@@ -1,4 +1,10 @@
-import { IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
 import { UserRole } from '../../entities/user.entity';
 import { VehicleType } from '../../entities/vehicle.entity';
 
@@ -15,7 +21,9 @@ export class RegisterDto {
   phone: string;
 
   @IsString()
-  @MinLength(6, { message: 'Le mot de passe doit contenir au moins 6 caractères' })
+  @MinLength(6, {
+    message: 'Le mot de passe doit contenir au moins 6 caractères',
+  })
   password: string;
 
   @IsEnum(UserRole)

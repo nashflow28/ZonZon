@@ -43,9 +43,24 @@ describe('ReportsService', () => {
       const livreurB = { id: 'L2', firstName: 'Joe', lastName: 'B' };
 
       ordersRepo.find.mockResolvedValue([
-        { id: 'o1', status: OrderStatus.COMPLETED, priceFcfa: 1000, livreur: livreurA },
-        { id: 'o2', status: OrderStatus.COMPLETED, priceFcfa: 500, livreur: livreurA },
-        { id: 'o3', status: OrderStatus.COMPLETED, priceFcfa: 2000, livreur: livreurB },
+        {
+          id: 'o1',
+          status: OrderStatus.COMPLETED,
+          priceFcfa: 1000,
+          livreur: livreurA,
+        },
+        {
+          id: 'o2',
+          status: OrderStatus.COMPLETED,
+          priceFcfa: 500,
+          livreur: livreurA,
+        },
+        {
+          id: 'o3',
+          status: OrderStatus.COMPLETED,
+          priceFcfa: 2000,
+          livreur: livreurB,
+        },
       ]);
       commissionsRepo.find.mockResolvedValue([]);
 
@@ -68,7 +83,12 @@ describe('ReportsService', () => {
 
     it('ignore les commandes sans livreur', async () => {
       ordersRepo.find.mockResolvedValue([
-        { id: 'o1', status: OrderStatus.COMPLETED, priceFcfa: 1000, livreur: null },
+        {
+          id: 'o1',
+          status: OrderStatus.COMPLETED,
+          priceFcfa: 1000,
+          livreur: null,
+        },
       ]);
       commissionsRepo.find.mockResolvedValue([]);
 

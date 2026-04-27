@@ -15,6 +15,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types';
 import { imageFileFilter, profilePhotoStorage } from './upload.config';
 import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 
@@ -24,14 +25,22 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
-  me(@CurrentUser() user: any) {
-    const { password: _p, ...safe } = user;
+  me(@CurrentUser() user: AuthenticatedUser) {
+    const { password: _p, ...safe } = user as AuthenticatedUser & {
+      password?: string;
+    };
     return safe;
   }
 
   @Patch('me/fcm-token')
-  updateFcmToken(@CurrentUser() user: any, @Body() dto: UpdateFcmTokenDto) {
-    return this.usersService.updateFcmToken(user.id, dto.token ?? null);
+  updateFcmToken(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateFcmTokenDto,
+  ) {
+    return this.usersService.updateFcmToken(
+      user.id ?? user.sub,
+      dto.token ?? null,
+    );
   }
 
   @Post('me/photo')
@@ -43,10 +52,13 @@ export class UsersController {
     }),
   )
   uploadPhoto(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.usersService.updateProfilePhoto(user.id, file.filename);
+    return this.usersService.updateProfilePhoto(
+      user.id ?? user.sub,
+      file.filename,
+    );
   }
 
   @Roles(UserRole.ADMIN)

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
@@ -56,7 +60,9 @@ export class AuthService {
   async loginWithCredentials(phone: string, password: string) {
     const user = await this.validateUser(phone, password);
     if (!user) {
-      throw new UnauthorizedException('Numéro de téléphone ou mot de passe incorrect');
+      throw new UnauthorizedException(
+        'Numéro de téléphone ou mot de passe incorrect',
+      );
     }
     return this.login(user);
   }

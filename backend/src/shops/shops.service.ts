@@ -67,10 +67,7 @@ export class ShopsService {
     });
   }
 
-  async updateMyShop(
-    actor: ActorPayload,
-    dto: UpdateShopDto,
-  ): Promise<Shop> {
+  async updateMyShop(actor: ActorPayload, dto: UpdateShopDto): Promise<Shop> {
     const shop = await this.getMyShop(actor);
     if (!shop) throw new NotFoundException('Aucune boutique à modifier');
 
@@ -119,7 +116,8 @@ export class ShopsService {
       Number.isFinite(filter.lat) &&
       Number.isFinite(filter.lng)
     ) {
-      const radius = filter.radiusKm && filter.radiusKm > 0 ? filter.radiusKm : null;
+      const radius =
+        filter.radiusKm && filter.radiusKm > 0 ? filter.radiusKm : null;
       const enriched = shops
         .map((s) => ({
           ...s,
@@ -147,7 +145,7 @@ export class ShopsService {
 
   async listMyProducts(actor: ActorPayload): Promise<Product[]> {
     const shop = await this.getMyShop(actor);
-    if (!shop) throw new NotFoundException('Créez d\'abord votre boutique');
+    if (!shop) throw new NotFoundException("Créez d'abord votre boutique");
     return this.productsRepo.find({
       where: { shopId: shop.id },
       order: { createdAt: 'DESC' },
@@ -159,7 +157,7 @@ export class ShopsService {
     dto: CreateProductDto,
   ): Promise<Product> {
     const shop = await this.getMyShop(actor);
-    if (!shop) throw new NotFoundException('Créez d\'abord votre boutique');
+    if (!shop) throw new NotFoundException("Créez d'abord votre boutique");
     const product = this.productsRepo.create({
       shopId: shop.id,
       name: dto.name.trim(),

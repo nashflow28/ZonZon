@@ -29,7 +29,10 @@ import { OrdersGateway } from '../src/orders/orders.gateway';
 import { UsersService } from '../src/users/users.service';
 import { User, UserRole } from '../src/entities/user.entity';
 import { Vehicle } from '../src/entities/vehicle.entity';
-import { DeliveryOrder, OrderStatus } from '../src/entities/delivery-order.entity';
+import {
+  DeliveryOrder,
+  OrderStatus,
+} from '../src/entities/delivery-order.entity';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -92,7 +95,9 @@ describe('Orders (e2e)', () => {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
-    mockedAxios.get.mockResolvedValue({ data: { routes: [{ distance: 3000 }] } });
+    mockedAxios.get.mockResolvedValue({
+      data: { routes: [{ distance: 3000 }] },
+    });
 
     usersRepo = makeInMemoryRepo<User>();
     vehiclesRepo = makeInMemoryRepo<Vehicle>();
@@ -108,7 +113,10 @@ describe('Orders (e2e)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         PassportModule,
-        JwtModule.register({ secret: process.env.JWT_SECRET, signOptions: { expiresIn: '7d' } }),
+        JwtModule.register({
+          secret: process.env.JWT_SECRET,
+          signOptions: { expiresIn: '7d' },
+        }),
       ],
       controllers: [AuthController, OrdersController],
       providers: [
@@ -126,7 +134,11 @@ describe('Orders (e2e)', () => {
 
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
     );
     await app.init();
   });

@@ -43,10 +43,7 @@ export class AddressesController {
   }
 
   @Delete(':id')
-  remove(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Req() req: Request,
-  ) {
+  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
     return this.addressesService.remove(this.userId(req), id);
   }
 }

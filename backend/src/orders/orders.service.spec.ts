@@ -60,12 +60,10 @@ describe('OrdersService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     // Make setTimeout instant so retries do not slow the tests
-    jest
-      .spyOn(global, 'setTimeout')
-      .mockImplementation(((fn: any) => {
-        fn();
-        return 0 as any;
-      }) as any);
+    jest.spyOn(global, 'setTimeout').mockImplementation(((fn: any) => {
+      fn();
+      return 0 as any;
+    }) as any);
 
     ordersRepository = mockRepo();
     usersService = { findOne: jest.fn() };
@@ -78,7 +76,10 @@ describe('OrdersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
-        { provide: getRepositoryToken(DeliveryOrder), useValue: ordersRepository },
+        {
+          provide: getRepositoryToken(DeliveryOrder),
+          useValue: ordersRepository,
+        },
         { provide: UsersService, useValue: usersService },
         { provide: OrdersGateway, useValue: gateway },
       ],
@@ -104,10 +105,15 @@ describe('OrdersService', () => {
 
     it('calcule un prix = distance × 150 arrondi, sauvegarde et broadcast', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
-      mockedAxios.get.mockResolvedValue({ data: { routes: [{ distance: 3000 }] } });
-      ordersRepository.save.mockImplementation(async (o: any) => ({ id: 'ord-1', ...o }));
+      mockedAxios.get.mockResolvedValue({
+        data: { routes: [{ distance: 3000 }] },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-1',
+        ...o,
+      }));
 
-      const result = await service.createOrder(clientUser.id, dto as any);
+      const result = await service.createOrder(clientUser.id, dto);
 
       // distance 3km → price = 3 * 150 = 450
       expect(ordersRepository.create).toHaveBeenCalledWith(
@@ -124,10 +130,15 @@ describe('OrdersService', () => {
     it('applique la distance minimale 0.5 km', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
       // 100 m → 0.1 km → force 0.5
-      mockedAxios.get.mockResolvedValue({ data: { routes: [{ distance: 100 }] } });
-      ordersRepository.save.mockImplementation(async (o: any) => ({ id: 'ord-2', ...o }));
+      mockedAxios.get.mockResolvedValue({
+        data: { routes: [{ distance: 100 }] },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-2',
+        ...o,
+      }));
 
-      await service.createOrder(clientUser.id, dto as any);
+      await service.createOrder(clientUser.id, dto);
 
       expect(ordersRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -139,26 +150,31 @@ describe('OrdersService', () => {
 
     it('rejette si l’utilisateur n’est pas un client', async () => {
       usersService.findOne.mockResolvedValue(livreurUser);
-      await expect(service.createOrder(livreurUser.id, dto as any)).rejects.toBeInstanceOf(
-        ForbiddenException,
-      );
+      await expect(
+        service.createOrder(livreurUser.id, dto as any),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('rejette si les coordonnées sont manquantes', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
       const badDto = { ...dto, pickupLat: undefined };
-      await expect(service.createOrder(clientUser.id, badDto as any)).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.createOrder(clientUser.id, badDto as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('cache OSRM : le 2e appel avec les mêmes coords n’appelle pas axios', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
-      mockedAxios.get.mockResolvedValue({ data: { routes: [{ distance: 3000 }] } });
-      ordersRepository.save.mockImplementation(async (o: any) => ({ id: 'o', ...o }));
+      mockedAxios.get.mockResolvedValue({
+        data: { routes: [{ distance: 3000 }] },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'o',
+        ...o,
+      }));
 
-      await service.createOrder(clientUser.id, dto as any);
-      await service.createOrder(clientUser.id, dto as any);
+      await service.createOrder(clientUser.id, dto);
+      await service.createOrder(clientUser.id, dto);
 
       expect(mockedAxios.get).toHaveBeenCalledTimes(1);
     });
@@ -166,7 +182,10 @@ describe('OrdersService', () => {
     it('fallback Haversine si axios throw 3 fois', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
       mockedAxios.get.mockRejectedValue(new Error('network down'));
-      ordersRepository.save.mockImplementation(async (o: any) => ({ id: 'o', ...o }));
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'o',
+        ...o,
+      }));
 
       // Use fresh coordinates to bypass the cache populated by previous tests.
       // ~1 degree of latitude ≈ 111 km → haversine * 1.3 ≈ 144.5 km
@@ -177,15 +196,17 @@ describe('OrdersService', () => {
         deliveryLat: 11,
         deliveryLng: 10,
       };
-      await service.createOrder(clientUser.id, freshDto as any);
+      await service.createOrder(clientUser.id, freshDto);
 
       expect(mockedAxios.get).toHaveBeenCalledTimes(3);
-      const createdArg = ordersRepository.create.mock.calls.at(-1)![0] as any;
+      const createdArg = ordersRepository.create.mock.calls.at(-1)![0];
       // Haversine × 1.3 for 1° lat at equator ≈ 144 km — check it's in a sane range
       expect(createdArg.distanceKm).toBeGreaterThan(140);
       expect(createdArg.distanceKm).toBeLessThan(150);
       // price = distance * 150 rounded
-      expect(createdArg.priceFcfa).toBe(Math.round(createdArg.distanceKm * 150));
+      expect(createdArg.priceFcfa).toBe(
+        Math.round(createdArg.distanceKm * 150),
+      );
     });
   });
 
@@ -216,16 +237,16 @@ describe('OrdersService', () => {
         status: OrderStatus.ACCEPTED,
         client: { id: clientUser.id },
       });
-      await expect(service.acceptOrder('o', livreurUser.id)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.acceptOrder('o', livreurUser.id),
+      ).rejects.toBeInstanceOf(ConflictException);
     });
 
     it('throw NotFoundException si introuvable', async () => {
       ordersRepository.findOne.mockResolvedValue(null);
-      await expect(service.acceptOrder('o', livreurUser.id)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.acceptOrder('o', livreurUser.id),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 
@@ -238,17 +259,29 @@ describe('OrdersService', () => {
     });
 
     it('permet ACCEPTED → IN_PROGRESS par le livreur', async () => {
-      ordersRepository.findOne.mockResolvedValue(buildOrder(OrderStatus.ACCEPTED));
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
       ordersRepository.save.mockImplementation(async (o: any) => o);
-      const result = await service.updateStatus('o', OrderStatus.IN_PROGRESS, livreurUser);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.IN_PROGRESS,
+        livreurUser,
+      );
       expect(result.status).toBe(OrderStatus.IN_PROGRESS);
       expect(gateway.broadcastStatusUpdate).toHaveBeenCalled();
     });
 
     it('permet IN_PROGRESS → COMPLETED par le livreur', async () => {
-      ordersRepository.findOne.mockResolvedValue(buildOrder(OrderStatus.IN_PROGRESS));
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.IN_PROGRESS),
+      );
       ordersRepository.save.mockImplementation(async (o: any) => o);
-      const result = await service.updateStatus('o', OrderStatus.COMPLETED, livreurUser);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.COMPLETED,
+        livreurUser,
+      );
       expect(result.status).toBe(OrderStatus.COMPLETED);
     });
 
@@ -258,28 +291,42 @@ describe('OrdersService', () => {
         livreur: null,
       });
       ordersRepository.save.mockImplementation(async (o: any) => o);
-      const result = await service.updateStatus('o', OrderStatus.CANCELLED, clientUser);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.CANCELLED,
+        clientUser,
+      );
       expect(result.status).toBe(OrderStatus.CANCELLED);
     });
 
     it('interdit une transition illégale (COMPLETED → PENDING) → BadRequest', async () => {
-      ordersRepository.findOne.mockResolvedValue(buildOrder(OrderStatus.COMPLETED));
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.COMPLETED),
+      );
       await expect(
         service.updateStatus('o', OrderStatus.PENDING, adminUser),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('interdit un client de passer à IN_PROGRESS', async () => {
-      ordersRepository.findOne.mockResolvedValue(buildOrder(OrderStatus.ACCEPTED));
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
       await expect(
         service.updateStatus('o', OrderStatus.IN_PROGRESS, clientUser),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('admin peut tout faire (ACCEPTED → IN_PROGRESS)', async () => {
-      ordersRepository.findOne.mockResolvedValue(buildOrder(OrderStatus.ACCEPTED));
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
       ordersRepository.save.mockImplementation(async (o: any) => o);
-      const result = await service.updateStatus('o', OrderStatus.IN_PROGRESS, adminUser);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.IN_PROGRESS,
+        adminUser,
+      );
       expect(result.status).toBe(OrderStatus.IN_PROGRESS);
     });
 

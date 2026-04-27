@@ -13,7 +13,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Request } from 'express';
 import { ShopsService } from './shops.service';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
@@ -26,16 +25,24 @@ import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
 import { ShopCategory, ShopStatus } from '../entities/shop.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types';
 import {
   imageFileFilter,
   productPhotoStorage,
   shopLogoStorage,
 } from './upload.config';
 
+type ShopActor = { id?: string; sub?: string; role: UserRole };
+
 @Controller('shops')
 @UseGuards(RolesGuard)
 export class ShopsController {
   constructor(private shopsService: ShopsService) {}
+
+  /** Convertit un AuthenticatedUser (rôle string-literal) vers le shape `ActorPayload` (rôle UserRole) attendu par le service. */
+  private toActor(user: AuthenticatedUser): ShopActor {
+    return { id: user.id, sub: user.sub, role: user.role as UserRole };
+  }
 
   // ── Public ─────────────────────────────────────────────────────────────
 
@@ -68,20 +75,26 @@ export class ShopsController {
 
   @Roles(UserRole.COMMERCANT)
   @Get('me')
-  getMine(@CurrentUser() user: any) {
-    return this.shopsService.getMyShop(user);
+  getMine(@CurrentUser() user: AuthenticatedUser) {
+    return this.shopsService.getMyShop(this.toActor(user));
   }
 
   @Roles(UserRole.COMMERCANT)
   @Post('me')
-  createMine(@Body() dto: CreateShopDto, @CurrentUser() user: any) {
-    return this.shopsService.createMyShop(user, dto);
+  createMine(
+    @Body() dto: CreateShopDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shopsService.createMyShop(this.toActor(user), dto);
   }
 
   @Roles(UserRole.COMMERCANT)
   @Patch('me')
-  updateMine(@Body() dto: UpdateShopDto, @CurrentUser() user: any) {
-    return this.shopsService.updateMyShop(user, dto);
+  updateMine(
+    @Body() dto: UpdateShopDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shopsService.updateMyShop(this.toActor(user), dto);
   }
 
   @Roles(UserRole.COMMERCANT)
@@ -94,24 +107,27 @@ export class ShopsController {
     }),
   )
   uploadLogo(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.shopsService.setMyShopLogo(user, file.filename);
+    return this.shopsService.setMyShopLogo(this.toActor(user), file.filename);
   }
 
   // ── Merchant : produits ──────────────────────────────────────────────
 
   @Roles(UserRole.COMMERCANT)
   @Get('me/products')
-  listMyProducts(@CurrentUser() user: any) {
-    return this.shopsService.listMyProducts(user);
+  listMyProducts(@CurrentUser() user: AuthenticatedUser) {
+    return this.shopsService.listMyProducts(this.toActor(user));
   }
 
   @Roles(UserRole.COMMERCANT)
   @Post('me/products')
-  createProduct(@Body() dto: CreateProductDto, @CurrentUser() user: any) {
-    return this.shopsService.createProduct(user, dto);
+  createProduct(
+    @Body() dto: CreateProductDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shopsService.createProduct(this.toActor(user), dto);
   }
 
   @Roles(UserRole.COMMERCANT)
@@ -119,9 +135,9 @@ export class ShopsController {
   updateProduct(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateProductDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.shopsService.updateProduct(user, id, dto);
+    return this.shopsService.updateProduct(this.toActor(user), id, dto);
   }
 
   @Roles(UserRole.COMMERCANT)
@@ -135,19 +151,23 @@ export class ShopsController {
   )
   uploadProductPhoto(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.shopsService.setProductPhoto(user, id, file.filename);
+    return this.shopsService.setProductPhoto(
+      this.toActor(user),
+      id,
+      file.filename,
+    );
   }
 
   @Roles(UserRole.COMMERCANT)
   @Delete('me/products/:id')
   deleteProduct(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.shopsService.removeProduct(user, id);
+    return this.shopsService.removeProduct(this.toActor(user), id);
   }
 
   // ── Admin ────────────────────────────────────────────────────────────

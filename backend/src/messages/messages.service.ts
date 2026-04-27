@@ -73,7 +73,9 @@ export class MessagesService {
       order.status === OrderStatus.COMPLETED ||
       order.status === OrderStatus.CANCELLED
     ) {
-      throw new ForbiddenException('La conversation est fermée pour cette course');
+      throw new ForbiddenException(
+        'La conversation est fermée pour cette course',
+      );
     }
 
     const senderId = this.actorId(actor);
@@ -102,10 +104,11 @@ export class MessagesService {
 
     // Push notification : seulement si le destinataire n'est pas dans la room du chat
     if (recipientId && !this.ordersGateway.isInChatRoom(orderId, recipientId)) {
-      const senderName = (full as any)?.sender?.firstName ?? 'Quelqu\'un';
+      const senderName = (full as any)?.sender?.firstName ?? "Quelqu'un";
       void this.notifications.sendToUser(recipientId, {
         title: senderName,
-        body: full!.content.length > 80
+        body:
+          full!.content.length > 80
             ? full!.content.substring(0, 77) + '…'
             : full!.content,
         data: {

@@ -16,6 +16,7 @@ import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
 import { UsersService } from '../users/users.service';
 import { OrdersGateway } from './orders.gateway';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateStatusDto } from './dto/update-status.dto';
 import { UserRole } from '../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -35,7 +36,8 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
   private readonly PRICE_PER_KM = 150;
-  private readonly osrmBase = process.env.OSRM_URL || 'http://router.project-osrm.org';
+  private readonly osrmBase =
+    process.env.OSRM_URL || 'http://router.project-osrm.org';
   private readonly cacheTtlMs = 24 * 60 * 60 * 1000;
   private readonly routeCache = new Map<string, RouteCacheEntry>();
   private readonly routeGeomCache = new Map<string, RouteCacheGeomEntry>();
@@ -88,14 +90,18 @@ export class OrdersService {
           return km;
         }
       } catch (err) {
-        this.logger.warn(`OSRM attempt ${attempt}/${maxAttempts} failed: ${(err as Error).message}`);
+        this.logger.warn(
+          `OSRM attempt ${attempt}/${maxAttempts} failed: ${(err as Error).message}`,
+        );
         if (attempt === maxAttempts) break;
         await new Promise((r) => setTimeout(r, 300 * attempt));
       }
     }
 
     const fallback = this.haversineKm(lat1, lng1, lat2, lng2);
-    this.logger.warn(`OSRM unavailable, fallback Haversine×1.3 = ${fallback.toFixed(2)} km`);
+    this.logger.warn(
+      `OSRM unavailable, fallback Haversine×1.3 = ${fallback.toFixed(2)} km`,
+    );
     return fallback;
   }
 
@@ -234,16 +240,17 @@ export class OrdersService {
   }
 
   findForUser(user: any) {
+    const userId = user.id ?? user.sub;
     if (user.role === UserRole.CLIENT) {
       return this.ordersRepository.find({
-        where: { client: { id: user.id } },
+        where: { client: { id: userId } },
         relations: ['livreur'],
         order: { createdAt: 'DESC' },
       });
     }
     if (user.role === UserRole.LIVREUR) {
       return this.ordersRepository.find({
-        where: { livreur: { id: user.id } },
+        where: { livreur: { id: userId } },
         relations: ['client'],
         order: { createdAt: 'DESC' },
       });
@@ -258,7 +265,9 @@ export class OrdersService {
     });
     if (!order) throw new NotFoundException('Commande introuvable');
     if (order.status !== OrderStatus.PENDING) {
-      throw new ConflictException('Cette course a déjà été prise par un autre livreur');
+      throw new ConflictException(
+        'Cette course a déjà été prise par un autre livreur',
+      );
     }
 
     const livreur = await this.usersService.findOne(livreurId);
@@ -266,10 +275,17 @@ export class OrdersService {
     order.livreur = livreur;
 
     const updated = await this.ordersRepository.save(order);
-    this.ordersGateway.broadcastOrderAccepted(order.id, livreur.id, order.client?.id);
+    this.ordersGateway.broadcastOrderAccepted(
+      order.id,
+      livreur.id,
+      order.client?.id,
+    );
 
     // Push notification au client si offline
-    if (order.client?.id && !this.ordersGateway.isUserConnected(order.client.id)) {
+    if (
+      order.client?.id &&
+      !this.ordersGateway.isUserConnected(order.client.id)
+    ) {
       void this.notifications.sendToUser(order.client.id, {
         title: 'Coursier en route !',
         body: `${livreur.firstName ?? 'Votre livreur'} a accepté votre course`,
@@ -279,15 +295,21 @@ export class OrdersService {
     return updated;
   }
 
-  async updateStatus(id: string, status: OrderStatus, actor: any) {
+  async updateStatus(
+    id: string,
+    status: OrderStatus,
+    actor: any,
+    dto?: UpdateStatusDto,
+  ) {
     const order = await this.ordersRepository.findOne({
       where: { id },
       relations: ['client', 'livreur'],
     });
     if (!order) throw new NotFoundException('Commande introuvable');
 
-    const isClient = order.client?.id === actor.id;
-    const isLivreur = order.livreur?.id === actor.id;
+    const actorId = actor.id ?? actor.sub;
+    const isClient = order.client?.id === actorId;
+    const isLivreur = order.livreur?.id === actorId;
     const isAdmin = actor.role === UserRole.ADMIN;
     if (!isClient && !isLivreur && !isAdmin) {
       throw new ForbiddenException('Vous ne pouvez pas modifier cette course');
@@ -300,33 +322,57 @@ export class OrdersService {
       );
     }
 
-    if (status === OrderStatus.IN_PROGRESS || status === OrderStatus.COMPLETED) {
+    if (
+      status === OrderStatus.IN_PROGRESS ||
+      status === OrderStatus.COMPLETED
+    ) {
       if (!isLivreur && !isAdmin) {
-        throw new ForbiddenException('Seul le livreur peut faire avancer la course');
+        throw new ForbiddenException(
+          'Seul le livreur peut faire avancer la course',
+        );
       }
     }
 
     order.status = status;
+    if (status === OrderStatus.CANCELLED) {
+      order.cancellationReason = dto?.cancellationReason?.trim() || null;
+      const role = actor.role as UserRole | string | undefined;
+      if (role === UserRole.ADMIN) {
+        order.cancelledBy = 'ADMIN';
+      } else if (role === UserRole.LIVREUR) {
+        order.cancelledBy = 'LIVREUR';
+      } else if (role === UserRole.CLIENT) {
+        order.cancelledBy = 'CLIENT';
+      } else {
+        order.cancelledBy = null;
+      }
+    }
     const saved = await this.ordersRepository.save(order);
-    this.ordersGateway.broadcastStatusUpdate(order.id, status, order.client?.id, order.livreur?.id);
+    this.ordersGateway.broadcastStatusUpdate(
+      order.id,
+      status,
+      order.client?.id,
+      order.livreur?.id,
+    );
 
     // Push au client pour les transitions importantes
     const clientId = order.client?.id;
     if (clientId && !this.ordersGateway.isUserConnected(clientId)) {
-      const map: Partial<Record<OrderStatus, { title: string; body: string }>> = {
-        [OrderStatus.IN_PROGRESS]: {
-          title: 'Livraison en cours',
-          body: 'Votre coursier a récupéré le colis',
-        },
-        [OrderStatus.COMPLETED]: {
-          title: 'Course terminée',
-          body: 'Votre colis a bien été livré, merci !',
-        },
-        [OrderStatus.CANCELLED]: {
-          title: 'Course annulée',
-          body: 'La course a été annulée',
-        },
-      };
+      const map: Partial<Record<OrderStatus, { title: string; body: string }>> =
+        {
+          [OrderStatus.IN_PROGRESS]: {
+            title: 'Livraison en cours',
+            body: 'Votre coursier a récupéré le colis',
+          },
+          [OrderStatus.COMPLETED]: {
+            title: 'Course terminée',
+            body: 'Votre colis a bien été livré, merci !',
+          },
+          [OrderStatus.CANCELLED]: {
+            title: 'Course annulée',
+            body: 'La course a été annulée',
+          },
+        };
       const payload = map[status];
       if (payload) {
         void this.notifications.sendToUser(clientId, {

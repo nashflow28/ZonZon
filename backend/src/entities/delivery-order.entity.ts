@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+} from 'typeorm';
 import { User } from './user.entity';
 
 export enum OrderStatus {
@@ -44,11 +51,21 @@ export class DeliveryOrder {
   @Column('decimal', { precision: 10, scale: 2, nullable: true })
   distanceKm: number;
 
-  @Column('decimal', { precision: 10, scale: 2, nullable: true })
+  @Column({ type: 'int', nullable: true })
   priceFcfa: number;
 
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING })
   status: OrderStatus;
+
+  @Column({ type: 'text', nullable: true })
+  cancellationReason: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: ['CLIENT', 'LIVREUR', 'ADMIN'],
+    nullable: true,
+  })
+  cancelledBy: 'CLIENT' | 'LIVREUR' | 'ADMIN' | null;
 
   @CreateDateColumn()
   createdAt: Date;

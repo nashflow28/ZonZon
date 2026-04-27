@@ -32,16 +32,20 @@ export class Commission {
   @Column('int', { default: 0 })
   completedCount: number;
 
-  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'int', default: 0 })
   totalRevenue: number;
 
   @Column('decimal', { precision: 5, scale: 4, default: 0.35 })
   commissionRate: number;
 
-  @Column('decimal', { precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'int', default: 0 })
   commissionDue: number;
 
-  @Column({ type: 'enum', enum: CommissionStatus, default: CommissionStatus.DUE })
+  @Column({
+    type: 'enum',
+    enum: CommissionStatus,
+    default: CommissionStatus.DUE,
+  })
   status: CommissionStatus;
 
   @Column({ type: 'datetime', nullable: true })

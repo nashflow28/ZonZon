@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
@@ -7,6 +15,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types';
 
 @Controller('orders')
 @UseGuards(RolesGuard)
@@ -15,8 +24,8 @@ export class OrdersController {
 
   @Roles(UserRole.CLIENT)
   @Post()
-  create(@Body() dto: CreateOrderDto, @CurrentUser() user: any) {
-    return this.ordersService.createOrder(user.id, dto);
+  create(@Body() dto: CreateOrderDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.ordersService.createOrder(user.id ?? user.sub, dto);
   }
 
   @Post('estimate')
@@ -36,22 +45,22 @@ export class OrdersController {
   }
 
   @Get('mine')
-  findMine(@CurrentUser() user: any) {
+  findMine(@CurrentUser() user: AuthenticatedUser) {
     return this.ordersService.findForUser(user);
   }
 
   @Roles(UserRole.LIVREUR)
   @Post(':id/accept')
-  accept(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.ordersService.acceptOrder(id, user.id);
+  accept(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.ordersService.acceptOrder(id, user.id ?? user.sub);
   }
 
   @Patch(':id/status')
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateStatusDto,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.ordersService.updateStatus(id, dto.status, user);
+    return this.ordersService.updateStatus(id, dto.status, user, dto);
   }
 }

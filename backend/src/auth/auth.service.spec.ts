@@ -57,7 +57,9 @@ describe('AuthService', () => {
 
     it('throw ConflictException si le phone existe déjà', async () => {
       usersService.findByPhone.mockResolvedValue({ id: 'u-1' });
-      await expect(service.register(dto as any)).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.register(dto as any)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('crée l’utilisateur et retourne { access_token, user } sans password', async () => {
@@ -71,7 +73,7 @@ describe('AuthService', () => {
         password: 'hashed',
       });
 
-      const res = await service.register(dto as any);
+      const res = await service.register(dto);
 
       expect(usersService.createWithPassword).toHaveBeenCalledWith({
         firstName: dto.firstName,
@@ -89,7 +91,7 @@ describe('AuthService', () => {
         access_token: 'fake.jwt.token',
         user: expect.objectContaining({ id: 'u-1', phone: dto.phone }),
       });
-      expect((res.user as any).password).toBeUndefined();
+      expect(res.user.password).toBeUndefined();
     });
 
     it('attache le véhicule si le rôle est LIVREUR avec un vehicleType', async () => {
@@ -105,9 +107,12 @@ describe('AuthService', () => {
         phone: '+22890000002',
         role: UserRole.LIVREUR,
         vehicleType: VehicleType.MOTO,
-      } as any);
+      });
 
-      expect(usersService.attachVehicle).toHaveBeenCalledWith('u-2', VehicleType.MOTO);
+      expect(usersService.attachVehicle).toHaveBeenCalledWith(
+        'u-2',
+        VehicleType.MOTO,
+      );
     });
   });
 
@@ -143,9 +148,9 @@ describe('AuthService', () => {
   describe('loginWithCredentials', () => {
     it('throw UnauthorizedException si validateUser retourne null', async () => {
       usersService.findByPhone.mockResolvedValue(null);
-      await expect(service.loginWithCredentials('+228', 'x')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
+      await expect(
+        service.loginWithCredentials('+228', 'x'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
     });
 
     it('retourne { access_token, user } si OK', async () => {

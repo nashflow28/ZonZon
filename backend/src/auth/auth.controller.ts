@@ -4,6 +4,7 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
+import type { AuthenticatedUser } from './types';
 
 @Controller('auth')
 export class AuthController {
@@ -22,8 +23,10 @@ export class AuthController {
   }
 
   @Get('me')
-  me(@CurrentUser() user: any) {
-    const { password: _p, ...safe } = user;
+  me(@CurrentUser() user: AuthenticatedUser) {
+    const { password: _p, ...safe } = user as AuthenticatedUser & {
+      password?: string;
+    };
     return safe;
   }
 }

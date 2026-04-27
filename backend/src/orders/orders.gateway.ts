@@ -18,9 +18,21 @@ type ActiveOrderRef = { orderId: string; clientId?: string };
 
 const POSITION_TTL_MS = 5 * 60 * 1000;
 
+function resolveWsCorsOrigin(): string[] | boolean {
+  const origins = process.env.FRONTEND_URLS?.split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (origins && origins.length > 0) {
+    return origins;
+  }
+  // Liste vide : on refuse en prod, on autorise tout en dev
+  return process.env.NODE_ENV === 'production' ? false : true;
+}
+
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URLS?.split(',') || '*',
+    origin: resolveWsCorsOrigin(),
+    credentials: true,
   },
 })
 export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -37,7 +49,10 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   handleConnection(client: Socket) {
     const token =
       (client.handshake.auth?.token as string) ||
-      (client.handshake.headers?.authorization as string)?.replace(/^Bearer\s+/i, '');
+      (client.handshake.headers?.authorization as string)?.replace(
+        /^Bearer\s+/i,
+        '',
+      );
 
     if (!token) {
       this.logger.warn(`Socket ${client.id} rejected: no token`);
@@ -47,10 +62,12 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     try {
       const payload = this.jwtService.verify(token);
-      (client.data as any).user = payload;
+      client.data.user = payload;
       client.join(`user:${payload.sub}`);
       client.join(`role:${payload.role}`);
-      this.logger.log(`Socket connected: ${client.id} (user ${payload.sub}, role ${payload.role})`);
+      this.logger.log(
+        `Socket connected: ${client.id} (user ${payload.sub}, role ${payload.role})`,
+      );
     } catch (err) {
       this.logger.warn(`Socket ${client.id} rejected: invalid token`);
       client.disconnect(true);
@@ -58,7 +75,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   handleDisconnect(client: Socket) {
-    const user = (client.data as any)?.user;
+    const user = client.data?.user;
     if (user?.sub) {
       this.driverPositions.delete(user.sub);
     }
@@ -70,7 +87,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { lat: number; lng: number },
   ) {
-    const user = (client.data as any)?.user;
+    const user = client.data?.user;
     if (!user || user.role !== UserRole.LIVREUR) {
       return;
     }
@@ -117,11 +134,13 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   private getConnectedDriverIds(): Set<string> {
     const ids = new Set<string>();
-    const room = this.server?.sockets?.adapter?.rooms?.get(`role:${UserRole.LIVREUR}`);
+    const room = this.server?.sockets?.adapter?.rooms?.get(
+      `role:${UserRole.LIVREUR}`,
+    );
     if (!room) return ids;
     for (const socketId of room) {
       const socket = this.server.sockets.sockets.get(socketId);
-      const sub = (socket?.data as any)?.user?.sub;
+      const sub = socket?.data?.user?.sub;
       if (sub) ids.add(sub);
     }
     return ids;
@@ -139,7 +158,9 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Si pas de coordonnées pickup exploitables, fallback broadcast global
     if (!Number.isFinite(pickupLat) || !Number.isFinite(pickupLng)) {
-      this.server.to(`role:${UserRole.LIVREUR}`).emit('newOrderAvailable', order);
+      this.server
+        .to(`role:${UserRole.LIVREUR}`)
+        .emit('newOrderAvailable', order);
       this.logger.log(
         `Nouvelle course diffusée à ${totalDrivers}/${totalDrivers} livreurs (coordonnées pickup manquantes, broadcast global)`,
       );
@@ -167,10 +188,18 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     );
   }
 
-  broadcastOrderAccepted(orderId: string, livreurId: string, clientId?: string) {
-    this.server.to(`role:${UserRole.LIVREUR}`).emit('orderAccepted', { orderId, livreurId });
+  broadcastOrderAccepted(
+    orderId: string,
+    livreurId: string,
+    clientId?: string,
+  ) {
+    this.server
+      .to(`role:${UserRole.LIVREUR}`)
+      .emit('orderAccepted', { orderId, livreurId });
     if (clientId) {
-      this.server.to(`user:${clientId}`).emit('orderAccepted', { orderId, livreurId });
+      this.server
+        .to(`user:${clientId}`)
+        .emit('orderAccepted', { orderId, livreurId });
     }
     // Mémorise le mapping pour forwarder la position du livreur au client
     this.activeOrders.set(livreurId, { orderId, clientId });
@@ -191,10 +220,17 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  broadcastStatusUpdate(orderId: string, status: string, clientId?: string, livreurId?: string) {
+  broadcastStatusUpdate(
+    orderId: string,
+    status: string,
+    clientId?: string,
+    livreurId?: string,
+  ) {
     const payload = { orderId, status };
-    if (clientId) this.server.to(`user:${clientId}`).emit('orderStatusUpdated', payload);
-    if (livreurId) this.server.to(`user:${livreurId}`).emit('orderStatusUpdated', payload);
+    if (clientId)
+      this.server.to(`user:${clientId}`).emit('orderStatusUpdated', payload);
+    if (livreurId)
+      this.server.to(`user:${livreurId}`).emit('orderStatusUpdated', payload);
 
     // Cleanup du mapping quand la course se termine
     if (livreurId && (status === 'COMPLETED' || status === 'CANCELLED')) {
@@ -229,29 +265,34 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { orderId: string; isTyping: boolean },
   ) {
-    const user = (client.data as any)?.user;
+    const user = client.data?.user;
     if (!user || !data?.orderId) return;
     // Diffuse à la room sauf l'émetteur
-    client
-      .to(`order:${data.orderId}:chat`)
-      .emit('chat:typing', {
-        orderId: data.orderId,
-        userId: user.sub,
-        isTyping: !!data.isTyping,
-      });
+    client.to(`order:${data.orderId}:chat`).emit('chat:typing', {
+      orderId: data.orderId,
+      userId: user.sub,
+      isTyping: !!data.isTyping,
+    });
   }
 
   broadcastChatMessage(
     orderId: string,
     message: any,
-    parties: { clientId?: string; livreurId?: string; senderId: string; recipientId?: string },
+    parties: {
+      clientId?: string;
+      livreurId?: string;
+      senderId: string;
+      recipientId?: string;
+    },
   ) {
     const payload = { orderId, message };
     // Tout le monde dans la room reçoit (chat ouvert)
     this.server.to(`order:${orderId}:chat`).emit('chat:message', payload);
     // Et notification "tap" personnelle à l'autre partie (pour badge non-lu)
     if (parties.recipientId) {
-      this.server.to(`user:${parties.recipientId}`).emit('chat:message', payload);
+      this.server
+        .to(`user:${parties.recipientId}`)
+        .emit('chat:message', payload);
     }
   }
 
@@ -276,7 +317,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!chatRoom) return false;
     for (const socketId of chatRoom) {
       const socket = this.server.sockets.sockets.get(socketId);
-      const sub = (socket?.data as any)?.user?.sub;
+      const sub = socket?.data?.user?.sub;
       if (sub === userId) return true;
     }
     return false;

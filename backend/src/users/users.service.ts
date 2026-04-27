@@ -62,7 +62,10 @@ export class UsersService {
   }
 
   async findOne(id: string) {
-    const user = await this.usersRepository.findOne({ where: { id }, relations: ['vehicle'] });
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      relations: ['vehicle'],
+    });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
     return user;
   }

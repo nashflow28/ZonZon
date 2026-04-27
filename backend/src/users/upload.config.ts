@@ -17,7 +17,10 @@ export const imageFileFilter = (
   cb: (err: Error | null, accept: boolean) => void,
 ) => {
   if (!/\.(jpe?g|png|webp)$/i.test(file.originalname)) {
-    return cb(new BadRequestException('Format accepté : jpg, png, webp'), false);
+    return cb(
+      new BadRequestException('Format accepté : jpg, png, webp'),
+      false,
+    );
   }
   cb(null, true);
 };

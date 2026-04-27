@@ -17,10 +17,7 @@ export class MessagesController {
   constructor(private messagesService: MessagesService) {}
 
   @Get()
-  list(
-    @Param('orderId', ParseUUIDPipe) orderId: string,
-    @Req() req: Request,
-  ) {
+  list(@Param('orderId', ParseUUIDPipe) orderId: string, @Req() req: Request) {
     return this.messagesService.listForOrder(orderId, req.user as any);
   }
 

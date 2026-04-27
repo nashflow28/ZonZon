@@ -62,7 +62,12 @@ export class ReportsService {
     const rate = this.commissionRate;
     const perLivreur = new Map<
       string,
-      { livreurId: string; livreurName: string; completedCount: number; totalRevenue: number }
+      {
+        livreurId: string;
+        livreurName: string;
+        completedCount: number;
+        totalRevenue: number;
+      }
     >();
 
     for (const o of orders) {
@@ -81,7 +86,9 @@ export class ReportsService {
     const persistedCommissions = await this.commissionsRepo.find({
       where: { weekStart: this.toIsoDate(from) },
     });
-    const byLivreur = new Map(persistedCommissions.map((c) => [c.livreur.id, c]));
+    const byLivreur = new Map(
+      persistedCommissions.map((c) => [c.livreur.id, c]),
+    );
 
     const rows = Array.from(perLivreur.values()).map((r) => {
       const commissionDue = Math.round(r.totalRevenue * rate);
@@ -110,7 +117,10 @@ export class ReportsService {
     const end = this.endOfWeek(start);
     const s = this.startOfWeek(start);
 
-    const report = await this.weeklyReport(this.toIsoDate(s), this.toIsoDate(end));
+    const report = await this.weeklyReport(
+      this.toIsoDate(s),
+      this.toIsoDate(end),
+    );
     const saved: Commission[] = [];
 
     for (const r of report.rows) {
@@ -138,12 +148,16 @@ export class ReportsService {
       }
     }
 
-    this.logger.log(`Snapshot hebdo : ${saved.length} commissions pour semaine ${this.toIsoDate(s)}`);
+    this.logger.log(
+      `Snapshot hebdo : ${saved.length} commissions pour semaine ${this.toIsoDate(s)}`,
+    );
     return saved;
   }
 
   async markPaid(commissionId: string) {
-    const c = await this.commissionsRepo.findOne({ where: { id: commissionId } });
+    const c = await this.commissionsRepo.findOne({
+      where: { id: commissionId },
+    });
     if (!c) throw new NotFoundException('Commission introuvable');
     c.status = CommissionStatus.PAID;
     c.paidAt = new Date();

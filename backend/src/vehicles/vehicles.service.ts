@@ -20,7 +20,8 @@ export class VehiclesService {
     const existing = await this.findByDriver(userId);
     if (existing) {
       existing.type = dto.type;
-      if (dto.licensePlate !== undefined) existing.licensePlate = dto.licensePlate;
+      if (dto.licensePlate !== undefined)
+        existing.licensePlate = dto.licensePlate;
       if (dto.description !== undefined) existing.description = dto.description;
       return this.vehiclesRepo.save(existing);
     }

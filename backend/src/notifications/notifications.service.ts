@@ -44,7 +44,9 @@ export class NotificationsService {
         this.app = admin.initializeApp({
           credential: admin.credential.applicationDefault(),
         });
-        this.logger.log('Firebase Admin initialisé (GOOGLE_APPLICATION_CREDENTIALS)');
+        this.logger.log(
+          'Firebase Admin initialisé (GOOGLE_APPLICATION_CREDENTIALS)',
+        );
       } else {
         this.logger.warn(
           'FIREBASE_CREDENTIALS_JSON manquant : les notifications push sont désactivées',
@@ -87,7 +89,7 @@ export class NotificationsService {
         },
       });
     } catch (err) {
-      const code = (err as any)?.errorInfo?.code;
+      const code = err?.errorInfo?.code;
       if (
         code === 'messaging/registration-token-not-registered' ||
         code === 'messaging/invalid-registration-token'
