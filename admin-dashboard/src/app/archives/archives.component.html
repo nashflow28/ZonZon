@@ -42,8 +42,40 @@
       </div>
     </div>
 
+    <!-- Stats cards (revenu cumulé sur la sélection) -->
+    <div *ngIf="!isLoading() && !errored()" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-gradient-to-br from-emerald-900/40 to-emerald-800/10 p-5 rounded-2xl border border-emerald-500/30">
+        <div class="text-xs uppercase tracking-wider text-emerald-300/80 font-semibold flex items-center gap-2">
+          <lucide-icon name="banknote" class="w-3.5 h-3.5"></lucide-icon>
+          Revenu total (terminées)
+        </div>
+        <div class="mt-2 text-3xl font-extrabold text-white tabular-nums">
+          {{ totalRevenue() | number:'1.0-0' }}
+          <span class="text-lg text-emerald-300/80">FCFA</span>
+        </div>
+      </div>
+      <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl border border-slate-700/60">
+        <div class="text-xs uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-2">
+          <lucide-icon name="check" class="w-3.5 h-3.5"></lucide-icon>
+          Terminées
+        </div>
+        <div class="mt-2 text-3xl font-extrabold text-white tabular-nums">
+          {{ completedCount() }}
+        </div>
+      </div>
+      <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl border border-slate-700/60">
+        <div class="text-xs uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-2">
+          <lucide-icon name="x" class="w-3.5 h-3.5"></lucide-icon>
+          Annulées
+        </div>
+        <div class="mt-2 text-3xl font-extrabold text-white tabular-nums">
+          {{ cancelledCount() }}
+        </div>
+      </div>
+    </div>
+
     <!-- Skeleton -->
-    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="6"></app-skeleton-row>
+    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="7"></app-skeleton-row>
 
     <!-- Error -->
     <div *ngIf="!isLoading() && errored()"
@@ -59,6 +91,7 @@
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-slate-900/50 text-slate-400 text-xs uppercase tracking-wider">
+              <th class="p-5 border-b border-slate-700/50">ID</th>
               <th class="p-5 border-b border-slate-700/50">Date</th>
               <th class="p-5 border-b border-slate-700/50">Client</th>
               <th class="p-5 border-b border-slate-700/50">Livreur</th>
@@ -69,7 +102,7 @@
           </thead>
           <tbody class="divide-y divide-slate-700/50 text-slate-300">
             <tr *ngIf="filtered().length === 0">
-              <td colspan="6" class="p-0">
+              <td colspan="7" class="p-0">
                 <app-empty-state
                   title="Aucune archive pour ces filtres"
                   description="Ajustez la plage de dates ou le statut pour retrouver une course.">
@@ -79,6 +112,9 @@
             <tr *ngFor="let o of filtered()"
                 (click)="onRowClick(o)"
                 class="hover:bg-slate-700/20 transition-colors cursor-pointer">
+              <td class="p-5 text-xs font-mono text-slate-400">
+                {{ shortId(o.id) }}
+              </td>
               <td class="p-5 text-sm text-slate-400">
                 {{ o.createdAt | date:'dd/MM/yyyy HH:mm' }}
               </td>

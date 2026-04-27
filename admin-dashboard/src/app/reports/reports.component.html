@@ -1,6 +1,14 @@
 <div class="p-4 md:p-8">
   <div class="max-w-7xl mx-auto">
-    <div class="flex justify-end mb-8">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
+      <button
+        (click)="snapshot()"
+        [disabled]="snapshotting() || isLoading()"
+        class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all shadow-lg shadow-blue-900/30">
+        <lucide-icon name="camera" class="w-4 h-4"></lucide-icon>
+        {{ snapshotting() ? 'Snapshot en cours...' : 'Snapshot semaine' }}
+      </button>
+
       <div class="flex items-center gap-3">
         <lucide-icon name="calendar" class="w-4 h-4 text-slate-400"></lucide-icon>
         <label class="text-sm text-slate-400">Semaine</label>
@@ -12,6 +20,17 @@
             {{ w.label }}
           </option>
         </select>
+      </div>
+    </div>
+
+    <!-- Banner snapshot manquant -->
+    <div *ngIf="!isLoading() && needsSnapshot() && rows().length > 0"
+         class="bg-amber-500/10 border border-amber-500/40 text-amber-200 rounded-2xl px-5 py-4 mb-6 flex items-start gap-3">
+      <lucide-icon name="alert-triangle" class="w-5 h-5 mt-0.5 shrink-0"></lucide-icon>
+      <div class="text-sm">
+        Certaines commissions de cette semaine ne sont pas encore snapshottées.
+        Cliquez sur <span class="font-semibold">Snapshot semaine</span> pour générer les
+        identifiants de commission et activer le bouton "Marquer payée".
       </div>
     </div>
 
@@ -34,7 +53,7 @@
       <div class="bg-gradient-to-br from-blue-900/50 to-blue-800/20 p-6 rounded-2xl border border-blue-500/30 shadow-xl shadow-blue-900/20">
         <h3 class="text-blue-300 font-medium mb-1 flex items-center gap-2">
           <lucide-icon name="banknote" class="w-4 h-4"></lucide-icon>
-          Commission à percevoir (35%)
+          Commission à percevoir ({{ commissionRatePercent() }}%)
         </h3>
         <div class="text-3xl md:text-4xl font-extrabold text-blue-400">
           {{ totalCommission() | number:'1.0-0' }} <span class="text-xl text-blue-500/50">FCFA</span>
@@ -53,7 +72,7 @@
     </div>
 
     <!-- Skeleton table -->
-    <app-skeleton-row *ngIf="isLoading()" [rows]="5" [cols]="5"></app-skeleton-row>
+    <app-skeleton-row *ngIf="isLoading()" [rows]="5" [cols]="6"></app-skeleton-row>
 
     <!-- Empty / error state -->
     <div *ngIf="!isLoading() && (errored() || rows().length === 0)"
@@ -82,7 +101,8 @@
               <th class="p-5 border-b border-slate-700/50">Livreur</th>
               <th class="p-5 border-b border-slate-700/50">Courses livrées</th>
               <th class="p-5 border-b border-slate-700/50">CA généré</th>
-              <th class="p-5 border-b border-slate-700/50">Commission due (35%)</th>
+              <th class="p-5 border-b border-slate-700/50">Commission due</th>
+              <th class="p-5 border-b border-slate-700/50">Statut</th>
               <th class="p-5 border-b border-slate-700/50 text-right">Action</th>
             </tr>
           </thead>
@@ -94,18 +114,38 @@
               <td class="p-5 text-blue-400 font-bold">
                 {{ row.commissionDue | number:'1.0-0' }} FCFA
               </td>
+              <td class="p-5">
+                <span *ngIf="isPaid(row)"
+                      class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-emerald-500/20 text-emerald-400 border-emerald-500/50">
+                  <lucide-icon name="check" class="w-3 h-3"></lucide-icon>
+                  PAID
+                </span>
+                <span *ngIf="!isPaid(row) && row.commissionId"
+                      class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-amber-500/20 text-amber-400 border-amber-500/50">
+                  <lucide-icon name="clock" class="w-3 h-3"></lucide-icon>
+                  DUE
+                </span>
+                <span *ngIf="!row.commissionId"
+                      class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border bg-slate-500/20 text-slate-400 border-slate-500/50">
+                  <lucide-icon name="minus" class="w-3 h-3"></lucide-icon>
+                  Non snapshotté
+                </span>
+              </td>
               <td class="p-5 text-right">
                 <button
-                  *ngIf="!isPaid(row.livreurId)"
+                  *ngIf="row.commissionId && !isPaid(row)"
                   (click)="pay(row)"
-                  [disabled]="isPaying(row.livreurId)"
+                  [disabled]="isPaying(row.commissionId)"
                   class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all">
-                  {{ isPaying(row.livreurId) ? 'Paiement...' : 'Marquer comme payé' }}
+                  {{ isPaying(row.commissionId) ? 'Paiement...' : 'Marquer payée' }}
                 </button>
-                <span *ngIf="isPaid(row.livreurId)"
+                <span *ngIf="row.commissionId && isPaid(row)"
                       class="inline-flex items-center gap-2 text-emerald-400 text-sm font-semibold">
                   <lucide-icon name="check" class="w-4 h-4"></lucide-icon>
                   Payé
+                </span>
+                <span *ngIf="!row.commissionId" class="text-xs text-slate-500 italic">
+                  Snapshot requis
                 </span>
               </td>
             </tr>

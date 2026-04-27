@@ -52,6 +52,26 @@ export class ArchivesComponent implements OnInit, OnDestroy {
     });
   });
 
+  // Revenu total des courses COMPLETED affichées (les CANCELLED ne contribuent pas).
+  readonly totalRevenue = computed<number>(() =>
+    this.filtered()
+      .filter((o) => o.status === 'COMPLETED')
+      .reduce((sum, o) => sum + (Number(o.priceFcfa) || 0), 0)
+  );
+
+  readonly completedCount = computed<number>(() =>
+    this.filtered().filter((o) => o.status === 'COMPLETED').length
+  );
+
+  readonly cancelledCount = computed<number>(() =>
+    this.filtered().filter((o) => o.status === 'CANCELLED').length
+  );
+
+  shortId(id: string): string {
+    if (!id) return '-';
+    return `#${id.slice(0, 8)}`;
+  }
+
   ngOnInit(): void {
     this.pageActions.setPage('Archives', 'Historique des commandes terminées et annulées');
     this.refreshSub = this.pageActions.refresh$.subscribe(() => this.fetch());

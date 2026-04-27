@@ -36,25 +36,46 @@ export class ReportsComponent implements OnInit, OnDestroy {
   readonly isLoading = signal<boolean>(false);
   readonly errored = signal<boolean>(false);
   readonly report = signal<WeeklyReport | null>(null);
-  readonly payingIds = signal<Set<string>>(new Set());
-  readonly paidIds = signal<Set<string>>(new Set());
+
+  // Suivi des paiements en cours, indexé par commissionId
+  readonly payingCommissionIds = signal<Set<string>>(new Set());
+  readonly snapshotting = signal<boolean>(false);
 
   readonly rows = computed<WeeklyReportRow[]>(() => this.report()?.rows ?? []);
 
-  readonly totalRevenue = computed(() =>
-    this.rows().reduce((sum, r) => sum + (r.totalRevenue || 0), 0)
-  );
+  // Si le backend renvoie totalRevenue / totalCommission, on les utilise.
+  // Sinon on retombe sur la somme des lignes.
+  readonly totalRevenue = computed(() => {
+    const r = this.report();
+    if (r && typeof r.totalRevenue === 'number') return r.totalRevenue;
+    return this.rows().reduce((sum, r) => sum + (r.totalRevenue || 0), 0);
+  });
 
-  readonly totalCommission = computed(() =>
-    this.rows().reduce((sum, r) => sum + (r.commissionDue || 0), 0)
-  );
+  readonly totalCommission = computed(() => {
+    const r = this.report();
+    if (r && typeof r.totalCommission === 'number') return r.totalCommission;
+    return this.rows().reduce((sum, r) => sum + (r.commissionDue || 0), 0);
+  });
 
-  readonly activeLivreurs = computed(() =>
-    this.rows().filter((r) => r.completedCount > 0).length
+  readonly activeLivreurs = computed(() => {
+    const r = this.report();
+    if (r && typeof r.activeDrivers === 'number') return r.activeDrivers;
+    return this.rows().filter((r) => r.completedCount > 0).length;
+  });
+
+  readonly commissionRatePercent = computed(() => {
+    const r = this.report();
+    const rate = r?.commissionRate ?? 0.35;
+    return Math.round(rate * 100);
+  });
+
+  // Y a-t-il au moins une ligne sans commissionId ? -> propose snapshot
+  readonly needsSnapshot = computed(() =>
+    this.rows().some((r) => !r.commissionId)
   );
 
   ngOnInit(): void {
-    this.pageActions.setPage('Comptabilité', 'Rapports hebdomadaires et commissions (35%)');
+    this.pageActions.setPage('Comptabilité', 'Rapports hebdomadaires et commissions');
     this.refreshSub = this.pageActions.refresh$.subscribe(() => this.reloadCurrent());
     this.weeks.set(this.buildRecentWeeks());
     const current = this.weeks()[0];
@@ -81,11 +102,15 @@ export class ReportsComponent implements OnInit, OnDestroy {
     }
   }
 
+  currentWeek(): WeekOption | undefined {
+    return this.weeks().find((w) => this.keyOf(w) === this.selectedWeekKey());
+  }
+
   private load(week: WeekOption): void {
     this.isLoading.set(true);
     this.errored.set(false);
     this.report.set(null);
-    this.paidIds.set(new Set());
+    this.payingCommissionIds.set(new Set());
     this.reportsService.getWeekly(week.from, week.to).subscribe({
       next: (data) => {
         this.report.set(data);
@@ -99,45 +124,61 @@ export class ReportsComponent implements OnInit, OnDestroy {
     });
   }
 
-  pay(row: WeeklyReportRow): void {
-    if (this.payingIds().has(row.livreurId) || this.paidIds().has(row.livreurId)) {
-      return;
-    }
-    const next = new Set(this.payingIds());
-    next.add(row.livreurId);
-    this.payingIds.set(next);
-
-    this.reportsService.payCommission(row.livreurId).subscribe({
-      next: (res) => {
-        const paying = new Set(this.payingIds());
-        paying.delete(row.livreurId);
-        this.payingIds.set(paying);
-        if (res?.success) {
-          const paid = new Set(this.paidIds());
-          paid.add(row.livreurId);
-          this.paidIds.set(paid);
-        }
+  /** POST /reports/snapshot pour générer/maj les commissionId de la semaine. */
+  snapshot(): void {
+    if (this.snapshotting()) return;
+    const week = this.currentWeek();
+    this.snapshotting.set(true);
+    this.reportsService.snapshotWeek(week?.from).subscribe({
+      next: () => {
+        this.snapshotting.set(false);
+        if (week) this.load(week);
       },
       error: (err) => {
-        console.error('Paiement commission echoue', err);
-        const paying = new Set(this.payingIds());
-        paying.delete(row.livreurId);
-        this.payingIds.set(paying);
+        console.error('Snapshot semaine echoue', err);
+        this.snapshotting.set(false);
       }
     });
   }
 
-  isPaying(id: string): boolean {
-    return this.payingIds().has(id);
+  /** Marque une commission comme payée. */
+  pay(row: WeeklyReportRow): void {
+    if (!row.commissionId) return;
+    if (this.payingCommissionIds().has(row.commissionId)) return;
+
+    const next = new Set(this.payingCommissionIds());
+    next.add(row.commissionId);
+    this.payingCommissionIds.set(next);
+
+    this.reportsService.markCommissionPaid(row.commissionId).subscribe({
+      next: () => {
+        const paying = new Set(this.payingCommissionIds());
+        if (row.commissionId) paying.delete(row.commissionId);
+        this.payingCommissionIds.set(paying);
+        // Recharge la liste pour refléter le nouveau status renvoyé par le backend
+        const week = this.currentWeek();
+        if (week) this.load(week);
+      },
+      error: (err) => {
+        console.error('Paiement commission echoue', err);
+        const paying = new Set(this.payingCommissionIds());
+        if (row.commissionId) paying.delete(row.commissionId);
+        this.payingCommissionIds.set(paying);
+      }
+    });
   }
 
-  isPaid(id: string): boolean {
-    return this.paidIds().has(id);
+  isPaying(commissionId: string | null): boolean {
+    if (!commissionId) return false;
+    return this.payingCommissionIds().has(commissionId);
+  }
+
+  isPaid(row: WeeklyReportRow): boolean {
+    return row.status === 'PAID';
   }
 
   selectedWeekLabel(): string {
-    const w = this.weeks().find((w) => this.keyOf(w) === this.selectedWeekKey());
-    return w?.label ?? '';
+    return this.currentWeek()?.label ?? '';
   }
 
   private keyOf(w: WeekOption): string {
