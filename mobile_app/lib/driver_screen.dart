@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'config/env.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
+import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
 
 class DriverScreen extends StatefulWidget {
@@ -22,7 +22,17 @@ class _DriverScreenState extends State<DriverScreen> {
   String? currentDriverId;
   final ApiClient _api = ApiClient();
   final AuthService _authService = AuthService();
-  Timer? _positionTimer;
+
+  /// Stream de positions (remplace l'ancien Timer.periodic 30s pour économiser
+  /// la batterie : on n'émet que quand le livreur a réellement bougé).
+  StreamSubscription<Position>? _positionSub;
+
+  /// Heartbeat de fallback : si la position n'a pas changé depuis 90 s,
+  /// on re-broadcast la dernière position connue pour garder le client
+  /// informé que le livreur est toujours là.
+  Timer? _heartbeatTimer;
+  Position? _lastKnownPosition;
+  DateTime? _lastEmittedAt;
 
   @override
   void initState() {
@@ -101,29 +111,62 @@ class _DriverScreenState extends State<DriverScreen> {
     return true;
   }
 
-  Future<void> _emitCurrentPosition() async {
-    try {
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      socket?.emit('driver:location', {
-        'lat': pos.latitude,
-        'lng': pos.longitude,
-      });
-    } catch (_) {
-      // Position temporairement indisponible — on réessaiera au prochain tick.
-    }
+  void _emitPosition(Position pos) {
+    socket?.emit('driver:location', {
+      'lat': pos.latitude,
+      'lng': pos.longitude,
+    });
+    _lastKnownPosition = pos;
+    _lastEmittedAt = DateTime.now();
   }
 
   Future<void> _startLocationUpdates() async {
     final granted = await _ensureLocationPermission();
     if (!granted) return;
 
-    await _emitCurrentPosition();
+    // Première position pour amorcer le tracking et avoir une référence
+    try {
+      final first = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      _emitPosition(first);
+    } catch (_) {
+      // pas grave, le stream prendra le relais
+    }
 
-    _positionTimer?.cancel();
-    _positionTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      _emitCurrentPosition();
+    // On annule un éventuel ancien stream avant d'en démarrer un nouveau
+    await _positionSub?.cancel();
+
+    const settings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 25, // ne re-broadcast que tous les 25 m parcourus
+    );
+    _positionSub =
+        Geolocator.getPositionStream(locationSettings: settings).listen(
+      (pos) {
+        _emitPosition(pos);
+      },
+      onError: (_) {
+        // on ignore : le heartbeat continuera à pousser la dernière position
+      },
+    );
+
+    // Heartbeat de fallback : si rien n'a été émis depuis 90 s, on re-pousse
+    // la dernière position connue pour rassurer le client.
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
+      final last = _lastKnownPosition;
+      final lastAt = _lastEmittedAt;
+      if (last == null) return;
+      if (lastAt == null ||
+          DateTime.now().difference(lastAt) >= const Duration(seconds: 90)) {
+        socket?.emit('driver:location', {
+          'lat': last.latitude,
+          'lng': last.longitude,
+          'heartbeat': true,
+        });
+        _lastEmittedAt = DateTime.now();
+      }
     });
   }
 
@@ -167,8 +210,37 @@ class _DriverScreenState extends State<DriverScreen> {
     }
   }
 
+  /// Ouvre WhatsApp côté livreur pour contacter le client. Visible quand la
+  /// course est `ACCEPTED` ou `IN_PROGRESS`.
+  Future<void> _openWhatsappToClient(dynamic orderData) async {
+    final client = orderData['client'] as Map<String, dynamic>?;
+    final phone = client?['phone']?.toString();
+    if (phone == null || phone.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Numéro du client indisponible.'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+      return;
+    }
+    final shortId = orderData['id'].toString().substring(
+          0,
+          orderData['id'].toString().length < 6
+              ? orderData['id'].toString().length
+              : 6,
+        );
+    final message =
+        'Bonjour, je suis votre livreur ZonZon pour la course #$shortId. J\'arrive bientôt.';
+    await WhatsappService.openChat(phone: phone, message: message);
+  }
+
   void _showSuccessDialog(dynamic orderData) {
     final orderId = orderData['id'].toString();
+    final status = orderData['status']?.toString() ?? 'ACCEPTED';
+    final canWhatsapp = status == 'ACCEPTED' || status == 'IN_PROGRESS';
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -207,6 +279,23 @@ class _DriverScreenState extends State<DriverScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0EA5E9)),
                 ),
               ),
+              if (canWhatsapp) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _openWhatsappToClient(orderData),
+                    icon: const Icon(Icons.message, color: Colors.white),
+                    label: const Text(
+                      'Contacter le client par WhatsApp',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF25D366),
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -251,7 +340,8 @@ class _DriverScreenState extends State<DriverScreen> {
 
   @override
   void dispose() {
-    _positionTimer?.cancel();
+    _positionSub?.cancel();
+    _heartbeatTimer?.cancel();
     socket?.disconnect();
     super.dispose();
   }

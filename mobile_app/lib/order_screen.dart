@@ -12,6 +12,7 @@ import 'models/place.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/geocoding_service.dart';
+import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
 import 'screens/location_picker_screen.dart';
 import 'screens/shop_list_screen.dart';
@@ -399,6 +400,31 @@ class _OrderScreenState extends State<OrderScreen> {
         ),
       ),
     );
+  }
+
+  /// Ouvre WhatsApp côté client pour contacter le livreur assigné. Visible
+  /// uniquement quand un livreur est assigné et que la course est ACCEPTED
+  /// ou IN_PROGRESS.
+  Future<void> _openWhatsappToLivreur() async {
+    final livreur = _assignedLivreur;
+    final orderId = _activeOrderId;
+    if (livreur == null || orderId == null) return;
+    final phone = livreur['phone']?.toString();
+    if (phone == null || phone.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Numéro du livreur indisponible.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+    final shortId =
+        orderId.length < 6 ? orderId : orderId.substring(0, 6);
+    final message =
+        'Bonjour, je suis le client de la course #$shortId. Pouvez-vous me confirmer votre arrivée ?';
+    await WhatsappService.openChat(phone: phone, message: message);
   }
 
   Future<void> _submitOrder() async {
@@ -904,6 +930,32 @@ class _OrderScreenState extends State<OrderScreen> {
                 ),
               ),
       ),
+      if (_assignedLivreur != null &&
+          (_activeOrderStatus == 'ACCEPTED' ||
+              _activeOrderStatus == 'IN_PROGRESS')) ...[
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 52,
+          child: ElevatedButton.icon(
+            onPressed: _openWhatsappToLivreur,
+            icon: const Icon(Icons.message, color: Colors.white, size: 20),
+            label: const Text(
+              'Contacter le livreur par WhatsApp',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF25D366),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+            ),
+          ),
+        ),
+      ],
     ];
   }
 
