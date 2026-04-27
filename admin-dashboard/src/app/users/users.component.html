@@ -1,0 +1,108 @@
+<div class="p-4 md:p-8">
+  <div class="max-w-7xl mx-auto">
+    <!-- Filters -->
+    <div class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 mb-6 flex flex-col sm:flex-row gap-4">
+      <div class="flex items-center gap-2">
+        <lucide-icon name="filter" class="w-4 h-4 text-slate-400"></lucide-icon>
+        <label class="text-sm text-slate-400">Rôle</label>
+        <select
+          class="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          [ngModel]="roleFilter()"
+          (ngModelChange)="onRoleChange($event)">
+          <option value="ALL">Tous</option>
+          <option value="CLIENT">Client</option>
+          <option value="LIVREUR">Livreur</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+      </div>
+
+      <div class="flex-1 relative">
+        <lucide-icon
+          name="search"
+          class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></lucide-icon>
+        <input
+          type="text"
+          placeholder="Rechercher par nom ou téléphone..."
+          class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg pl-10 pr-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          [ngModel]="search()"
+          (ngModelChange)="onSearch($event)" />
+      </div>
+    </div>
+
+    <!-- Skeleton -->
+    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="5"></app-skeleton-row>
+
+    <!-- Error -->
+    <div *ngIf="!isLoading() && errored()"
+         class="bg-slate-800/40 p-10 rounded-2xl border border-slate-700/50 text-center text-slate-400 flex flex-col items-center gap-3">
+      <lucide-icon name="alert-triangle" class="w-8 h-8 text-red-400"></lucide-icon>
+      Impossible de charger les utilisateurs.
+    </div>
+
+    <!-- Table -->
+    <div *ngIf="!isLoading() && !errored()"
+         class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden shadow-zz-lg">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-400 text-xs uppercase tracking-wider">
+              <th class="p-5 border-b border-slate-700/50">Utilisateur</th>
+              <th class="p-5 border-b border-slate-700/50">Téléphone</th>
+              <th class="p-5 border-b border-slate-700/50">Rôle</th>
+              <th class="p-5 border-b border-slate-700/50">Véhicule</th>
+              <th class="p-5 border-b border-slate-700/50">Inscrit le</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-700/50 text-slate-300">
+            <tr *ngIf="filteredUsers().length === 0">
+              <td colspan="5" class="p-8 text-center text-slate-500">Aucun utilisateur trouvé.</td>
+            </tr>
+            <tr *ngFor="let u of filteredUsers()" class="hover:bg-slate-700/20 transition-colors">
+              <td class="p-5">
+                <div class="flex items-center gap-3">
+                  <img *ngIf="u.profilePhotoUrl; else avatarInitials"
+                       [src]="u.profilePhotoUrl" alt=""
+                       class="w-10 h-10 rounded-full border border-slate-600 object-cover" />
+                  <ng-template #avatarInitials>
+                    <div class="w-10 h-10 rounded-full bg-blue-600/30 border border-blue-500/50 flex items-center justify-center font-bold text-blue-300 text-sm">
+                      {{ initials(u) }}
+                    </div>
+                  </ng-template>
+                  <div>
+                    <div class="font-semibold text-white">{{ u.firstName }} {{ u.lastName }}</div>
+                    <div class="code-id" [title]="u.id">#{{ shortId(u.id) }}</div>
+                  </div>
+                </div>
+              </td>
+              <td class="p-5">
+                <div class="flex items-center gap-2">
+                  <lucide-icon name="phone" class="w-3.5 h-3.5 text-slate-400"></lucide-icon>
+                  {{ u.phone }}
+                </div>
+              </td>
+              <td class="p-5">
+                <span class="px-3 py-1 rounded-full text-xs font-bold border" [ngClass]="roleBadge(u.role)">
+                  {{ u.role }}
+                </span>
+              </td>
+              <td class="p-5">
+                <ng-container *ngIf="u.role === 'LIVREUR' && u.vehicle; else noVehicle">
+                  <div class="text-sm">{{ u.vehicle.type }}</div>
+                  <div class="text-xs text-slate-500" *ngIf="u.vehicle.licensePlate">
+                    {{ u.vehicle.licensePlate }}
+                  </div>
+                </ng-container>
+                <ng-template #noVehicle>
+                  <span class="text-slate-600">-</span>
+                </ng-template>
+              </td>
+              <td class="p-5 text-sm text-slate-400">
+                {{ u.createdAt | date:'dd/MM/yyyy' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

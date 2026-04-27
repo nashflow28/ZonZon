@@ -1,0 +1,30 @@
+<div class="zz-empty flex flex-col items-center justify-center text-center px-6 py-14">
+  <div class="zz-empty-icon relative w-20 h-20 rounded-full flex items-center justify-center mb-5
+              bg-gradient-to-br from-blue-500/15 to-emerald-500/15
+              border border-slate-700/60 shadow-inner shadow-blue-500/5">
+    <div class="absolute inset-0 rounded-full bg-gradient-to-br from-blue-500/10 to-emerald-500/10 blur-xl"></div>
+    <!-- Icône Lucide-style inline (package) — fallback universel -->
+    <svg class="relative w-9 h-9 text-slate-300" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"
+         aria-hidden="true">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="3.29 7.26 12 12.01 20.71 7.26"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </svg>
+  </div>
+
+  <h3 class="text-lg font-semibold text-white mb-1.5">{{ title }}</h3>
+  <p *ngIf="description" class="text-sm text-slate-400 max-w-sm leading-relaxed">
+    {{ description }}
+  </p>
+
+  <button
+    *ngIf="actionLabel"
+    type="button"
+    (click)="onAction()"
+    class="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white
+           bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500
+           shadow-lg shadow-blue-900/30 transition-all">
+    {{ actionLabel }}
+  </button>
+</div>

@@ -1,0 +1,117 @@
+<div class="p-4 md:p-8">
+  <div class="max-w-7xl mx-auto">
+    <div class="flex justify-end mb-8">
+      <div class="flex items-center gap-3">
+        <lucide-icon name="calendar" class="w-4 h-4 text-slate-400"></lucide-icon>
+        <label class="text-sm text-slate-400">Semaine</label>
+        <select
+          class="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          [ngModel]="selectedWeekKey()"
+          (ngModelChange)="onWeekChange($event)">
+          <option *ngFor="let w of weeks()" [value]="(w.year + '-W' + (w.week < 10 ? '0' + w.week : w.week))">
+            {{ w.label }}
+          </option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Skeleton cards quand loading -->
+    <app-skeleton-row *ngIf="isLoading()" [rows]="3" variant="card" class="block mb-8"></app-skeleton-row>
+
+    <!-- Recap cards -->
+    <div *ngIf="!isLoading()" class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 shadow-xl relative overflow-hidden">
+        <div class="absolute -right-4 -top-4 text-slate-700 opacity-20">
+          <lucide-icon name="trending-up" class="w-24 h-24"></lucide-icon>
+        </div>
+        <h3 class="text-slate-400 font-medium mb-1">Chiffre d'affaires global</h3>
+        <div class="text-3xl md:text-4xl font-extrabold text-white">
+          {{ totalRevenue() | number:'1.0-0' }} <span class="text-xl text-slate-500">FCFA</span>
+        </div>
+        <p class="text-sm text-slate-400 mt-4">{{ selectedWeekLabel() }}</p>
+      </div>
+
+      <div class="bg-gradient-to-br from-blue-900/50 to-blue-800/20 p-6 rounded-2xl border border-blue-500/30 shadow-xl shadow-blue-900/20">
+        <h3 class="text-blue-300 font-medium mb-1 flex items-center gap-2">
+          <lucide-icon name="banknote" class="w-4 h-4"></lucide-icon>
+          Commission à percevoir (35%)
+        </h3>
+        <div class="text-3xl md:text-4xl font-extrabold text-blue-400">
+          {{ totalCommission() | number:'1.0-0' }} <span class="text-xl text-blue-500/50">FCFA</span>
+        </div>
+        <p class="text-sm text-blue-300/70 mt-4">À récupérer auprès des livreurs</p>
+      </div>
+
+      <div class="bg-gradient-to-br from-emerald-900/50 to-emerald-800/20 p-6 rounded-2xl border border-emerald-500/30 shadow-xl shadow-emerald-900/20">
+        <h3 class="text-emerald-300 font-medium mb-1 flex items-center gap-2">
+          <lucide-icon name="activity" class="w-4 h-4"></lucide-icon>
+          Livreurs actifs
+        </h3>
+        <div class="text-3xl md:text-4xl font-extrabold text-emerald-400">{{ activeLivreurs() }}</div>
+        <p class="text-sm text-emerald-300/70 mt-4">Au moins 1 course terminée</p>
+      </div>
+    </div>
+
+    <!-- Skeleton table -->
+    <app-skeleton-row *ngIf="isLoading()" [rows]="5" [cols]="5"></app-skeleton-row>
+
+    <!-- Empty / error state -->
+    <div *ngIf="!isLoading() && (errored() || rows().length === 0)"
+         class="bg-slate-800/40 backdrop-blur-xl p-10 rounded-2xl border border-slate-700/50 text-center">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-700/50 mb-4">
+        <lucide-icon name="file-text" class="w-8 h-8 text-slate-400"></lucide-icon>
+      </div>
+      <h3 class="text-xl font-bold text-white">Aucune donnée pour cette période</h3>
+      <p class="text-slate-400 max-w-md mx-auto mt-2">
+        Sélectionnez une autre semaine ou réessayez plus tard.
+      </p>
+    </div>
+
+    <!-- Table -->
+    <div *ngIf="!isLoading() && !errored() && rows().length > 0"
+         class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden shadow-zz-lg">
+      <div class="px-6 py-4 border-b border-slate-700/50 flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white">Détail par livreur</h3>
+        <span class="text-xs text-slate-400">{{ rows().length }} livreurs</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-400 text-xs uppercase tracking-wider">
+              <th class="p-5 border-b border-slate-700/50">Livreur</th>
+              <th class="p-5 border-b border-slate-700/50">Courses livrées</th>
+              <th class="p-5 border-b border-slate-700/50">CA généré</th>
+              <th class="p-5 border-b border-slate-700/50">Commission due (35%)</th>
+              <th class="p-5 border-b border-slate-700/50 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-700/50 text-slate-300">
+            <tr *ngFor="let row of rows()" class="hover:bg-slate-700/20 transition-colors">
+              <td class="p-5 font-semibold text-white">{{ row.livreurName }}</td>
+              <td class="p-5">{{ row.completedCount }}</td>
+              <td class="p-5">{{ row.totalRevenue | number:'1.0-0' }} FCFA</td>
+              <td class="p-5 text-blue-400 font-bold">
+                {{ row.commissionDue | number:'1.0-0' }} FCFA
+              </td>
+              <td class="p-5 text-right">
+                <button
+                  *ngIf="!isPaid(row.livreurId)"
+                  (click)="pay(row)"
+                  [disabled]="isPaying(row.livreurId)"
+                  class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition-all">
+                  {{ isPaying(row.livreurId) ? 'Paiement...' : 'Marquer comme payé' }}
+                </button>
+                <span *ngIf="isPaid(row.livreurId)"
+                      class="inline-flex items-center gap-2 text-emerald-400 text-sm font-semibold">
+                  <lucide-icon name="check" class="w-4 h-4"></lucide-icon>
+                  Payé
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>

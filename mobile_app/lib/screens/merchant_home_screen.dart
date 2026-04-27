@@ -1,0 +1,595 @@
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../config/env.dart';
+import '../models/product.dart';
+import '../models/shop.dart';
+import '../services/auth_service.dart';
+import '../services/shops_service.dart';
+import 'login_screen.dart';
+import 'merchant_shop_form_screen.dart';
+import 'merchant_product_form_screen.dart';
+
+class MerchantHomeScreen extends StatefulWidget {
+  const MerchantHomeScreen({super.key});
+
+  @override
+  State<MerchantHomeScreen> createState() => _MerchantHomeScreenState();
+}
+
+class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
+  final ShopsService _shops = ShopsService();
+  Shop? _shop;
+  List<Product> _products = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _loading = true);
+    final shop = await _shops.getMyShop();
+    final products = shop != null ? await _shops.myProducts() : <Product>[];
+    if (!mounted) return;
+    setState(() {
+      _shop = shop;
+      _products = products;
+      _loading = false;
+    });
+  }
+
+  Future<void> _logout() async {
+    await AuthService().logout();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
+  Future<void> _openShopForm() async {
+    final saved = await Navigator.of(context).push<Shop>(
+      MaterialPageRoute(
+        builder: (_) => MerchantShopFormScreen(initial: _shop),
+      ),
+    );
+    if (saved != null) _refresh();
+  }
+
+  Future<void> _openProductForm({Product? edit}) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => MerchantProductFormScreen(initial: edit),
+      ),
+    );
+    if (saved == true) _refresh();
+  }
+
+  Future<void> _pickShopLogo() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+    );
+    if (picked == null) return;
+    final updated = await _shops.uploadShopLogo(picked.path);
+    if (updated != null && mounted) {
+      setState(() => _shop = updated);
+    }
+  }
+
+  Future<void> _toggleAvailable(Product p) async {
+    final updated = await _shops.updateProduct(p.id, {'available': !p.available});
+    if (updated != null && mounted) {
+      setState(() {
+        _products = _products
+            .map((x) => x.id == updated.id ? updated : x)
+            .toList();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0F172A),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1E293B),
+        elevation: 0,
+        title: const Row(
+          children: [
+            Icon(Icons.storefront, color: Color(0xFF10B981)),
+            SizedBox(width: 10),
+            Text('Espace commerçant',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Rafraîchir',
+            icon: const Icon(Icons.refresh, color: Colors.white70),
+            onPressed: _refresh,
+          ),
+          IconButton(
+            tooltip: 'Se déconnecter',
+            icon: const Icon(Icons.logout, color: Colors.white70),
+            onPressed: _logout,
+          ),
+        ],
+      ),
+      body: _loading
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)))
+          : _shop == null
+              ? _OnboardingState(onCreate: _openShopForm)
+              : RefreshIndicator(
+                  color: const Color(0xFF10B981),
+                  onRefresh: _refresh,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      _ShopHeaderCard(
+                        shop: _shop!,
+                        onEdit: _openShopForm,
+                        onPickLogo: _pickShopLogo,
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Mes produits',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _openProductForm(),
+                            icon: const Icon(Icons.add, color: Color(0xFF10B981)),
+                            label: const Text(
+                              'Ajouter',
+                              style: TextStyle(color: Color(0xFF10B981)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_products.isEmpty)
+                        _EmptyProducts(onAdd: () => _openProductForm())
+                      else
+                        ..._products.map(
+                          (p) => _ProductTile(
+                            product: p,
+                            onEdit: () => _openProductForm(edit: p),
+                            onToggle: () => _toggleAvailable(p),
+                            onDelete: () async {
+                              final ok = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  backgroundColor: const Color(0xFF1E293B),
+                                  title: const Text('Supprimer ?',
+                                      style: TextStyle(color: Colors.white)),
+                                  content: Text(
+                                    'Le produit "${p.name}" sera retiré du catalogue.',
+                                    style: const TextStyle(color: Colors.white70),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, false),
+                                      child: const Text('Annuler'),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.redAccent),
+                                      onPressed: () => Navigator.pop(ctx, true),
+                                      child: const Text('Supprimer'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              if (ok != true) return;
+                              await _shops.deleteProduct(p.id);
+                              _refresh();
+                            },
+                          ),
+                        ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+    );
+  }
+}
+
+class _OnboardingState extends StatelessWidget {
+  final VoidCallback onCreate;
+  const _OnboardingState({required this.onCreate});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+              ),
+              child: const Icon(Icons.add_business,
+                  color: Color(0xFF10B981), size: 56),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Bienvenue !',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Créez votre boutique pour rejoindre la marketplace ZonZon. '
+              'C\'est gratuit, et vos premiers clients vous attendent.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: onCreate,
+                icon: const Icon(Icons.storefront),
+                label: const Text(
+                  'Créer ma boutique',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B981),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShopHeaderCard extends StatelessWidget {
+  final Shop shop;
+  final VoidCallback onEdit;
+  final VoidCallback onPickLogo;
+  const _ShopHeaderCard({
+    required this.shop,
+    required this.onEdit,
+    required this.onPickLogo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final logoUrl = shop.logoUrl;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: onPickLogo,
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.05),
+                      border: Border.all(
+                          color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                      image: logoUrl != null
+                          ? DecorationImage(
+                              image: NetworkImage('$apiUrl$logoUrl'),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
+                    ),
+                    child: logoUrl == null
+                        ? const Icon(Icons.add_a_photo,
+                            color: Color(0xFF10B981), size: 28)
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        shop.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      _StatusBadge(status: shop.status, reason: shop.rejectionReason),
+                      if (shop.address.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.place,
+                                color: Colors.white38, size: 14),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                shop.address,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: Colors.white60, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit, color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+          if (shop.description != null && shop.description!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              child: Text(
+                shop.description!,
+                style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final ShopStatus status;
+  final String? reason;
+  const _StatusBadge({required this.status, required this.reason});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color;
+    String label;
+    IconData icon;
+    switch (status) {
+      case ShopStatus.approved:
+        color = const Color(0xFF10B981);
+        label = 'Approuvée';
+        icon = Icons.check_circle;
+        break;
+      case ShopStatus.rejected:
+        color = Colors.redAccent;
+        label = reason != null && reason!.isNotEmpty
+            ? 'Rejetée : $reason'
+            : 'Rejetée';
+        icon = Icons.cancel;
+        break;
+      case ShopStatus.suspended:
+        color = Colors.orange;
+        label = 'Suspendue';
+        icon = Icons.pause_circle;
+        break;
+      case ShopStatus.pending:
+      default:
+        color = const Color(0xFFFBBF24);
+        label = 'En attente de validation';
+        icon = Icons.hourglass_top;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 2,
+              style: TextStyle(
+                color: color,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyProducts extends StatelessWidget {
+  final VoidCallback onAdd;
+  const _EmptyProducts({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Column(
+        children: [
+          const Icon(Icons.inventory_2_outlined,
+              color: Colors.white24, size: 48),
+          const SizedBox(height: 12),
+          const Text(
+            'Aucun produit pour l\'instant',
+            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Ajoutez votre premier article pour qu\'il apparaisse dans la marketplace.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white54, fontSize: 12.5),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add, color: Color(0xFF10B981)),
+            label: const Text('Ajouter un produit',
+                style: TextStyle(color: Color(0xFF10B981))),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFF10B981)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductTile extends StatelessWidget {
+  final Product product;
+  final VoidCallback onEdit;
+  final VoidCallback onToggle;
+  final VoidCallback onDelete;
+  const _ProductTile({
+    required this.product,
+    required this.onEdit,
+    required this.onToggle,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final photo = product.photoUrl;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: product.available
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.orange.withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.white.withValues(alpha: 0.05),
+              image: photo != null
+                  ? DecorationImage(
+                      image: NetworkImage('$apiUrl$photo'),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            child: photo == null
+                ? const Icon(Icons.image_outlined, color: Colors.white24)
+                : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${product.priceFcfa} FCFA',
+                  style: const TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (!product.available)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Text(
+                      'Indisponible',
+                      style: TextStyle(color: Colors.orange, fontSize: 11),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            iconColor: Colors.white60,
+            color: const Color(0xFF1E293B),
+            onSelected: (v) {
+              if (v == 'edit') onEdit();
+              if (v == 'toggle') onToggle();
+              if (v == 'delete') onDelete();
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Text('Modifier', style: TextStyle(color: Colors.white)),
+              ),
+              PopupMenuItem(
+                value: 'toggle',
+                child: Text(
+                  product.available ? 'Marquer indisponible' : 'Remettre en vente',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Text('Supprimer', style: TextStyle(color: Colors.redAccent)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}

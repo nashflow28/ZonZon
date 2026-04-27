@@ -1,0 +1,161 @@
+<div class="min-h-screen bg-zz-bg text-zz-text flex">
+  <!-- Overlay mobile -->
+  <div
+    *ngIf="sidebarOpen()"
+    (click)="closeSidebar()"
+    class="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden"
+    aria-hidden="true"></div>
+
+  <!-- Sidebar (fixe desktop, drawer mobile) -->
+  <aside
+    class="fixed md:sticky top-0 z-40 h-screen w-64 shrink-0 border-r border-slate-700/50 bg-slate-900/95 md:bg-slate-900/60 backdrop-blur-xl flex flex-col transition-transform duration-300 ease-out"
+    [class.-translate-x-full]="!sidebarOpen()"
+    [class.translate-x-0]="sidebarOpen()"
+    [ngClass]="{ 'md:translate-x-0': true }">
+    <div class="px-6 py-5 border-b border-slate-700/50 flex items-center justify-between">
+      <div>
+        <h1 class="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+          ZonZon Admin
+        </h1>
+        <p class="text-[11px] text-slate-500 mt-1">Centre de contrôle</p>
+      </div>
+      <button
+        type="button"
+        (click)="closeSidebar()"
+        class="md:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800/60"
+        aria-label="Fermer le menu">
+        <lucide-icon name="x" class="w-5 h-5"></lucide-icon>
+      </button>
+    </div>
+
+    <nav class="flex-1 py-4 space-y-1 overflow-y-auto zz-scrollbar">
+      <a
+        *ngFor="let link of navLinks"
+        [routerLink]="link.path"
+        routerLinkActive="bg-blue-600/20 border-l-4 border-blue-500 text-white"
+        [routerLinkActiveOptions]="{ exact: false }"
+        class="flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 border-l-4 border-transparent transition-all">
+        <lucide-icon [name]="link.icon" class="w-4 h-4"></lucide-icon>
+        <span>{{ link.label }}</span>
+      </a>
+    </nav>
+
+    <div class="border-t border-slate-700/50 p-4">
+      <div *ngIf="user() as u" class="flex items-center gap-3 mb-3">
+        <img *ngIf="u.profilePhotoUrl; else initialsTpl"
+             [src]="u.profilePhotoUrl"
+             alt="Profil"
+             class="w-10 h-10 rounded-full border border-slate-600 object-cover" />
+        <ng-template #initialsTpl>
+          <div class="w-10 h-10 rounded-full bg-blue-600/30 border border-blue-500/50 flex items-center justify-center font-bold text-blue-300 text-sm">
+            {{ (u.firstName?.[0] || '') + (u.lastName?.[0] || '') }}
+          </div>
+        </ng-template>
+        <div class="min-w-0">
+          <div class="text-sm font-semibold text-white truncate">{{ u.firstName }} {{ u.lastName }}</div>
+          <div class="text-[11px] text-slate-400">{{ u.role }}</div>
+        </div>
+      </div>
+      <button
+        (click)="logout()"
+        class="w-full bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg border border-slate-600 transition-all text-sm flex items-center justify-center gap-2">
+        <lucide-icon name="log-out" class="w-4 h-4"></lucide-icon>
+        Déconnexion
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main area -->
+  <div class="flex-1 min-w-0 flex flex-col min-h-screen">
+    <!-- Header partage fixe -->
+    <header class="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50">
+      <div class="flex items-center gap-3 px-4 md:px-8 h-16">
+        <!-- Hamburger (mobile) -->
+        <button
+          type="button"
+          (click)="toggleSidebar()"
+          class="md:hidden text-slate-300 hover:text-white p-2 rounded-lg hover:bg-slate-800/60 transition-colors"
+          aria-label="Ouvrir le menu">
+          <lucide-icon name="menu" class="w-5 h-5"></lucide-icon>
+        </button>
+
+        <!-- Titre -->
+        <div class="min-w-0 flex-1">
+          <h2 class="text-sm md:text-base font-bold text-white truncate">
+            {{ pageActions.title() || 'ZonZon Admin' }}
+          </h2>
+          <p *ngIf="pageActions.subtitle()" class="text-[11px] text-slate-400 truncate">
+            {{ pageActions.subtitle() }}
+          </p>
+        </div>
+
+        <!-- Indicateur live -->
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700/60"
+             [title]="liveLabel()">
+          <span class="relative flex h-2.5 w-2.5">
+            <span
+              *ngIf="liveStatus.isConnected()"
+              class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5" [ngClass]="liveDotClass()"></span>
+          </span>
+          <span class="text-xs text-slate-300">{{ liveLabel() }}</span>
+          <lucide-icon
+            [name]="liveStatus.isConnected() ? 'wifi' : 'wifi-off'"
+            class="w-3.5 h-3.5 text-slate-400"></lucide-icon>
+        </div>
+
+        <!-- Refresh global -->
+        <button
+          type="button"
+          (click)="refresh()"
+          class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-600 transition-all text-sm"
+          aria-label="Rafraichir">
+          <lucide-icon name="refresh-cw" class="w-4 h-4"></lucide-icon>
+          <span class="hidden sm:inline">Rafraîchir</span>
+        </button>
+
+        <!-- Avatar + menu -->
+        <div class="relative" *ngIf="user() as u">
+          <button
+            type="button"
+            (click)="toggleUserMenu()"
+            class="flex items-center gap-2 p-1 rounded-full hover:bg-slate-800/60 transition-colors"
+            aria-label="Menu utilisateur">
+            <img *ngIf="u.profilePhotoUrl; else headerInitials"
+                 [src]="u.profilePhotoUrl"
+                 alt="Profil"
+                 class="w-9 h-9 rounded-full border border-slate-600 object-cover" />
+            <ng-template #headerInitials>
+              <div class="w-9 h-9 rounded-full bg-blue-600/30 border border-blue-500/50 flex items-center justify-center font-bold text-blue-300 text-xs">
+                {{ initials() }}
+              </div>
+            </ng-template>
+            <lucide-icon name="chevron-down" class="w-4 h-4 text-slate-400 hidden md:block"></lucide-icon>
+          </button>
+
+          <div
+            *ngIf="userMenuOpen()"
+            class="absolute right-0 mt-2 w-56 rounded-xl border border-slate-700/60 bg-slate-900/95 backdrop-blur-xl shadow-zz-lg overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-700/50">
+              <div class="text-sm font-semibold text-white truncate">
+                {{ u.firstName }} {{ u.lastName }}
+              </div>
+              <div class="text-[11px] text-slate-400">{{ u.role }}</div>
+            </div>
+            <button
+              (click)="logout()"
+              class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-800/70 transition-colors">
+              <lucide-icon name="log-out" class="w-4 h-4"></lucide-icon>
+              Déconnexion
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Contenu -->
+    <main class="flex-1 min-w-0">
+      <router-outlet />
+    </main>
+  </div>
+</div>

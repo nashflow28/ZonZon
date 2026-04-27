@@ -1,0 +1,23 @@
+:host {
+  display: block;
+}
+
+.zz-stat-card {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.zz-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px -12px rgba(59, 130, 246, 0.25);
+}
+
+.zz-badge-pulse {
+  position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zz-stat-card:hover {
+    transform: none;
+    box-shadow: none;
+  }
+}

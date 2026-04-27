@@ -1,0 +1,151 @@
+<div class="p-4 md:p-8">
+  <div class="max-w-7xl mx-auto">
+    <!-- Stat cards -->
+    <div *ngIf="!isLoading()" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+
+      <!-- Carte 1 : Courses en cours -->
+      <div class="zz-stat-card relative overflow-hidden bg-gradient-to-br from-blue-600/20 to-blue-900/10 border border-blue-500/30 rounded-2xl p-5">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-xs uppercase tracking-wider text-blue-300/80 font-semibold">Courses en cours</div>
+            <div class="mt-2 text-3xl md:text-4xl font-black text-white tabular-nums">
+              {{ liveCountAnimated() }}
+            </div>
+            <div class="text-xs text-slate-400 mt-1">vs hier : <span class="text-slate-500">—</span></div>
+          </div>
+          <div class="shrink-0 w-11 h-11 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-200">
+            <lucide-icon name="activity" class="w-5 h-5"></lucide-icon>
+          </div>
+        </div>
+        <div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-blue-500/10 blur-2xl pointer-events-none"></div>
+      </div>
+
+      <!-- Carte 2 : Terminées aujourd'hui -->
+      <div class="zz-stat-card relative overflow-hidden bg-gradient-to-br from-emerald-600/20 to-emerald-900/10 border border-emerald-500/30 rounded-2xl p-5">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-xs uppercase tracking-wider text-emerald-300/80 font-semibold">Terminées aujourd'hui</div>
+            <div class="mt-2 text-3xl md:text-4xl font-black text-white tabular-nums">
+              {{ completedToday().length }}
+            </div>
+            <div class="text-xs text-slate-400 mt-1">vs hier : <span class="text-slate-500">—</span></div>
+          </div>
+          <div class="shrink-0 w-11 h-11 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-200">
+            <lucide-icon name="check" class="w-5 h-5"></lucide-icon>
+          </div>
+        </div>
+        <div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none"></div>
+      </div>
+
+      <!-- Carte 3 : Revenu du jour -->
+      <div class="zz-stat-card relative overflow-hidden bg-gradient-to-br from-amber-600/20 to-amber-900/10 border border-amber-500/30 rounded-2xl p-5 sm:col-span-2 lg:col-span-1">
+        <div class="flex items-start justify-between">
+          <div>
+            <div class="text-xs uppercase tracking-wider text-amber-300/80 font-semibold">Revenu du jour</div>
+            <div class="mt-2 text-3xl md:text-4xl font-black text-white tabular-nums">
+              {{ revenueToday() | number:'1.0-0' }}
+              <span class="text-base font-bold text-amber-300/80">FCFA</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">vs hier : <span class="text-slate-500">—</span></div>
+          </div>
+          <div class="shrink-0 w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-200">
+            <lucide-icon name="banknote" class="w-5 h-5"></lucide-icon>
+          </div>
+        </div>
+        <div class="absolute -right-6 -bottom-6 w-24 h-24 rounded-full bg-amber-500/10 blur-2xl pointer-events-none"></div>
+      </div>
+    </div>
+
+    <!-- Loading State (skeleton) -->
+    <app-skeleton-row *ngIf="isLoading()" [rows]="5" [cols]="4"></app-skeleton-row>
+
+    <!-- LIVE ORDERS -->
+    <div *ngIf="!isLoading()" class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden shadow-zz-lg">
+      <div class="px-6 py-4 border-b border-slate-700/50 flex items-center gap-3">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+        </span>
+        <h3 class="text-lg font-bold text-white">Courses en direct</h3>
+        <span class="text-xs text-slate-400">{{ orders().length }} en cours</span>
+      </div>
+
+      <!-- Empty state -->
+      <div *ngIf="orders().length === 0">
+        <app-empty-state
+          title="Aucune course en cours"
+          description="Dès qu'un client passe commande, elle apparaîtra ici en temps réel."
+          actionLabel="Rafraîchir"
+          (action)="fetchOrders()">
+        </app-empty-state>
+      </div>
+
+      <!-- Table -->
+      <div *ngIf="orders().length > 0" class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-400 text-xs uppercase tracking-wider">
+              <th class="p-5 border-b border-slate-700/50">Livreur &amp; Client</th>
+              <th class="p-5 border-b border-slate-700/50">Trajet</th>
+              <th class="p-5 border-b border-slate-700/50">Prix &amp; Dist.</th>
+              <th class="p-5 border-b border-slate-700/50">Créée</th>
+              <th class="p-5 border-b border-slate-700/50">Statut</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-700/50 text-slate-300">
+            <tr *ngFor="let order of orders()"
+                (click)="openOrder(order)"
+                class="hover:bg-slate-700/20 transition-colors cursor-pointer">
+              <td class="p-5">
+                <div class="flex items-center gap-3">
+                  <div class="w-9 h-9 rounded-full bg-emerald-600/30 border border-emerald-500/50 flex items-center justify-center font-bold text-emerald-200 text-xs shrink-0">
+                    {{ initials(order.livreur) }}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="font-bold text-emerald-300 truncate flex items-center gap-1.5">
+                      <lucide-icon name="bike" class="w-3.5 h-3.5"></lucide-icon>
+                      {{ order.livreur?.firstName || 'En recherche...' }}
+                    </div>
+                    <div class="text-xs text-slate-400 truncate">Client : {{ order.client?.firstName || 'Anonyme' }}</div>
+                  </div>
+                </div>
+              </td>
+              <td class="p-5 max-w-sm">
+                <div class="flex items-center gap-2 mb-1">
+                  <div class="w-2 h-2 rounded-full bg-blue-500 shrink-0"></div>
+                  <span class="text-sm truncate">{{ order.pickupAddress }}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <div class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></div>
+                  <span class="text-sm truncate">{{ order.deliveryAddress }}</span>
+                </div>
+              </td>
+              <td class="p-5">
+                <div class="text-white font-bold text-lg">{{ order.priceFcfa | number:'1.0-0' }} FCFA</div>
+                <div class="text-xs text-slate-400">{{ order.distanceKm }} km</div>
+              </td>
+              <td class="p-5 text-sm text-slate-400 whitespace-nowrap">
+                {{ order.createdAt | timeAgo }}
+              </td>
+              <td class="p-5">
+                <span
+                  class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border"
+                  [class.zz-badge-pulse]="isPulsing(order.status)"
+                  [ngClass]="getStatusColor(order.status)">
+                  <span *ngIf="isPulsing(order.status)" class="relative flex h-1.5 w-1.5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-current"></span>
+                  </span>
+                  {{ order.status }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panneau de détail (overlay) -->
+<app-order-detail [order]="selectedOrder()" (close)="closeOrder()"></app-order-detail>

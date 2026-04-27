@@ -1,0 +1,179 @@
+<div class="zz-login min-h-screen bg-[#0B1120] text-white flex flex-col lg:flex-row">
+
+  <!-- ============== Mobile header (logo seul) ============== -->
+  <div class="lg:hidden px-6 pt-8 pb-4 flex items-center justify-center">
+    <div class="flex items-center gap-2">
+      <span class="inline-flex w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 items-center justify-center font-bold">Z</span>
+      <span class="text-lg font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+        ZonZon Admin
+      </span>
+    </div>
+  </div>
+
+  <!-- ============== Partie formulaire (40%) ============== -->
+  <section class="zz-login-form flex-1 lg:w-2/5 flex items-center justify-center p-6 lg:p-10">
+    <div class="w-full max-w-md">
+
+      <div class="hidden lg:flex items-center gap-2 mb-10">
+        <span class="inline-flex w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-emerald-500 items-center justify-center font-bold text-lg">Z</span>
+        <span class="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+          ZonZon Admin
+        </span>
+      </div>
+
+      <div class="mb-8 zz-anim-item" style="--zz-delay: 0ms;">
+        <h1 class="text-3xl lg:text-4xl font-extrabold text-white">Content de vous revoir.</h1>
+        <p class="text-slate-400 mt-2">Connectez-vous pour accéder au centre de contrôle.</p>
+      </div>
+
+      <div class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-2xl p-6 lg:p-8 zz-anim-item" style="--zz-delay: 80ms;">
+        <form [formGroup]="form" (ngSubmit)="submit()" class="space-y-5" novalidate>
+
+          <!-- Téléphone -->
+          <div class="zz-anim-item" style="--zz-delay: 160ms;">
+            <label for="zz-phone" class="block text-sm font-medium text-slate-300 mb-2">Téléphone</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>
+                </svg>
+              </span>
+              <input
+                id="zz-phone"
+                type="tel"
+                formControlName="phone"
+                placeholder="+228 90 00 00 00"
+                autocomplete="tel"
+                class="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900/60 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+              />
+            </div>
+            <p *ngIf="form.controls.phone.touched && form.controls.phone.invalid"
+               class="text-xs text-red-400 mt-1.5">
+              Le numéro de téléphone est requis.
+            </p>
+          </div>
+
+          <!-- Mot de passe -->
+          <div class="zz-anim-item" style="--zz-delay: 220ms;">
+            <label for="zz-pass" class="block text-sm font-medium text-slate-300 mb-2">Mot de passe</label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 pointer-events-none">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </span>
+              <input
+                id="zz-pass"
+                type="password"
+                formControlName="password"
+                placeholder="••••••••"
+                autocomplete="current-password"
+                class="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-900/60 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+              />
+            </div>
+            <p *ngIf="form.controls.password.touched && form.controls.password.invalid"
+               class="text-xs text-red-400 mt-1.5">
+              Mot de passe requis (4 caractères min).
+            </p>
+          </div>
+
+          <!-- Erreur -->
+          <div *ngIf="errorMessage()"
+               class="bg-red-500/10 border border-red-500/40 text-red-300 text-sm rounded-xl px-4 py-3 zz-anim-item"
+               role="alert">
+            {{ errorMessage() }}
+          </div>
+
+          <!-- Bouton -->
+          <button
+            type="submit"
+            [disabled]="isLoading()"
+            class="zz-btn-glow zz-anim-item w-full bg-gradient-to-r from-blue-600 to-emerald-600 hover:from-blue-500 hover:to-emerald-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl shadow-lg shadow-blue-900/30 transition-all flex items-center justify-center gap-2"
+            style="--zz-delay: 280ms;">
+            <svg *ngIf="isLoading()" class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            {{ isLoading() ? 'Connexion…' : 'Se connecter' }}
+          </button>
+        </form>
+      </div>
+
+      <div class="flex items-center justify-between mt-6 text-xs text-slate-500 zz-anim-item" style="--zz-delay: 340ms;">
+        <span>ZonZon Admin · v0.1.0</span>
+        <a href="mailto:support@zonzon.tg" class="hover:text-slate-300 transition">Besoin d'aide&nbsp;?</a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============== Partie hero visuel (60%) — desktop uniquement ============== -->
+  <aside class="zz-hero hidden lg:flex lg:w-3/5 relative overflow-hidden items-center justify-center p-10">
+    <!-- Gradient background -->
+    <div class="absolute inset-0 bg-gradient-to-br from-blue-700 via-blue-600 to-emerald-500"></div>
+    <!-- Overlay radial -->
+    <div class="absolute inset-0 opacity-60"
+         style="background-image: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.15), transparent 40%), radial-gradient(circle at 80% 80%, rgba(16,185,129,0.4), transparent 50%);"></div>
+
+    <!-- Motif géométrique SVG (routes + pins) -->
+    <svg class="absolute inset-0 w-full h-full opacity-30" viewBox="0 0 800 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <pattern id="zz-grid" width="48" height="48" patternUnits="userSpaceOnUse">
+          <path d="M 48 0 L 0 0 0 48" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+        </pattern>
+      </defs>
+      <rect width="800" height="900" fill="url(#zz-grid)"/>
+      <!-- Routes -->
+      <path d="M -50 700 Q 200 500 400 620 T 850 480"
+            fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="3" stroke-dasharray="10 10" stroke-linecap="round" />
+      <path d="M 100 200 Q 300 350 550 250 T 900 350"
+            fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-dasharray="8 12" stroke-linecap="round" />
+      <!-- Pins -->
+      <g fill="white">
+        <circle cx="180" cy="230" r="6" />
+        <circle cx="550" cy="250" r="5" opacity="0.8"/>
+        <circle cx="400" cy="620" r="8" />
+        <circle cx="780" cy="480" r="6" opacity="0.7"/>
+      </g>
+      <!-- Ondes autour du pin central -->
+      <g fill="none" stroke="white" stroke-width="1" opacity="0.4">
+        <circle cx="400" cy="620" r="22" />
+        <circle cx="400" cy="620" r="40" opacity="0.6"/>
+        <circle cx="400" cy="620" r="60" opacity="0.3"/>
+      </g>
+    </svg>
+
+    <!-- Contenu hero -->
+    <div class="relative z-10 max-w-lg text-center">
+      <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm text-xs font-semibold mb-6">
+        <span class="relative flex h-2 w-2">
+          <span class="absolute inline-flex h-full w-full rounded-full bg-white opacity-70 animate-ping"></span>
+          <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+        </span>
+        Supervision en temps réel
+      </div>
+
+      <h2 class="text-5xl xl:text-6xl font-black leading-tight tracking-tight">
+        ZonZon
+      </h2>
+      <p class="text-xl xl:text-2xl font-semibold text-white/90 mt-3">
+        Livraison express, Togo entier.
+      </p>
+      <p class="text-sm text-white/70 mt-4 max-w-sm mx-auto">
+        Pilotez vos livreurs, suivez les courses et gardez une longueur d'avance — tout, depuis un seul écran.
+      </p>
+
+      <div class="mt-8 flex items-center justify-center gap-3 flex-wrap">
+        <span class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/15 backdrop-blur-md border border-white/25 text-sm font-semibold">
+          <span aria-hidden="true">⚡</span> Temps réel
+        </span>
+        <span class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/15 backdrop-blur-md border border-white/25 text-sm font-semibold">
+          <span aria-hidden="true">🇹🇬</span> 100% local
+        </span>
+      </div>
+    </div>
+  </aside>
+</div>

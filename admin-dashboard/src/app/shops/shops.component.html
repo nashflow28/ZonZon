@@ -1,0 +1,197 @@
+<div class="p-4 md:p-8">
+  <div class="max-w-7xl mx-auto">
+    <!-- Stats summary -->
+    <div *ngIf="!isLoading()" class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+      <div class="rounded-2xl p-4 border bg-yellow-500/10 border-yellow-500/30">
+        <div class="text-[11px] uppercase tracking-wider text-yellow-200/80 font-semibold">En attente</div>
+        <div class="text-2xl font-extrabold text-yellow-200 mt-1">{{ counts().pending }}</div>
+      </div>
+      <div class="rounded-2xl p-4 border bg-emerald-500/10 border-emerald-500/30">
+        <div class="text-[11px] uppercase tracking-wider text-emerald-200/80 font-semibold">Approuvées</div>
+        <div class="text-2xl font-extrabold text-emerald-200 mt-1">{{ counts().approved }}</div>
+      </div>
+      <div class="rounded-2xl p-4 border bg-red-500/10 border-red-500/30">
+        <div class="text-[11px] uppercase tracking-wider text-red-200/80 font-semibold">Rejetées</div>
+        <div class="text-2xl font-extrabold text-red-200 mt-1">{{ counts().rejected }}</div>
+      </div>
+      <div class="rounded-2xl p-4 border bg-orange-500/10 border-orange-500/30">
+        <div class="text-[11px] uppercase tracking-wider text-orange-200/80 font-semibold">Suspendues</div>
+        <div class="text-2xl font-extrabold text-orange-200 mt-1">{{ counts().suspended }}</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 mb-6 flex items-center gap-3 flex-wrap">
+      <lucide-icon name="filter" class="w-4 h-4 text-slate-400"></lucide-icon>
+      <label class="text-sm text-slate-400">Statut</label>
+      <select
+        class="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        [ngModel]="statusFilter()"
+        (ngModelChange)="onStatusChange($event)">
+        <option value="ALL">Toutes</option>
+        <option value="PENDING">En attente</option>
+        <option value="APPROVED">Approuvées</option>
+        <option value="REJECTED">Rejetées</option>
+        <option value="SUSPENDED">Suspendues</option>
+      </select>
+      <span class="text-xs text-slate-500">{{ filtered().length }} résultat(s)</span>
+    </div>
+
+    <!-- Skeleton -->
+    <app-skeleton-row *ngIf="isLoading()" [rows]="5" [cols]="5"></app-skeleton-row>
+
+    <!-- Error -->
+    <div *ngIf="!isLoading() && errored()"
+         class="bg-slate-800/40 p-10 rounded-2xl border border-slate-700/50 text-center text-slate-400 flex flex-col items-center gap-3">
+      <lucide-icon name="alert-triangle" class="w-8 h-8 text-red-400"></lucide-icon>
+      Impossible de charger les boutiques.
+    </div>
+
+    <!-- Empty -->
+    <div *ngIf="!isLoading() && !errored() && filtered().length === 0"
+         class="bg-slate-800/40 p-12 rounded-2xl border border-slate-700/50 text-center text-slate-400">
+      Aucune boutique pour ce filtre.
+    </div>
+
+    <!-- Grid -->
+    <div *ngIf="!isLoading() && !errored() && filtered().length > 0"
+         class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <div *ngFor="let shop of filtered()"
+           (click)="open(shop)"
+           class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 hover:bg-slate-700/30 transition cursor-pointer">
+        <div class="flex items-start gap-3">
+          <div *ngIf="logoSrc(shop) as src; else placeholderLogo"
+               class="w-14 h-14 rounded-xl bg-slate-900 flex items-center justify-center overflow-hidden border border-slate-700/50 shrink-0">
+            <img [src]="src" alt="" class="w-full h-full object-cover" />
+          </div>
+          <ng-template #placeholderLogo>
+            <div class="w-14 h-14 rounded-xl bg-emerald-600/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
+              <lucide-icon name="store" class="w-6 h-6 text-emerald-300"></lucide-icon>
+            </div>
+          </ng-template>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h3 class="text-white font-bold truncate">{{ shop.name }}</h3>
+            </div>
+            <span
+              class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border mb-2"
+              [ngClass]="statusBadgeClass(shop.status)">
+              {{ statusLabel(shop.status) }}
+            </span>
+            <div class="text-xs text-slate-400 mb-1">{{ categoryLabel(shop.category) }}</div>
+            <div class="text-xs text-slate-500 truncate">{{ shop.address }}</div>
+            <div class="text-[11px] text-slate-500 mt-2">par {{ ownerName(shop) }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Side panel -->
+<ng-container *ngIf="selectedShop() as s">
+  <div class="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm" (click)="close()"></div>
+
+  <aside
+    class="fixed top-0 right-0 z-50 h-screen w-full md:w-[480px]
+           bg-slate-900/95 backdrop-blur-xl border-l border-slate-700/50 shadow-2xl
+           flex flex-col overflow-hidden">
+    <header class="flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-700/50">
+      <div class="min-w-0">
+        <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Boutique</div>
+        <div class="flex items-center gap-3 mt-0.5">
+          <h2 class="text-lg font-bold text-white truncate">{{ s.name }}</h2>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold border"
+                [ngClass]="statusBadgeClass(s.status)">
+            {{ statusLabel(s.status) }}
+          </span>
+        </div>
+      </div>
+      <button type="button" (click)="close()"
+              class="shrink-0 w-9 h-9 rounded-lg border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 hover:text-white transition flex items-center justify-center">
+        <lucide-icon name="x" class="w-4 h-4"></lucide-icon>
+      </button>
+    </header>
+
+    <div class="flex-1 overflow-y-auto zz-scrollbar px-6 py-5 space-y-5">
+      <!-- Logo -->
+      <div *ngIf="logoSrc(s) as src" class="rounded-xl overflow-hidden border border-slate-700/50">
+        <img [src]="src" alt="" class="w-full h-48 object-cover" />
+      </div>
+
+      <!-- Détails -->
+      <section class="bg-slate-800/40 border border-slate-700/50 rounded-xl p-4 space-y-2">
+        <div *ngIf="s.description" class="text-sm text-slate-200">{{ s.description }}</div>
+        <div class="flex items-center gap-2 text-sm text-slate-300">
+          <lucide-icon name="map-pin" class="w-4 h-4 text-emerald-400"></lucide-icon>
+          {{ s.address }}
+        </div>
+        <div *ngIf="s.phone" class="flex items-center gap-2 text-sm text-slate-300">
+          <lucide-icon name="phone" class="w-4 h-4 text-emerald-400"></lucide-icon>
+          {{ s.phone }}
+        </div>
+        <div *ngIf="s.hours" class="flex items-center gap-2 text-sm text-slate-300">
+          <lucide-icon name="clock" class="w-4 h-4 text-emerald-400"></lucide-icon>
+          {{ s.hours }}
+        </div>
+        <div class="text-xs text-slate-500 pt-2 border-t border-slate-700/50">
+          Catégorie : {{ categoryLabel(s.category) }}
+        </div>
+      </section>
+
+      <!-- Owner -->
+      <section class="bg-slate-800/40 border border-slate-700/50 rounded-xl p-4">
+        <div class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Propriétaire</div>
+        <div class="text-white font-semibold">{{ ownerName(s) }}</div>
+        <div class="text-xs text-slate-400">{{ s.owner?.phone || '—' }}</div>
+      </section>
+
+      <!-- Reason if rejected -->
+      <section *ngIf="s.status === 'REJECTED' && s.rejectionReason"
+               class="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+        <div class="text-[11px] uppercase tracking-wider text-red-300 font-semibold mb-1">Motif de rejet</div>
+        <div class="text-sm text-red-200">{{ s.rejectionReason }}</div>
+      </section>
+
+      <!-- Actions -->
+      <section class="space-y-3 pb-4">
+        <ng-container *ngIf="s.status === 'PENDING' || s.status === 'REJECTED'">
+          <textarea
+            [ngModel]="rejectionReason()"
+            (ngModelChange)="rejectionReason.set($event)"
+            placeholder="Motif de rejet (optionnel)…"
+            rows="2"
+            class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-red-500"></textarea>
+          <div class="grid grid-cols-2 gap-3">
+            <button (click)="reject(s)"
+                    class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-4 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition">
+              <lucide-icon name="x-circle" class="w-4 h-4"></lucide-icon>
+              Rejeter
+            </button>
+            <button (click)="approve(s)"
+                    class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition">
+              <lucide-icon name="check-circle" class="w-4 h-4"></lucide-icon>
+              Approuver
+            </button>
+          </div>
+        </ng-container>
+
+        <ng-container *ngIf="s.status === 'APPROVED'">
+          <button (click)="suspend(s)"
+                  class="w-full bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/40 text-orange-200 px-4 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition">
+            <lucide-icon name="alert-triangle" class="w-4 h-4"></lucide-icon>
+            Suspendre la boutique
+          </button>
+        </ng-container>
+
+        <ng-container *ngIf="s.status === 'SUSPENDED'">
+          <button (click)="approve(s)"
+                  class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition">
+            <lucide-icon name="check-circle" class="w-4 h-4"></lucide-icon>
+            Réactiver
+          </button>
+        </ng-container>
+      </section>
+    </div>
+  </aside>
+</ng-container>

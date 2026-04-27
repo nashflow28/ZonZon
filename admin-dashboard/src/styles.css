@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --zz-bg: #0B1120;
+  --zz-surface: #1E293B;
+  --zz-accent-from: #0EA5E9;
+  --zz-accent-to: #10B981;
+  --zz-text: #F1F5F9;
+  --zz-text-muted: #94A3B8;
+  --zz-border: rgba(148, 163, 184, 0.15);
+  --zz-radius: 1rem;
+  --zz-shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+html, body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--zz-bg);
+  color: var(--zz-text);
+}
+
+::selection {
+  background: rgba(14, 165, 233, 0.35);
+  color: #fff;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.6);
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) opacity(1);
+}
+
+.code-id {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: #64748B;
+}
+
+.zz-scrollbar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.zz-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.zz-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 10px;
+}
+.zz-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.3);
+}
