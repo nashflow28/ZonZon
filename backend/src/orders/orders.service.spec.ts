@@ -11,6 +11,7 @@ import axios from 'axios';
 import { OrdersService } from './orders.service';
 import { OrdersGateway } from './orders.gateway';
 import { UsersService } from '../users/users.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
 import { UserRole } from '../entities/user.entity';
 
@@ -55,7 +56,9 @@ describe('OrdersService', () => {
     broadcastNewOrder: jest.Mock;
     broadcastOrderAccepted: jest.Mock;
     broadcastStatusUpdate: jest.Mock;
+    isUserConnected: jest.Mock;
   };
+  let notifications: { sendToUser: jest.Mock };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -71,7 +74,9 @@ describe('OrdersService', () => {
       broadcastNewOrder: jest.fn(),
       broadcastOrderAccepted: jest.fn(),
       broadcastStatusUpdate: jest.fn(),
+      isUserConnected: jest.fn().mockReturnValue(true),
     };
+    notifications = { sendToUser: jest.fn().mockResolvedValue(undefined) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -82,6 +87,7 @@ describe('OrdersService', () => {
         },
         { provide: UsersService, useValue: usersService },
         { provide: OrdersGateway, useValue: gateway },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
 
@@ -247,6 +253,61 @@ describe('OrdersService', () => {
       await expect(
         service.acceptOrder('o', livreurUser.id),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('atomicité : 2 livreurs en concurrence → 1 seul gagne, l’autre reçoit ConflictException', async () => {
+      const livreur2 = {
+        id: 'livreur-2',
+        role: UserRole.LIVREUR,
+        firstName: 'Carl',
+        lastName: 'Livreur2',
+        phone: '+22890000004',
+      };
+
+      // 1er findOne : commande PENDING (livreur 1 va gagner)
+      // 2ème findOne : commande déjà ACCEPTED (par livreur 1)
+      ordersRepository.findOne
+        .mockResolvedValueOnce({
+          id: 'ord-concurrent',
+          status: OrderStatus.PENDING,
+          client: { id: clientUser.id },
+        })
+        .mockResolvedValueOnce({
+          id: 'ord-concurrent',
+          status: OrderStatus.ACCEPTED,
+          client: { id: clientUser.id },
+          livreur: livreurUser,
+        });
+
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === livreurUser.id) return livreurUser;
+        if (id === livreur2.id) return livreur2;
+        return null;
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      // Le 1er livreur gagne
+      const winner = await service.acceptOrder(
+        'ord-concurrent',
+        livreurUser.id,
+      );
+      expect(winner.status).toBe(OrderStatus.ACCEPTED);
+      expect(winner.livreur).toEqual(livreurUser);
+
+      // Le 2e livreur perd → ConflictException
+      await expect(
+        service.acceptOrder('ord-concurrent', livreur2.id),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      // save() doit n'avoir été appelé qu'une seule fois (le gagnant)
+      expect(ordersRepository.save).toHaveBeenCalledTimes(1);
+      // broadcastOrderAccepted n'est appelé que par le gagnant
+      expect(gateway.broadcastOrderAccepted).toHaveBeenCalledTimes(1);
+      expect(gateway.broadcastOrderAccepted).toHaveBeenCalledWith(
+        'ord-concurrent',
+        livreurUser.id,
+        clientUser.id,
+      );
     });
   });
 
