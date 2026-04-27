@@ -13,6 +13,7 @@ import 'models/shop.dart';
 import 'screens/chat_screen.dart';
 import 'screens/location_picker_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/rating_screen.dart';
 import 'screens/shop_list_screen.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
@@ -55,6 +56,9 @@ class _OrderScreenState extends State<OrderScreen> {
   /// Si la course vient d'un commerce sélectionné, on garde la trace.
   Shop? _shopOrigin;
   catalog.Product? _shopProduct;
+
+  /// Évite de présenter plusieurs fois l'écran de notation pour une course.
+  final Set<String> _ratedOrders = <String>{};
 
   final TextEditingController _descController =
       TextEditingController(text: '1 colis de vêtements');
@@ -118,7 +122,34 @@ class _OrderScreenState extends State<OrderScreen> {
           _driverPositionAt = null;
         }
       });
+      if (evt.status == 'COMPLETED') {
+        _promptRatingForCompletedOrder();
+      }
     });
+  }
+
+  /// Pousse l'écran de notation une fois la course terminée. Idempotent par
+  /// orderId pour éviter les doubles affichages si plusieurs events arrivent.
+  Future<void> _promptRatingForCompletedOrder() async {
+    final orderId = _activeOrderId;
+    if (orderId == null || _ratedOrders.contains(orderId)) return;
+    _ratedOrders.add(orderId);
+    final livreur = _assignedLivreur;
+    final livreurName = livreur != null
+        ? '${livreur['firstName'] ?? ''} ${livreur['lastName'] ?? ''}'.trim()
+        : '';
+    // Petit délai pour laisser la SnackBar de fin de course s'afficher.
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RatingScreen(
+          orderId: orderId,
+          otherPartyName: livreurName,
+          otherPartyRole: 'LIVREUR',
+        ),
+      ),
+    );
   }
 
   /// Distance approximative livreur → client (Haversine, km).

@@ -8,6 +8,7 @@ import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
+import 'screens/rating_screen.dart';
 
 class DriverScreen extends StatefulWidget {
   const DriverScreen({super.key});
@@ -237,6 +238,27 @@ class _DriverScreenState extends State<DriverScreen> {
     await WhatsappService.openChat(phone: phone, message: message);
   }
 
+  /// Présente l'écran de notation du client après que le livreur a marqué
+  /// la course COMPLETED.
+  Future<void> _promptRatingForClient(dynamic orderData) async {
+    final orderId = orderData?['id']?.toString();
+    if (orderId == null) return;
+    final client = orderData['client'] as Map<String, dynamic>?;
+    final clientName = client != null
+        ? '${client['firstName'] ?? ''} ${client['lastName'] ?? ''}'.trim()
+        : '';
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RatingScreen(
+          orderId: orderId,
+          otherPartyName: clientName,
+          otherPartyRole: 'CLIENT',
+        ),
+      ),
+    );
+  }
+
   void _showSuccessDialog(dynamic orderData) {
     final orderId = orderData['id'].toString();
     final status = orderData['status']?.toString() ?? 'ACCEPTED';
@@ -313,6 +335,7 @@ class _DriverScreenState extends State<DriverScreen> {
                   onPressed: () async {
                     await _updateStatus(orderId, 'COMPLETED');
                     if (context.mounted) Navigator.pop(context);
+                    await _promptRatingForClient(orderData);
                   },
                   icon: const Icon(Icons.check_circle, color: Colors.white),
                   label: const Text('Course terminée', style: TextStyle(color: Colors.white)),
