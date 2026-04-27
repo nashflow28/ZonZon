@@ -107,6 +107,16 @@ npm run migration:revert
 
 `synchronize` est actif uniquement lorsque `NODE_ENV` est different de `production`. Toute modification d'entite destinee a la production **doit** etre accompagnee d'une migration commitee dans `src/migrations/`.
 
+## Routing (OpenRouteService)
+
+Le calcul de distance/itinéraire utilise OpenRouteService (free tier 2000 req/jour).
+
+1. Inscris-toi sur https://openrouteservice.org/dev/#/signup
+2. Génère une clé API
+3. Renseigne `ORS_API_KEY=...` dans ton `.env`
+
+Sans clé, le backend tombe sur Haversine ×1.3 (estimation grossière, suffisant en dev local).
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

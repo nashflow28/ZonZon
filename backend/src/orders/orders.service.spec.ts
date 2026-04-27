@@ -59,6 +59,20 @@ describe('OrdersService', () => {
     isUserConnected: jest.Mock;
   };
   let notifications: { sendToUser: jest.Mock };
+  let originalOrsKey: string | undefined;
+
+  beforeAll(() => {
+    originalOrsKey = process.env.ORS_API_KEY;
+    process.env.ORS_API_KEY = 'test-ors-key';
+  });
+
+  afterAll(() => {
+    if (originalOrsKey === undefined) {
+      delete process.env.ORS_API_KEY;
+    } else {
+      process.env.ORS_API_KEY = originalOrsKey;
+    }
+  });
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -112,7 +126,9 @@ describe('OrdersService', () => {
     it('calcule un prix = distance × 150 arrondi, sauvegarde et broadcast', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
       mockedAxios.get.mockResolvedValue({
-        data: { routes: [{ distance: 3000 }] },
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
       });
       ordersRepository.save.mockImplementation(async (o: any) => ({
         id: 'ord-1',
@@ -137,7 +153,9 @@ describe('OrdersService', () => {
       usersService.findOne.mockResolvedValue(clientUser);
       // 100 m → 0.1 km → force 0.5
       mockedAxios.get.mockResolvedValue({
-        data: { routes: [{ distance: 100 }] },
+        data: {
+          features: [{ properties: { summary: { distance: 100 } } }],
+        },
       });
       ordersRepository.save.mockImplementation(async (o: any) => ({
         id: 'ord-2',
@@ -169,10 +187,12 @@ describe('OrdersService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('cache OSRM : le 2e appel avec les mêmes coords n’appelle pas axios', async () => {
+    it('cache ORS : le 2e appel avec les mêmes coords n’appelle pas axios', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
       mockedAxios.get.mockResolvedValue({
-        data: { routes: [{ distance: 3000 }] },
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
       });
       ordersRepository.save.mockImplementation(async (o: any) => ({
         id: 'o',

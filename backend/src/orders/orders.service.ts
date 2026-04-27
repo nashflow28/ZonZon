@@ -36,8 +36,10 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
   private readonly PRICE_PER_KM = 150;
-  private readonly osrmBase =
-    process.env.OSRM_URL || 'http://router.project-osrm.org';
+  private readonly orsBase =
+    'https://api.openrouteservice.org/v2/directions/driving-car';
+  private readonly orsApiKey = process.env.ORS_API_KEY;
+  private orsKeyWarned = false;
   private readonly cacheTtlMs = 24 * 60 * 60 * 1000;
   private readonly routeCache = new Map<string, RouteCacheEntry>();
   private readonly routeGeomCache = new Map<string, RouteCacheGeomEntry>();
@@ -65,6 +67,16 @@ export class OrdersService {
     return 2 * R * Math.asin(Math.sqrt(a)) * 1.3;
   }
 
+  private warnMissingOrsKeyOnce() {
+    if (!this.orsKeyWarned) {
+      this.logger.warn(
+        'ORS_API_KEY missing — falling back to Haversine×1.3 (dev mode). ' +
+          'Set ORS_API_KEY in .env to enable OpenRouteService routing.',
+      );
+      this.orsKeyWarned = true;
+    }
+  }
+
   private async calculateRealDistance(
     lat1: number,
     lng1: number,
@@ -77,13 +89,29 @@ export class OrdersService {
       return cached.km;
     }
 
-    const url = `${this.osrmBase}/route/v1/driving/${lng1},${lat1};${lng2},${lat2}?overview=false`;
+    if (!this.orsApiKey) {
+      this.warnMissingOrsKeyOnce();
+      const fallback = this.haversineKm(lat1, lng1, lat2, lng2);
+      this.routeCache.set(key, { km: fallback, at: Date.now() });
+      return fallback;
+    }
+
+    const url =
+      `${this.orsBase}?api_key=${encodeURIComponent(this.orsApiKey)}` +
+      `&start=${lng1},${lat1}&end=${lng2},${lat2}`;
     const maxAttempts = 3;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const response = await axios.get(url, { timeout: 5000 });
-        const meters = response.data?.routes?.[0]?.distance;
+        const response = await axios.get(url, {
+          timeout: 5000,
+          headers: {
+            Accept:
+              'application/json, application/geo+json, application/gpx+xml',
+          },
+        });
+        const meters =
+          response.data?.features?.[0]?.properties?.summary?.distance;
         if (typeof meters === 'number') {
           const km = meters / 1000;
           this.routeCache.set(key, { km, at: Date.now() });
@@ -91,7 +119,7 @@ export class OrdersService {
         }
       } catch (err) {
         this.logger.warn(
-          `OSRM attempt ${attempt}/${maxAttempts} failed: ${(err as Error).message}`,
+          `ORS attempt ${attempt}/${maxAttempts} failed: ${(err as Error).message}`,
         );
         if (attempt === maxAttempts) break;
         await new Promise((r) => setTimeout(r, 300 * attempt));
@@ -100,7 +128,7 @@ export class OrdersService {
 
     const fallback = this.haversineKm(lat1, lng1, lat2, lng2);
     this.logger.warn(
-      `OSRM unavailable, fallback Haversine×1.3 = ${fallback.toFixed(2)} km`,
+      `ORS unavailable, fallback Haversine×1.3 = ${fallback.toFixed(2)} km`,
     );
     return fallback;
   }
@@ -108,7 +136,7 @@ export class OrdersService {
   /**
    * Calcule la route avec géométrie pour un preview côté client.
    * Renvoie distance + polyline (paires [lat, lng] pour flutter_map).
-   * Si OSRM indispo, fallback Haversine sans géométrie (juste 2 points).
+   * Si ORS indispo, fallback Haversine sans géométrie (juste 2 points).
    */
   async estimateRoute(
     pickupLat: number,
@@ -143,20 +171,41 @@ export class OrdersService {
       return cached.route;
     }
 
+    if (!this.orsApiKey) {
+      this.warnMissingOrsKeyOnce();
+      const fallbackKm = this.haversineKm(lat1, lng1, lat2, lng2);
+      const fallbackResult: RouteWithGeometry = {
+        km: fallbackKm,
+        geometry: [
+          [lat1, lng1],
+          [lat2, lng2],
+        ],
+      };
+      this.routeGeomCache.set(key, { route: fallbackResult, at: Date.now() });
+      this.routeCache.set(key, { km: fallbackKm, at: Date.now() });
+      return fallbackResult;
+    }
+
     const url =
-      `${this.osrmBase}/route/v1/driving/${lng1},${lat1};${lng2},${lat2}` +
-      `?overview=full&geometries=geojson`;
+      `${this.orsBase}?api_key=${encodeURIComponent(this.orsApiKey)}` +
+      `&start=${lng1},${lat1}&end=${lng2},${lat2}`;
     const maxAttempts = 3;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        const response = await axios.get(url, { timeout: 6000 });
-        const route = response.data?.routes?.[0];
-        const meters = route?.distance;
-        const coords = route?.geometry?.coordinates;
+        const response = await axios.get(url, {
+          timeout: 6000,
+          headers: {
+            Accept:
+              'application/json, application/geo+json, application/gpx+xml',
+          },
+        });
+        const feature = response.data?.features?.[0];
+        const meters = feature?.properties?.summary?.distance;
+        const coords = feature?.geometry?.coordinates;
         if (typeof meters === 'number' && Array.isArray(coords)) {
           const km = meters / 1000;
-          // OSRM renvoie [lng, lat] → on convertit en [lat, lng] pour flutter_map
+          // ORS renvoie [lng, lat] → on convertit en [lat, lng] pour flutter_map
           const polyline = coords
             .filter(
               (c: any) =>
@@ -173,7 +222,7 @@ export class OrdersService {
         }
       } catch (err) {
         this.logger.warn(
-          `OSRM-geom attempt ${attempt}/${maxAttempts} failed: ${(err as Error).message}`,
+          `ORS-geom attempt ${attempt}/${maxAttempts} failed: ${(err as Error).message}`,
         );
         if (attempt === maxAttempts) break;
         await new Promise((r) => setTimeout(r, 300 * attempt));
