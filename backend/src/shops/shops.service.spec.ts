@@ -81,7 +81,7 @@ describe('ShopsService', () => {
         ...s,
       }));
 
-      const result = await service.createMyShop(merchantActor, dto as any);
+      const result = await service.createMyShop(merchantActor, dto);
 
       expect(shopsRepo.findOne).toHaveBeenCalledWith({
         where: { ownerId: merchantActor.id },
@@ -217,7 +217,7 @@ describe('ShopsService', () => {
 
       const res = await service.updateMyShop(merchantActor, {
         name: 'New name',
-      } as any);
+      });
 
       expect(res.status).toBe(ShopStatus.PENDING);
       expect(res.name).toBe('New name');
@@ -242,7 +242,7 @@ describe('ShopsService', () => {
 
       const res = await service.updateMyShop(merchantActor, {
         name: 'Updated',
-      } as any);
+      });
 
       expect(res.status).toBe(ShopStatus.REJECTED);
       expect(res.name).toBe('Updated');

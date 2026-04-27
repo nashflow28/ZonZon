@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { LoggerModule } from 'nestjs-pino';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -28,6 +29,34 @@ import { ShopsModule } from './shops/shops.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        transport:
+          process.env.NODE_ENV !== 'production'
+            ? {
+                target: 'pino-pretty',
+                options: { singleLine: true, colorize: true },
+              }
+            : undefined,
+        redact: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'res.headers["set-cookie"]',
+        ],
+        customProps: () => ({ context: 'HTTP' }),
+        serializers: {
+          req: (req: { method: string; url: string; id: string | number }) => ({
+            method: req.method,
+            url: req.url,
+            id: req.id,
+          }),
+          res: (res: { statusCode: number }) => ({
+            statusCode: res.statusCode,
+          }),
+        },
+        autoLogging: process.env.NODE_ENV === 'production',
+      },
+    }),
     ThrottlerModule.forRoot([
       { name: 'short', ttl: 1000, limit: 10 },
       { name: 'medium', ttl: 60_000, limit: 100 },
@@ -68,9 +97,6 @@ import { ShopsModule } from './shops/shops.module';
     ShopsModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
-  ],
+  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}
