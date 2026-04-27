@@ -7,6 +7,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
@@ -28,6 +29,7 @@ export class OrdersController {
     return this.ordersService.createOrder(user.id ?? user.sub, dto);
   }
 
+  @Throttle({ short: { limit: 20, ttl: 60_000 } })
   @Post('estimate')
   estimate(@Body() dto: EstimateOrderDto) {
     return this.ordersService.estimateRoute(

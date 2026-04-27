@@ -1,0 +1,18 @@
+# Deployment workflow skeleton.
+# TODO: configure the actual deployment strategy (SSH to a server, Docker
+# image push, Fly.io / Railway / Render / Cloud Run, Firebase App Distribution
+# for the mobile app, etc.). This file is intentionally a placeholder so a
+# release tag (vX.Y.Z) does not currently trigger any real deployment.
+name: Deploy
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: |
+          echo "TODO: configurer le déploiement (SSH, Docker, ou plateforme cible)"
