@@ -30,7 +30,7 @@
     </div>
 
     <!-- Skeleton -->
-    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="5"></app-skeleton-row>
+    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="6"></app-skeleton-row>
 
     <!-- Error -->
     <div *ngIf="!isLoading() && errored()"
@@ -50,12 +50,13 @@
               <th class="p-5 border-b border-slate-700/50">Téléphone</th>
               <th class="p-5 border-b border-slate-700/50">Rôle</th>
               <th class="p-5 border-b border-slate-700/50">Véhicule</th>
+              <th class="p-5 border-b border-slate-700/50">Note moyenne</th>
               <th class="p-5 border-b border-slate-700/50">Inscrit le</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700/50 text-slate-300">
             <tr *ngIf="filteredUsers().length === 0">
-              <td colspan="5" class="p-8 text-center text-slate-500">Aucun utilisateur trouvé.</td>
+              <td colspan="6" class="p-8 text-center text-slate-500">Aucun utilisateur trouvé.</td>
             </tr>
             <tr *ngFor="let u of filteredUsers()" class="hover:bg-slate-700/20 transition-colors">
               <td class="p-5">
@@ -95,6 +96,11 @@
                 <ng-template #noVehicle>
                   <span class="text-slate-600">-</span>
                 </ng-template>
+              </td>
+              <td class="p-5 text-sm">
+                <span [ngClass]="u.role === 'LIVREUR' ? 'text-amber-300' : 'text-slate-600'">
+                  {{ ratingLabel(u) }}
+                </span>
               </td>
               <td class="p-5 text-sm text-slate-400">
                 {{ u.createdAt | date:'dd/MM/yyyy' }}

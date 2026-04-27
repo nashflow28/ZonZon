@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, computed, inject, signal } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
-import { User, UsersService } from './users.service';
+import { RatingStats, User, UsersService } from './users.service';
 import { LucideAngularModule } from 'lucide-angular';
 import { SkeletonRowComponent } from '../shared/skeleton/skeleton-row.component';
 import { PageActionsService } from '../shared/page-actions.service';
@@ -27,6 +27,9 @@ export class UsersComponent implements OnInit, OnDestroy {
 
   readonly roleFilter = signal<RoleFilter>('ALL');
   readonly search = signal<string>('');
+
+  /// Cache des stats de notation par livreurId (chargées à la volée).
+  readonly ratingStats = signal<Record<string, RatingStats>>({});
 
   readonly filteredUsers = computed<User[]>(() => {
     const role = this.roleFilter();
@@ -57,6 +60,7 @@ export class UsersComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.users.set(data ?? []);
         this.isLoading.set(false);
+        this.loadDriverRatings();
       },
       error: (err) => {
         console.error('Erreur chargement utilisateurs', err);
@@ -64,6 +68,35 @@ export class UsersComponent implements OnInit, OnDestroy {
         this.isLoading.set(false);
       }
     });
+  }
+
+  /// Charge en parallèle les stats de notation pour chaque livreur, en
+  /// silence : si un appel échoue on laisse simplement la cellule vide.
+  private loadDriverRatings(): void {
+    const drivers = this.users().filter((u) => u.role === 'LIVREUR');
+    for (const driver of drivers) {
+      if (!driver.id) continue;
+      this.usersService.getRatingStats(driver.id).subscribe({
+        next: (stats) => {
+          this.ratingStats.update((current) => ({
+            ...current,
+            [driver.id]: stats,
+          }));
+        },
+        error: () => {
+          // ignore : la cellule reste vide ("—")
+        },
+      });
+    }
+  }
+
+  /// Texte affiché dans la colonne "Note moyenne".
+  ratingLabel(u: User): string {
+    if (u.role !== 'LIVREUR') return '—';
+    const stats = this.ratingStats()[u.id];
+    if (!stats || stats.count === 0) return '—';
+    const avg = stats.average.toFixed(1);
+    return `${avg} ★ (${stats.count})`;
   }
 
   initials(u: User): string {

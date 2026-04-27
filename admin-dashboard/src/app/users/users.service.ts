@@ -19,6 +19,11 @@ export interface User {
   createdAt: string;
 }
 
+export interface RatingStats {
+  average: number;
+  count: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class UsersService {
   private http = inject(HttpClient);
@@ -26,5 +31,9 @@ export class UsersService {
 
   getUsers(): Observable<User[]> {
     return this.http.get<User[]>(this.apiUrl);
+  }
+
+  getRatingStats(userId: string): Observable<RatingStats> {
+    return this.http.get<RatingStats>(`${this.apiUrl}/${userId}/ratings/stats`);
   }
 }
