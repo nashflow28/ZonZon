@@ -16,6 +16,7 @@ import { Message } from './entities/message.entity';
 import { SavedAddress } from './entities/saved-address.entity';
 import { Shop } from './entities/shop.entity';
 import { Product } from './entities/product.entity';
+import { Rating } from './entities/rating.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -25,6 +26,7 @@ import { MessagesModule } from './messages/messages.module';
 import { AddressesModule } from './addresses/addresses.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ShopsModule } from './shops/shops.module';
+import { RatingsModule } from './ratings/ratings.module';
 
 @Module({
   imports: [
@@ -77,6 +79,7 @@ import { ShopsModule } from './shops/shops.module';
         SavedAddress,
         Shop,
         Product,
+        Rating,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',
@@ -95,6 +98,7 @@ import { ShopsModule } from './shops/shops.module';
     AddressesModule,
     NotificationsModule,
     ShopsModule,
+    RatingsModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
