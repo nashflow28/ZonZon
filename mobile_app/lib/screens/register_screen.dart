@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../utils/platform_adapter.dart';
 import '../home_screen.dart';
 import '../widgets/phone_field.dart';
 
@@ -37,9 +38,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _lastNameController.text.trim().isEmpty ||
         _phoneController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez remplir tous les champs.')),
-      );
+      showAdaptiveSnack(context, 'Veuillez remplir tous les champs.');
       return;
     }
 
@@ -60,9 +59,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Inscription échouée : $e'), backgroundColor: Colors.redAccent),
-      );
+      showAdaptiveSnack(context, 'Inscription échouée : $e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -129,7 +126,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           hint: 'Mot de passe',
                           obscure: _obscure,
                           suffix: IconButton(
-                            icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white38),
+                            icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white60),
                             onPressed: () => setState(() => _obscure = !_obscure),
                           ),
                         ),
@@ -147,7 +144,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         if (_role == 'LIVREUR') ...[
                           const SizedBox(height: 18),
-                          const Text('Type d\'engin :', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          const Text('Type d’engin :', style: TextStyle(color: Colors.white70, fontSize: 14)),
                           const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -190,7 +187,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                             ),
                             child: _isLoading
-                                ? const CircularProgressIndicator(color: Colors.white)
+                                ? adaptiveLoader(color: Colors.white)
                                 : const Text(
                                     'Créer mon compte',
                                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.4),

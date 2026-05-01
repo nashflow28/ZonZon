@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/message.dart';
 import '../services/chat_service.dart';
+import '../utils/platform_adapter.dart';
 
 class ChatScreen extends StatefulWidget {
   final String orderId;
@@ -117,7 +118,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         return ['Je suis en route', '5 min de retard', 'Vous êtes où ?'];
       }
       if (status == 'IN_PROGRESS') {
-        return ['Je suis en bas', 'J\'arrive', 'Quel étage ?'];
+        return ['Je suis en bas', 'J’arrive', 'Quel étage ?'];
       }
       return ['Bonjour', 'Merci'];
     }
@@ -212,9 +213,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
           Expanded(
             child: !_ready
-                ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF0EA5E9)),
-                  )
+                ? Center(child: adaptiveLoader())
                 : _MessagesList(
                     messages: _messages,
                     myId: _chat.myId,
@@ -581,7 +580,7 @@ class _Composer extends StatelessWidget {
                   style: const TextStyle(color: Colors.white, fontSize: 15.5),
                   decoration: const InputDecoration(
                     hintText: 'Écrire un message…',
-                    hintStyle: TextStyle(color: Colors.white38),
+                    hintStyle: TextStyle(color: Colors.white60),
                     border: InputBorder.none,
                     contentPadding:
                         EdgeInsets.symmetric(horizontal: 18, vertical: 12),

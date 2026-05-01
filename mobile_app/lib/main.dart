@@ -4,6 +4,7 @@ import 'home_screen.dart';
 import 'screens/login_screen.dart';
 import 'services/auth_service.dart';
 import 'services/push_service.dart';
+import 'utils/platform_adapter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,18 +20,48 @@ void main() async {
 class ZonZonApp extends StatelessWidget {
   const ZonZonApp({super.key});
 
+  // Fallback Inter ; sur iOS le système utilisera SF Pro pour le texte non
+  // stylé, sur Android Roboto. On garde Inter comme fallback explicite pour
+  // les écrans qui le déclarent (cohérence visuelle de la marque).
+  static const _fontFallback = 'Inter';
+
+  ThemeData _baseTheme(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    return ThemeData(
+      brightness: brightness,
+      primaryColor: const Color(0xFF0EA5E9),
+      scaffoldBackgroundColor:
+          isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+      fontFamily: _fontFallback,
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFF0EA5E9),
+        brightness: brightness,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'ZonZon',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        primaryColor: const Color(0xFF0EA5E9),
-        scaffoldBackgroundColor: const Color(0xFF0F172A),
-        fontFamily: 'Inter',
-        useMaterial3: true,
-      ),
+      theme: _baseTheme(Brightness.light),
+      darkTheme: _baseTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      builder: (context, child) {
+        // Clamp Dynamic Type pour éviter de casser les layouts compacts
+        // tout en respectant l'accessibilité (WCAG / iOS Larger Text).
+        final mq = MediaQuery.of(context);
+        final clamped = mq.textScaler.clamp(
+          minScaleFactor: 0.85,
+          maxScaleFactor: 1.4,
+        );
+        return MediaQuery(
+          data: mq.copyWith(textScaler: clamped),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: const _AuthGate(),
     );
   }
@@ -50,11 +81,9 @@ class _AuthGateState extends State<_AuthGate> {
       future: AuthService().getToken(),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0F172A),
-            body: Center(
-              child: CircularProgressIndicator(color: Color(0xFF0EA5E9)),
-            ),
+          return Scaffold(
+            backgroundColor: const Color(0xFF0F172A),
+            body: Center(child: adaptiveLoader()),
           );
         }
         final token = snapshot.data;

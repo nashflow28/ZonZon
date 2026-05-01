@@ -9,6 +9,8 @@ import 'services/auth_service.dart';
 import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
 import 'screens/rating_screen.dart';
+import 'screens/driver_profile_screen.dart';
+import 'utils/platform_adapter.dart';
 
 class DriverScreen extends StatefulWidget {
   const DriverScreen({super.key});
@@ -18,6 +20,7 @@ class DriverScreen extends StatefulWidget {
 }
 
 class _DriverScreenState extends State<DriverScreen> {
+  int _currentTab = 0;
   IO.Socket? socket;
   List<dynamic> availableOrders = [];
   String? currentDriverId;
@@ -84,9 +87,7 @@ class _DriverScreenState extends State<DriverScreen> {
         setState(() {
           availableOrders.insert(0, data);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('🔔 Nouvelle course disponible !'), backgroundColor: Colors.orange),
-        );
+        showAdaptiveSnack(context, '🔔 Nouvelle course disponible !');
       }
     });
 
@@ -183,31 +184,28 @@ class _DriverScreenState extends State<DriverScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Désolé, cette course a déjà été prise !'), backgroundColor: Colors.red),
-        );
+        showAdaptiveSnack(context, 'Désolé, cette course a déjà été prise !', isError: true);
       }
     }
   }
 
-  Future<void> _updateStatus(String orderId, String status) async {
+  /// Retourne `true` si la mise à jour a réussi.
+  Future<bool> _updateStatus(String orderId, String status) async {
     try {
       final res = await _api.patch('/orders/$orderId/status', body: {'status': status});
       if (res.statusCode == 200 || res.statusCode == 201) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Statut mis à jour : $status'), backgroundColor: const Color(0xFF10B981)),
-          );
+          showAdaptiveSnack(context, 'Statut mis à jour : $status');
         }
+        return true;
       } else {
         throw Exception('Transition refusée');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur : $e'), backgroundColor: Colors.redAccent),
-        );
+        showAdaptiveSnack(context, 'Erreur : $e', isError: true);
       }
+      return false;
     }
   }
 
@@ -218,12 +216,7 @@ class _DriverScreenState extends State<DriverScreen> {
     final phone = client?['phone']?.toString();
     if (phone == null || phone.trim().isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Numéro du client indisponible.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
+        showAdaptiveSnack(context, 'Numéro du client indisponible.', isError: true);
       }
       return;
     }
@@ -234,7 +227,7 @@ class _DriverScreenState extends State<DriverScreen> {
               : 6,
         );
     final message =
-        'Bonjour, je suis votre livreur ZonZon pour la course #$shortId. J\'arrive bientôt.';
+        'Bonjour, je suis votre livreur ZonZon pour la course #$shortId. J’arrive bientôt.';
     await WhatsappService.openChat(phone: phone, message: message);
   }
 
@@ -248,115 +241,182 @@ class _DriverScreenState extends State<DriverScreen> {
         ? '${client['firstName'] ?? ''} ${client['lastName'] ?? ''}'.trim()
         : '';
     if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RatingScreen(
-          orderId: orderId,
-          otherPartyName: clientName,
-          otherPartyRole: 'CLIENT',
-        ),
+    await pushAdaptive<void>(
+      context,
+      RatingScreen(
+        orderId: orderId,
+        otherPartyName: clientName,
+        otherPartyRole: 'CLIENT',
       ),
     );
   }
 
   void _showSuccessDialog(dynamic orderData) {
     final orderId = orderData['id'].toString();
-    final status = orderData['status']?.toString() ?? 'ACCEPTED';
-    final canWhatsapp = status == 'ACCEPTED' || status == 'IN_PROGRESS';
+
+    // Variables d'état du dialog (closures partagées avec StatefulBuilder)
+    String dialogStatus = orderData['status']?.toString() ?? 'ACCEPTED';
+    bool dialogProcessing = false;
+
+    final client = orderData['client'] as Map<String, dynamic>?;
+    final clientName = client != null
+        ? '${client['firstName'] ?? ''} ${client['lastName'] ?? ''}'.trim()
+        : 'Client';
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Course Acceptée ! 🎉', style: TextStyle(color: Colors.white)),
-        content: Text('Allez au ${orderData['pickupAddress']} pour récupérer le colis.', style: const TextStyle(color: Colors.white70)),
-        actionsAlignment: MainAxisAlignment.center,
-        actionsOverflowDirection: VerticalDirection.down,
-        actions: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    final client = orderData['client'] as Map<String, dynamic>?;
-                    final clientName = client != null
-                        ? '${client['firstName'] ?? ''} ${client['lastName'] ?? ''}'.trim()
-                        : 'Client';
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ChatScreen(
-                          orderId: orderId,
-                          otherPartyName: clientName.isEmpty ? 'Client' : clientName,
-                          otherPartyPhone: client?['phone']?.toString(),
-                          otherPartyRole: 'CLIENT',
-                          orderStatus: orderData['status']?.toString() ?? 'ACCEPTED',
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.chat_bubble_outline, color: Colors.white),
-                  label: const Text('Discuter avec le client', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0EA5E9)),
-                ),
-              ),
-              if (canWhatsapp) ...[
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _openWhatsappToClient(orderData),
-                    icon: const Icon(Icons.message, color: Colors.white),
-                    label: const Text(
-                      'Contacter le client par WhatsApp',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF25D366),
+      builder: (dlgCtx) => StatefulBuilder(
+        builder: (dlgCtx, setDialogState) {
+          // Action sécurisée : désactive les boutons, applique la transition,
+          // ferme le dialog si la course est terminée/annulée.
+          Future<void> doTransition(String targetStatus) async {
+            setDialogState(() => dialogProcessing = true);
+            final ok = await _updateStatus(orderId, targetStatus);
+            if (!ok) {
+              if (dlgCtx.mounted) {
+                setDialogState(() => dialogProcessing = false);
+              }
+              return;
+            }
+            if (targetStatus == 'COMPLETED' || targetStatus == 'CANCELLED') {
+              if (dlgCtx.mounted) Navigator.pop(dlgCtx);
+              if (targetStatus == 'COMPLETED') {
+                await _promptRatingForClient(orderData);
+              }
+            } else {
+              if (dlgCtx.mounted) {
+                setDialogState(() {
+                  dialogStatus = targetStatus;
+                  dialogProcessing = false;
+                });
+              }
+            }
+          }
+
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1E293B),
+            title: const Text('Course Acceptée ! 🎉',
+                style: TextStyle(color: Colors.white)),
+            content: Text(
+              'Allez au ${orderData['pickupAddress']} pour récupérer le colis.',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actionsOverflowDirection: VerticalDirection.down,
+            actions: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── Bouton Chat ────────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: dialogProcessing
+                          ? null
+                          : () => pushAdaptive<void>(
+                                dlgCtx,
+                                ChatScreen(
+                                  orderId: orderId,
+                                  otherPartyName:
+                                      clientName.isEmpty ? 'Client' : clientName,
+                                  otherPartyPhone: client?['phone']?.toString(),
+                                  otherPartyRole: 'CLIENT',
+                                  orderStatus: dialogStatus,
+                                ),
+                              ),
+                      icon: const Icon(Icons.chat_bubble_outline,
+                          color: Colors.white),
+                      label: const Text('Discuter avec le client',
+                          style: TextStyle(color: Colors.white)),
+                      style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0EA5E9)),
                     ),
                   ),
-                ),
-              ],
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _updateStatus(orderId, 'IN_PROGRESS'),
-                  icon: const Icon(Icons.directions_bike, color: Colors.white),
-                  label: const Text('Je suis sur place', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0EA5E9)),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () async {
-                    await _updateStatus(orderId, 'COMPLETED');
-                    if (context.mounted) Navigator.pop(context);
-                    await _promptRatingForClient(orderData);
-                  },
-                  icon: const Icon(Icons.check_circle, color: Colors.white),
-                  label: const Text('Course terminée', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981)),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton.icon(
-                  onPressed: () async {
-                    await _updateStatus(orderId, 'CANCELLED');
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  icon: const Icon(Icons.cancel, color: Colors.redAccent),
-                  label: const Text('Annuler la course', style: TextStyle(color: Colors.redAccent)),
-                ),
+                  // ── WhatsApp ───────────────────────────────────────────
+                  if (dialogStatus == 'ACCEPTED' ||
+                      dialogStatus == 'IN_PROGRESS') ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: dialogProcessing
+                            ? null
+                            : () => _openWhatsappToClient(orderData),
+                        icon:
+                            const Icon(Icons.message, color: Colors.white),
+                        label: const Text('Contacter par WhatsApp',
+                            style: TextStyle(color: Colors.white)),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF25D366)),
+                      ),
+                    ),
+                  ],
+
+                  const SizedBox(height: 8),
+
+                  // ── Actions selon le statut courant ────────────────────
+                  if (dialogProcessing)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: CircularProgressIndicator(
+                          color: Color(0xFF10B981)),
+                    )
+                  else ...[
+                    // ACCEPTED → "Je suis sur place" (→ IN_PROGRESS)
+                    if (dialogStatus == 'ACCEPTED') ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => doTransition('IN_PROGRESS'),
+                          icon: const Icon(Icons.directions_bike,
+                              color: Colors.white),
+                          label: const Text('Je suis sur place',
+                              style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0EA5E9)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    // IN_PROGRESS → "Course terminée" (→ COMPLETED)
+                    if (dialogStatus == 'IN_PROGRESS') ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () => doTransition('COMPLETED'),
+                          icon: const Icon(Icons.check_circle,
+                              color: Colors.white),
+                          label: const Text('Course terminée',
+                              style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF10B981)),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    // Annuler — disponible tant que pas terminal
+                    if (dialogStatus != 'COMPLETED' &&
+                        dialogStatus != 'CANCELLED')
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          onPressed: () => doTransition('CANCELLED'),
+                          icon: const Icon(Icons.cancel,
+                              color: Colors.redAccent),
+                          label: const Text('Annuler la course',
+                              style:
+                                  TextStyle(color: Colors.redAccent)),
+                        ),
+                      ),
+                  ],
+                ],
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -374,65 +434,84 @@ class _DriverScreenState extends State<DriverScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
-        title: const Text('Radar Livreur', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          _currentTab == 0 ? 'Radar Livreur' : 'Mon Profil',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: const Color(0xFF1E293B),
         iconTheme: const IconThemeData(color: Colors.white),
+        automaticallyImplyLeading: false,
       ),
-      body: availableOrders.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  CircularProgressIndicator(color: Color(0xFF10B981)),
-                  SizedBox(height: 20),
-                  Text('En attente de nouvelles courses...', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                ],
-              ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: availableOrders.length,
-              itemBuilder: (context, index) {
-                final order = availableOrders[index];
-                return Card(
-                  color: const Color(0xFF1E293B),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text('${order['priceFcfa']} FCFA', style: const TextStyle(color: Color(0xFF10B981), fontSize: 22, fontWeight: FontWeight.bold)),
-                            Text('${order['distanceKm']} km', style: const TextStyle(color: Colors.white54, fontSize: 14)),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(children: [const Icon(Icons.my_location, color: Colors.blue, size: 20), const SizedBox(width: 8), Expanded(child: Text('${order['pickupAddress']}', style: const TextStyle(color: Colors.white)))]),
-                        const SizedBox(height: 8),
-                        Row(children: [const Icon(Icons.location_on, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('${order['deliveryAddress']}', style: const TextStyle(color: Colors.white)))]),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 50,
-                          child: ElevatedButton(
-                            onPressed: () => _acceptOrder(order['id'].toString()),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3B82F6),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: const Text('Accepter la course', style: TextStyle(fontSize: 18, color: Colors.white)),
-                          ),
-                        )
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+      body: _currentTab == 0 ? _buildRadar() : const DriverProfileScreen(),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentTab,
+        onTap: (i) => setState(() => _currentTab = i),
+        backgroundColor: const Color(0xFF1E293B),
+        selectedItemColor: const Color(0xFF10B981),
+        unselectedItemColor: Colors.white60,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'Radar'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
+        ],
+      ),
     );
+  }
+
+  Widget _buildRadar() {
+    return availableOrders.isEmpty
+        ? Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                adaptiveLoader(color: const Color(0xFF10B981)),
+                const SizedBox(height: 20),
+                const Text('En attente de nouvelles courses...', style: TextStyle(color: Colors.white70, fontSize: 16)),
+              ],
+            ),
+          )
+        : ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: availableOrders.length,
+            itemBuilder: (context, index) {
+              final order = availableOrders[index];
+              return Card(
+                color: const Color(0xFF1E293B),
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('${order['priceFcfa']} FCFA', style: const TextStyle(color: Color(0xFF10B981), fontSize: 22, fontWeight: FontWeight.bold)),
+                          Text('${order['distanceKm']} km', style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(children: [const Icon(Icons.my_location, color: Colors.blue, size: 20), const SizedBox(width: 8), Expanded(child: Text('${order['pickupAddress']}', style: const TextStyle(color: Colors.white)))]),
+                      const SizedBox(height: 8),
+                      Row(children: [const Icon(Icons.location_on, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('${order['deliveryAddress']}', style: const TextStyle(color: Colors.white)))]),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: () => _acceptOrder(order['id'].toString()),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3B82F6),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text('Accepter la course', style: TextStyle(fontSize: 18, color: Colors.white)),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
   }
 }

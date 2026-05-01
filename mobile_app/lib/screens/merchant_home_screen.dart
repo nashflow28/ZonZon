@@ -8,6 +8,7 @@ import '../services/shops_service.dart';
 import 'login_screen.dart';
 import 'merchant_shop_form_screen.dart';
 import 'merchant_product_form_screen.dart';
+import '../utils/platform_adapter.dart';
 
 class MerchantHomeScreen extends StatefulWidget {
   const MerchantHomeScreen({super.key});
@@ -50,19 +51,17 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   }
 
   Future<void> _openShopForm() async {
-    final saved = await Navigator.of(context).push<Shop>(
-      MaterialPageRoute(
-        builder: (_) => MerchantShopFormScreen(initial: _shop),
-      ),
+    final saved = await pushAdaptive<Shop>(
+      context,
+      MerchantShopFormScreen(initial: _shop),
     );
     if (saved != null) _refresh();
   }
 
   Future<void> _openProductForm({Product? edit}) async {
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => MerchantProductFormScreen(initial: edit),
-      ),
+    final saved = await pushAdaptive<bool>(
+      context,
+      MerchantProductFormScreen(initial: edit),
     );
     if (saved == true) _refresh();
   }
@@ -120,7 +119,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
           : _shop == null
               ? _OnboardingState(onCreate: _openShopForm)
               : RefreshIndicator(
@@ -166,29 +165,14 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                             onEdit: () => _openProductForm(edit: p),
                             onToggle: () => _toggleAvailable(p),
                             onDelete: () async {
-                              final ok = await showDialog<bool>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  backgroundColor: const Color(0xFF1E293B),
-                                  title: const Text('Supprimer ?',
-                                      style: TextStyle(color: Colors.white)),
-                                  content: Text(
+                              final ok = await showAdaptiveConfirmDialog(
+                                context,
+                                title: 'Supprimer ?',
+                                message:
                                     'Le produit "${p.name}" sera retiré du catalogue.',
-                                    style: const TextStyle(color: Colors.white70),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx, false),
-                                      child: const Text('Annuler'),
-                                    ),
-                                    ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.redAccent),
-                                      onPressed: () => Navigator.pop(ctx, true),
-                                      child: const Text('Supprimer'),
-                                    ),
-                                  ],
-                                ),
+                                confirmLabel: 'Supprimer',
+                                cancelLabel: 'Annuler',
+                                isDestructive: true,
                               );
                               if (ok != true) return;
                               await _shops.deleteProduct(p.id);
@@ -238,7 +222,7 @@ class _OnboardingState extends StatelessWidget {
             const SizedBox(height: 8),
             const Text(
               'Créez votre boutique pour rejoindre la marketplace ZonZon. '
-              'C\'est gratuit, et vos premiers clients vous attendent.',
+              'C’est gratuit, et vos premiers clients vous attendent.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
             ),
@@ -337,7 +321,7 @@ class _ShopHeaderCard extends StatelessWidget {
                         Row(
                           children: [
                             const Icon(Icons.place,
-                                color: Colors.white38, size: 14),
+                                color: Colors.white60, size: 14),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
@@ -457,12 +441,12 @@ class _EmptyProducts extends StatelessWidget {
               color: Colors.white24, size: 48),
           const SizedBox(height: 12),
           const Text(
-            'Aucun produit pour l\'instant',
+            'Aucun produit pour l’instant',
             style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           const Text(
-            'Ajoutez votre premier article pour qu\'il apparaisse dans la marketplace.',
+            'Ajoutez votre premier article pour qu’il apparaisse dans la marketplace.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.white54, fontSize: 12.5),
           ),

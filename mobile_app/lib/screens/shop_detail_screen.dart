@@ -3,6 +3,7 @@ import '../config/env.dart';
 import '../models/product.dart';
 import '../models/shop.dart';
 import '../services/shops_service.dart';
+import '../utils/platform_adapter.dart';
 
 class ShopDetailScreen extends StatefulWidget {
   final String shopId;
@@ -44,8 +45,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       body: s == null
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF10B981)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
           : CustomScrollView(
               slivers: [
                 SliverAppBar(

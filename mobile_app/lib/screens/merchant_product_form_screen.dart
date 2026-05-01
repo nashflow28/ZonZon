@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/env.dart';
 import '../models/product.dart';
 import '../services/shops_service.dart';
+import '../utils/platform_adapter.dart';
 
 class MerchantProductFormScreen extends StatefulWidget {
   final Product? initial;
@@ -97,13 +99,12 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
     if (saved != null) {
       Navigator.of(context).pop(true);
     } else {
-      _snack('Échec de l\'enregistrement');
+      _snack('Échec de l’enregistrement');
     }
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    showAdaptiveSnack(context, msg);
   }
 
   @override
@@ -132,7 +133,7 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
                 border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                 image: _localPhotoPath != null
                     ? DecorationImage(
-                        image: NetworkImage('file://$_localPhotoPath'),
+                        image: FileImage(File(_localPhotoPath!)),
                         fit: BoxFit.cover,
                       )
                     : (_photoUrl != null
@@ -249,7 +250,7 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
         style: const TextStyle(color: Colors.white, fontSize: 15),
         decoration: InputDecoration(
           hintText: label,
-          hintStyle: const TextStyle(color: Colors.white38),
+          hintStyle: const TextStyle(color: Colors.white60),
           prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF10B981)) : null,
           border: InputBorder.none,
           contentPadding:

@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_client.dart';
+import '../utils/platform_adapter.dart';
 
 /// Handler de message en arrière-plan. DOIT être top-level.
 @pragma('vm:entry-point')
@@ -44,12 +45,56 @@ class PushService {
 
     final messaging = FirebaseMessaging.instance;
 
-    // Permission iOS / Android 13+
-    await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    // Pre-prompt explicatif (Apple HIG / Material) : on n'appelle jamais
+    // requestPermission directement sans avoir d'abord expliqué à
+    // l'utilisateur pourquoi on en a besoin. Si l'utilisateur refuse le
+    // pre-prompt, on n'invoque pas le dialog système (préserve la chance
+    // de redemander plus tard).
+    if (_prePromptContext() != null) {
+      final current = await messaging.getNotificationSettings();
+      // Re-fetch après l'await pour rester safe sur le BuildContext.
+      final ctx = _prePromptContext();
+      if (ctx == null) {
+        await messaging.requestPermission(alert: true, badge: true, sound: true);
+      } else if (current.authorizationStatus ==
+          AuthorizationStatus.notDetermined) {
+        final accepted = await showAdaptiveConfirmDialog(
+          // ignore: use_build_context_synchronously
+          ctx,
+          title: 'Activer les notifications ?',
+          message:
+              'ZonZon vous prévient quand un livreur accepte votre course, '
+              'quand il arrive, et pour les messages reçus.',
+          confirmLabel: 'Activer',
+          cancelLabel: 'Plus tard',
+        );
+        if (accepted != true) {
+          // L'utilisateur a refusé le pre-prompt : on ne demande pas la
+          // permission OS pour pouvoir réessayer une autre fois.
+          // On continue quand même l'init pour les data-only messages.
+        } else {
+          await messaging.requestPermission(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+        }
+      } else {
+        // Déjà déterminé (autorisé ou refusé) : on appelle requestPermission
+        // qui sera no-op côté iOS et bénin côté Android.
+        await messaging.requestPermission(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
+    } else {
+      await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    }
 
     // Channel Android (visible dans les paramètres système)
     const androidChannel = AndroidNotificationChannel(
@@ -143,6 +188,17 @@ class PushService {
       if (decoded is Map) return _normalizeData(decoded);
     } catch (_) {}
     return null;
+  }
+
+  /// Tente de récupérer un BuildContext valide pour afficher le pre-prompt.
+  /// Retourne null si l'arbre n'est pas monté (cas extrême : init très tôt).
+  BuildContext? _prePromptContext() {
+    try {
+      final element = WidgetsBinding.instance.rootElement;
+      return element;
+    } catch (_) {
+      return null;
+    }
   }
 
   Map<String, String> _normalizeData(Map data) {

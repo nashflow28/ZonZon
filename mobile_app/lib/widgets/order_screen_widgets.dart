@@ -13,7 +13,7 @@ class OrderHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      top: 50,
+      top: MediaQuery.of(context).padding.top + 8,
       left: 20,
       right: 20,
       child: ClipRRect(
@@ -30,7 +30,7 @@ class OrderHeader extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const SizedBox(width: 40),
+                const SizedBox(width: 44),
                 const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -54,8 +54,8 @@ class OrderHeader extends StatelessWidget {
                   child: InkWell(
                     onTap: onLogout,
                     child: const SizedBox(
-                      width: 40,
-                      height: 40,
+                      width: 44,
+                      height: 44,
                       child: Icon(Icons.logout,
                           color: Colors.white70, size: 18),
                     ),
@@ -107,6 +107,7 @@ class ShopOriginBanner extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.close, size: 16, color: Colors.white60),
             tooltip: 'Annuler',
+            constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             onPressed: onCancel,
           ),
         ],
@@ -195,7 +196,7 @@ class AddressCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          color: Colors.white38,
+                          color: Colors.white60,
                           fontSize: 12,
                         ),
                       ),
@@ -239,10 +240,10 @@ class SwapButton extends StatelessWidget {
               child: InkWell(
                 onTap: onTap,
                 child: const SizedBox(
-                  width: 34,
-                  height: 34,
+                  width: 44,
+                  height: 44,
                   child: Icon(Icons.swap_vert,
-                      color: Color(0xFF0EA5E9), size: 18),
+                      color: Color(0xFF0EA5E9), size: 20),
                 ),
               ),
             ),
@@ -475,7 +476,8 @@ class OrderBottomSheet extends StatelessWidget {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
+            padding: EdgeInsets.fromLTRB(
+                24, 18, 24, 24 + MediaQuery.of(context).padding.bottom),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -632,7 +634,7 @@ class OrderFormSection extends StatelessWidget {
           color: const Color(0xFF10B981),
           label: 'Arrivée',
           place: delivery,
-          emptyHint: 'Choisir le point d\'arrivée',
+          emptyHint: 'Choisir le point d’arrivée',
           onTap: onPickDelivery,
         ),
         const SizedBox(height: 14),
@@ -664,6 +666,7 @@ class OrderAcceptedSection extends StatelessWidget {
   final LatLng? driverPosition;
   final DateTime? driverPositionAt;
   final double? distanceKm;
+  final int unreadChatCount;
   final VoidCallback onOpenChat;
   final VoidCallback onOpenWhatsapp;
 
@@ -676,6 +679,7 @@ class OrderAcceptedSection extends StatelessWidget {
     required this.distanceKm,
     required this.onOpenChat,
     required this.onOpenWhatsapp,
+    this.unreadChatCount = 0,
   });
 
   bool get _showWhatsapp =>
@@ -748,7 +752,7 @@ class OrderAcceptedSection extends StatelessWidget {
                               strokeWidth: 2, color: Color(0xFF0EA5E9)),
                         ),
                         SizedBox(width: 12),
-                        Text('Recherche d\'un livreur…',
+                        Text('Recherche d’un livreur…',
                             style: TextStyle(
                                 color: Colors.white70, fontSize: 15)),
                       ],
@@ -770,22 +774,57 @@ class OrderAcceptedSection extends StatelessWidget {
                           offset: const Offset(0, 8))
                     ],
                   ),
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     onPressed: onOpenChat,
-                    icon: const Icon(Icons.chat_bubble_rounded,
-                        color: Colors.white, size: 22),
-                    label: Text(
-                      'Discuter avec ${assignedLivreur!['firstName'] ?? 'le livreur'}',
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white),
-                    ),
                     style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(20))),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            const Icon(Icons.chat_bubble_rounded,
+                                color: Colors.white, size: 22),
+                            if (unreadChatCount > 0)
+                              Positioned(
+                                top: -6,
+                                right: -8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.redAccent,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(
+                                      minWidth: 16, minHeight: 16),
+                                  child: Text(
+                                    unreadChatCount > 9
+                                        ? '9+'
+                                        : '$unreadChatCount',
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Discuter avec ${assignedLivreur!['firstName'] ?? 'le livreur'}',
+                          style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
         ),
@@ -833,7 +872,7 @@ class LiveTrackingBanner extends StatelessWidget {
 
   static String _formatLastSeen(DateTime when) {
     final s = DateTime.now().difference(when).inSeconds;
-    if (s < 10) return 'à l\'instant';
+    if (s < 10) return 'à l’instant';
     if (s < 60) return '${s}s';
     final m = (s / 60).floor();
     return '$m min';
@@ -911,7 +950,7 @@ class LiveTrackingBanner extends StatelessWidget {
           if (lastSeen != null)
             Text(
               _formatLastSeen(lastSeen),
-              style: const TextStyle(color: Colors.white38, fontSize: 11),
+              style: const TextStyle(color: Colors.white60, fontSize: 11),
             ),
         ],
       ),

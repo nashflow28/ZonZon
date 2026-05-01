@@ -1,4 +1,4 @@
 const String apiUrl = String.fromEnvironment(
   'API_URL',
-  defaultValue: 'http://127.0.0.1:3050',
+  defaultValue: 'https://zonzon-backend.fly.dev',
 );

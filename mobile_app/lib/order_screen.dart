@@ -21,6 +21,7 @@ import 'services/estimate_service.dart';
 import 'services/geocoding_service.dart';
 import 'services/whatsapp_service.dart';
 import 'utils/geo_utils.dart';
+import 'utils/platform_adapter.dart';
 import 'widgets/order_map_widget.dart';
 import 'widgets/order_screen_widgets.dart';
 
@@ -39,6 +40,7 @@ class _OrderScreenState extends State<OrderScreen> {
   String? _activeOrderId;
   String? _activeOrderStatus;
   Map<String, dynamic>? _assignedLivreur;
+  int _unreadChatCount = 0;
 
   /// Position live du livreur (re-broadcastée toutes les ~30s par le backend).
   LatLng? _driverPosition;
@@ -73,6 +75,7 @@ class _OrderScreenState extends State<OrderScreen> {
   StreamSubscription<DriverPosition>? _driverPosSub;
   StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
   StreamSubscription<OrderStatusUpdate>? _statusSub;
+  StreamSubscription<NewChatMessageEvent>? _chatMsgSub;
 
   @override
   void initState() {
@@ -123,8 +126,15 @@ class _OrderScreenState extends State<OrderScreen> {
         }
       });
       if (evt.status == 'COMPLETED') {
+        hapticSuccess();
         _promptRatingForCompletedOrder();
       }
+    });
+
+    // Badge non-lu : incrémenter quand un message du livreur arrive
+    _chatMsgSub = _socketCtrl.newChatMessage$.listen((evt) {
+      if (!mounted) return;
+      setState(() => _unreadChatCount++);
     });
   }
 
@@ -141,13 +151,12 @@ class _OrderScreenState extends State<OrderScreen> {
     // Petit délai pour laisser la SnackBar de fin de course s'afficher.
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => RatingScreen(
-          orderId: orderId,
-          otherPartyName: livreurName,
-          otherPartyRole: 'LIVREUR',
-        ),
+    await pushAdaptive<void>(
+      context,
+      RatingScreen(
+        orderId: orderId,
+        otherPartyName: livreurName,
+        otherPartyRole: 'LIVREUR',
       ),
     );
   }
@@ -165,6 +174,7 @@ class _OrderScreenState extends State<OrderScreen> {
     _driverPosSub?.cancel();
     _orderAcceptedSub?.cancel();
     _statusSub?.cancel();
+    _chatMsgSub?.cancel();
     _estimateSvc.dispose();
     _socketCtrl.dispose();
     _descController.dispose();
@@ -213,8 +223,9 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Future<void> _openShops() async {
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(builder: (_) => const ShopListScreen()),
+    final result = await pushAdaptive<Map<String, dynamic>>(
+      context,
+      const ShopListScreen(),
     );
     if (result == null || !mounted) return;
     final shop = result['shop'] as Shop?;
@@ -237,13 +248,12 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Future<void> _pickPickup() async {
-    final result = await Navigator.of(context).push<Place>(
-      MaterialPageRoute(
-        builder: (_) => LocationPickerScreen(
-          title: 'Point de départ',
-          hint: 'Rechercher un lieu de départ',
-          initial: _pickup?.location,
-        ),
+    final result = await pushAdaptive<Place>(
+      context,
+      LocationPickerScreen(
+        title: 'Point de départ',
+        hint: 'Rechercher un lieu de départ',
+        initial: _pickup?.location,
       ),
     );
     if (result != null && mounted) {
@@ -254,13 +264,12 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Future<void> _pickDelivery() async {
-    final result = await Navigator.of(context).push<Place>(
-      MaterialPageRoute(
-        builder: (_) => LocationPickerScreen(
-          title: 'Point d\'arrivée',
-          hint: 'Rechercher un lieu de livraison',
-          initial: _delivery?.location ?? _pickup?.location,
-        ),
+    final result = await pushAdaptive<Place>(
+      context,
+      LocationPickerScreen(
+        title: 'Point d’arrivée',
+        hint: 'Rechercher un lieu de livraison',
+        initial: _delivery?.location ?? _pickup?.location,
       ),
     );
     if (result != null && mounted) {
@@ -272,6 +281,7 @@ class _OrderScreenState extends State<OrderScreen> {
 
   void _swap() {
     if (_pickup == null && _delivery == null) return;
+    hapticSelection();
     setState(() {
       final tmp = _pickup;
       _pickup = _delivery;
@@ -334,28 +344,13 @@ class _OrderScreenState extends State<OrderScreen> {
   }
 
   Future<void> _confirmLogout() async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Se déconnecter ?',
-            style: TextStyle(color: Colors.white)),
-        content: const Text(
-          'Vous reviendrez à l\'écran de connexion.',
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Déconnexion'),
-          ),
-        ],
-      ),
+    final ok = await showAdaptiveConfirmDialog(
+      context,
+      title: 'Se déconnecter ?',
+      message: 'Vous reviendrez à l’écran de connexion.',
+      confirmLabel: 'Déconnexion',
+      cancelLabel: 'Annuler',
+      isDestructive: true,
     );
     if (ok == true) await _logout();
   }
@@ -372,19 +367,20 @@ class _OrderScreenState extends State<OrderScreen> {
   void _openChat() {
     final orderId = _activeOrderId;
     if (orderId == null) return;
+    // Remettre le compteur à zéro dès l'ouverture du chat
+    setState(() => _unreadChatCount = 0);
     final livreur = _assignedLivreur;
     final livreurName = livreur != null
         ? '${livreur['firstName'] ?? ''} ${livreur['lastName'] ?? ''}'.trim()
         : 'Livreur';
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChatScreen(
-          orderId: orderId,
-          otherPartyName: livreurName.isEmpty ? 'Livreur' : livreurName,
-          otherPartyPhone: livreur?['phone']?.toString(),
-          otherPartyRole: 'LIVREUR',
-          orderStatus: _activeOrderStatus ?? 'ACCEPTED',
-        ),
+    pushAdaptive<void>(
+      context,
+      ChatScreen(
+        orderId: orderId,
+        otherPartyName: livreurName.isEmpty ? 'Livreur' : livreurName,
+        otherPartyPhone: livreur?['phone']?.toString(),
+        otherPartyRole: 'LIVREUR',
+        orderStatus: _activeOrderStatus ?? 'ACCEPTED',
       ),
     );
   }
@@ -399,11 +395,10 @@ class _OrderScreenState extends State<OrderScreen> {
     final phone = livreur['phone']?.toString();
     if (phone == null || phone.trim().isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Numéro du livreur indisponible.'),
-          backgroundColor: Colors.redAccent,
-        ),
+      showAdaptiveSnack(
+        context,
+        'Numéro du livreur indisponible.',
+        isError: true,
       );
       return;
     }
@@ -417,15 +412,11 @@ class _OrderScreenState extends State<OrderScreen> {
     final pickup = _pickup;
     final delivery = _delivery;
     if (pickup == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sélectionnez un point de départ')),
-      );
+      showAdaptiveSnack(context, 'Sélectionnez un point de départ');
       return;
     }
     if (delivery == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sélectionnez un point d\'arrivée')),
-      );
+      showAdaptiveSnack(context, 'Sélectionnez un point d’arrivée');
       return;
     }
 
@@ -452,12 +443,10 @@ class _OrderScreenState extends State<OrderScreen> {
             _activeOrderStatus = responseData['status']?.toString() ?? 'PENDING';
           });
           _socketCtrl.activeOrderId = newOrderId;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                  'Succès ! Prix : ${responseData['priceFcfa']} FCFA. Livreur en route !'),
-              backgroundColor: const Color(0xFF10B981),
-            ),
+          hapticSuccess();
+          showAdaptiveSnack(
+            context,
+            'Succès ! Prix : ${responseData['priceFcfa']} FCFA. Livreur en route !',
           );
         }
       } else {
@@ -465,9 +454,8 @@ class _OrderScreenState extends State<OrderScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.redAccent),
-        );
+        hapticError();
+        showAdaptiveSnack(context, 'Erreur : $e', isError: true);
       }
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -490,8 +478,7 @@ class _OrderScreenState extends State<OrderScreen> {
           if (isLocationLoading)
             Container(
               color: const Color(0xFF0F172A).withValues(alpha: 0.8),
-              child: const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF0EA5E9))),
+              child: Center(child: adaptiveLoader()),
             ),
           OrderHeader(onLogout: _confirmLogout),
           OrderBottomSheet(
@@ -502,6 +489,7 @@ class _OrderScreenState extends State<OrderScreen> {
                     driverPosition: _driverPosition,
                     driverPositionAt: _driverPositionAt,
                     distanceKm: _distanceDriverToPickup(),
+                    unreadChatCount: _unreadChatCount,
                     onOpenChat: _openChat,
                     onOpenWhatsapp: _openWhatsappToLivreur,
                   )

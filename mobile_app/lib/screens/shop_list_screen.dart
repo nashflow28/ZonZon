@@ -4,6 +4,7 @@ import '../config/env.dart';
 import '../models/shop.dart';
 import '../services/shops_service.dart';
 import 'shop_detail_screen.dart';
+import '../utils/platform_adapter.dart';
 
 /// Sélection de boutique côté client.
 /// Retourne `{shop, product}` au order_screen quand un produit est commandé.
@@ -64,10 +65,9 @@ class _ShopListScreenState extends State<ShopListScreen> {
   }
 
   Future<void> _openShop(Shop shop) async {
-    final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (_) => ShopDetailScreen(shopId: shop.id, preview: shop),
-      ),
+    final result = await pushAdaptive<Map<String, dynamic>>(
+      context,
+      ShopDetailScreen(shopId: shop.id, preview: shop),
     );
     // Si l'utilisateur a choisi un produit, on remonte le résultat à order_screen
     if (result != null && mounted) {
@@ -121,8 +121,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
             ),
           Expanded(
             child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF10B981)))
+                ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
                 : _shops.isEmpty
                     ? _empty()
                     : RefreshIndicator(
@@ -297,7 +296,7 @@ class _ShopCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: Colors.white38),
+                const Icon(Icons.chevron_right, color: Colors.white60),
               ],
             ),
           ),

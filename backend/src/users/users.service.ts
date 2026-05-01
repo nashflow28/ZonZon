@@ -53,6 +53,11 @@ export class UsersService {
     return { ok: true };
   }
 
+  async updateProfile(userId: string, dto: { firstName?: string; lastName?: string }) {
+    await this.usersRepository.update(userId, dto);
+    return this.findOne(userId);
+  }
+
   findByPhone(phone: string) {
     return this.usersRepository.findOne({ where: { phone } });
   }

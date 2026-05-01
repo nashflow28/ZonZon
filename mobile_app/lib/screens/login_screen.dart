@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../utils/platform_adapter.dart';
 import '../home_screen.dart';
 import '../widgets/phone_field.dart';
 import 'register_screen.dart';
@@ -28,9 +29,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (_phoneController.text.trim().isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Veuillez remplir tous les champs.')),
-      );
+      showAdaptiveSnack(context, 'Veuillez remplir tous les champs.');
       return;
     }
 
@@ -44,9 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Échec de la connexion : $e'), backgroundColor: Colors.redAccent),
-      );
+      showAdaptiveSnack(context, 'Échec de la connexion : $e', isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -121,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             suffix: IconButton(
                               icon: Icon(
                                 _obscure ? Icons.visibility_off : Icons.visibility,
-                                color: Colors.white38,
+                                color: Colors.white60,
                               ),
                               onPressed: () => setState(() => _obscure = !_obscure),
                             ),
@@ -144,7 +141,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                               ),
                               child: _isLoading
-                                  ? const CircularProgressIndicator(color: Colors.white)
+                                  ? adaptiveLoader(color: Colors.white)
                                   : const Text(
                                       'Se connecter',
                                       style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.4),
@@ -156,9 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onPressed: _isLoading
                                 ? null
                                 : () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                                    );
+                                    pushAdaptive<void>(context, const RegisterScreen());
                                   },
                             child: RichText(
                               text: const TextSpan(

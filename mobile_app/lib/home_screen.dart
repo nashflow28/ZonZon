@@ -4,6 +4,7 @@ import 'driver_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/merchant_home_screen.dart';
 import 'services/auth_service.dart';
+import 'utils/platform_adapter.dart';
 
 /// Aiguillage par rôle après authentification.
 /// - CLIENT    → OrderScreen (commande directe + accès aux commerces)
@@ -48,9 +49,9 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF0F172A),
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF0EA5E9))),
+      return Scaffold(
+        backgroundColor: const Color(0xFF0F172A),
+        body: Center(child: adaptiveLoader()),
       );
     }
     switch (_role) {

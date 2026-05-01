@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import '../config/env.dart';
 import '../models/product.dart';
 import '../models/shop.dart';
@@ -185,12 +186,34 @@ class ShopsService {
     return Shop.fromJson(res);
   }
 
+  /// Détecte le type MIME depuis l'extension du fichier.
+  /// Retourne toujours un MediaType image valide.
+  MediaType _contentTypeFromPath(String filePath) {
+    final ext = filePath.toLowerCase().split('.').last;
+    switch (ext) {
+      case 'png':
+        return MediaType('image', 'png');
+      case 'webp':
+        return MediaType('image', 'webp');
+      case 'gif':
+        return MediaType('image', 'gif');
+      case 'jpg':
+      case 'jpeg':
+      default:
+        return MediaType('image', 'jpeg');
+    }
+  }
+
   Future<Map<String, dynamic>?> _uploadImageRaw(String path, String filePath) async {
     final token = await _auth.getToken();
     final uri = Uri.parse('$apiUrl$path');
     final req = http.MultipartRequest('POST', uri);
     if (token != null) req.headers['Authorization'] = 'Bearer $token';
-    req.files.add(await http.MultipartFile.fromPath('file', filePath));
+    req.files.add(await http.MultipartFile.fromPath(
+      'file',
+      filePath,
+      contentType: _contentTypeFromPath(filePath),
+    ));
     try {
       final streamed = await req.send();
       final body = await streamed.stream.bytesToString();

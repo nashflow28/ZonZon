@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/ratings_service.dart';
+import '../utils/platform_adapter.dart';
 
 /// Ecran de notation post-course (1-5 étoiles + commentaire optionnel).
 ///
@@ -38,11 +39,7 @@ class _RatingScreenState extends State<RatingScreen> {
 
   Future<void> _submit() async {
     if (_score < 1 || _score > 5) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sélectionnez une note de 1 à 5 étoiles'),
-        ),
-      );
+      showAdaptiveSnack(context, 'Sélectionnez une note de 1 à 5 étoiles');
       return;
     }
     setState(() => _submitting = true);
@@ -54,21 +51,13 @@ class _RatingScreenState extends State<RatingScreen> {
     if (!mounted) return;
     setState(() => _submitting = false);
     if (result != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Merci pour votre retour !'),
-          backgroundColor: Color(0xFF10B981),
-        ),
-      );
+      showAdaptiveSnack(context, 'Merci pour votre retour !');
       Navigator.of(context).pop(true);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Impossible d\'envoyer la note (déjà notée ou erreur réseau)',
-          ),
-          backgroundColor: Colors.redAccent,
-        ),
+      showAdaptiveSnack(
+        context,
+        'Impossible d’envoyer la note (déjà notée ou erreur réseau)',
+        isError: true,
       );
     }
   }
@@ -103,7 +92,7 @@ class _RatingScreenState extends State<RatingScreen> {
             children: [
               const SizedBox(height: 8),
               Text(
-                'Comment s\'est passée votre expérience avec $displayName ?',
+                'Comment s’est passée votre expérience avec $displayName ?',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -147,7 +136,7 @@ class _RatingScreenState extends State<RatingScreen> {
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
-                  counterStyle: const TextStyle(color: Colors.white38),
+                  counterStyle: const TextStyle(color: Colors.white60),
                 ),
               ),
               const SizedBox(height: 16),
@@ -162,14 +151,7 @@ class _RatingScreenState extends State<RatingScreen> {
                     ),
                   ),
                   child: _submitting
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2.4,
-                          ),
-                        )
+                      ? adaptiveLoader(color: Colors.white)
                       : const Text(
                           'Envoyer',
                           style: TextStyle(

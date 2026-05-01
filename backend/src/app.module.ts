@@ -70,6 +70,7 @@ import { RatingsModule } from './ratings/ratings.module';
       username: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_DATABASE || 'zonzon_db',
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
       entities: [
         User,
         Vehicle,

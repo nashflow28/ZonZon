@@ -8,6 +8,7 @@ import '../models/saved_address.dart';
 import '../services/geocoding_service.dart';
 import '../services/recent_addresses_service.dart';
 import '../services/saved_addresses_service.dart';
+import '../utils/platform_adapter.dart';
 
 /// Plein écran de sélection d'un point sur la carte.
 ///
@@ -156,9 +157,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _onMapSettled(p);
     } catch (_) {
       if (!silent && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible de récupérer votre position')),
-        );
+        showAdaptiveSnack(context, 'Impossible de récupérer votre position', isError: true);
       }
     }
   }
@@ -195,9 +194,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     if (!mounted) return;
     if (result != null) {
       setState(() => _favorites = [..._favorites, result]);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('« ${result.label} » ajouté à vos favoris')),
-      );
+      showAdaptiveSnack(context, '« ${result.label} » ajouté à vos favoris');
     }
   }
 
@@ -214,7 +211,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
             hintText: 'Maison, Travail, École…',
-            hintStyle: TextStyle(color: Colors.white38),
+            hintStyle: TextStyle(color: Colors.white60),
           ),
           onSubmitted: (v) => Navigator.of(ctx).pop(v),
         ),
@@ -452,7 +449,7 @@ class _SearchField extends StatelessWidget {
         style: const TextStyle(color: Colors.white, fontSize: 15),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: Colors.white38),
+          hintStyle: const TextStyle(color: Colors.white60),
           prefixIcon: const Icon(Icons.search, color: Color(0xFF0EA5E9)),
           suffixIcon: onClear != null
               ? IconButton(

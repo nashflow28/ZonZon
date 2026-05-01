@@ -4,6 +4,7 @@ import '../models/place.dart';
 import '../models/shop.dart';
 import '../services/shops_service.dart';
 import 'location_picker_screen.dart';
+import '../utils/platform_adapter.dart';
 
 class MerchantShopFormScreen extends StatefulWidget {
   final Shop? initial;
@@ -61,13 +62,12 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
   }
 
   Future<void> _pickLocation() async {
-    final result = await Navigator.of(context).push<Place>(
-      MaterialPageRoute(
-        builder: (_) => LocationPickerScreen(
-          title: 'Adresse de la boutique',
-          hint: 'Rechercher l\'adresse de votre commerce',
-          initial: _location,
-        ),
+    final result = await pushAdaptive<Place>(
+      context,
+      LocationPickerScreen(
+        title: 'Adresse de la boutique',
+        hint: 'Rechercher l’adresse de votre commerce',
+        initial: _location,
       ),
     );
     if (result != null && mounted) {
@@ -84,7 +84,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
       return;
     }
     if (_location == null || _address.isEmpty) {
-      _snack('Sélectionnez l\'adresse de votre boutique');
+      _snack('Sélectionnez l’adresse de votre boutique');
       return;
     }
     setState(() => _saving = true);
@@ -117,13 +117,12 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
     if (saved != null) {
       Navigator.of(context).pop(saved);
     } else {
-      _snack('Échec de l\'enregistrement');
+      _snack('Échec de l’enregistrement');
     }
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    showAdaptiveSnack(context, msg);
   }
 
   @override
@@ -140,7 +139,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _loadingCats
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -302,7 +301,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
         style: const TextStyle(color: Colors.white, fontSize: 15),
         decoration: InputDecoration(
           hintText: label,
-          hintStyle: const TextStyle(color: Colors.white38),
+          hintStyle: const TextStyle(color: Colors.white60),
           prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF10B981)) : null,
           border: InputBorder.none,
           contentPadding:

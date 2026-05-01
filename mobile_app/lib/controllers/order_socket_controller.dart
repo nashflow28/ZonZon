@@ -37,9 +37,17 @@ class OrderStatusUpdate {
   OrderStatusUpdate({required this.orderId, required this.status});
 }
 
+/// Nouveau message chat reçu sur la commande active.
+class NewChatMessageEvent {
+  final String orderId;
+  final Map<String, dynamic> raw;
+
+  NewChatMessageEvent({required this.orderId, required this.raw});
+}
+
 /// Gère le cycle de vie du socket pour l'écran de commande client.
 ///
-/// Le contrôleur s'abonne aux trois évènements pertinents et expose un
+/// Le contrôleur s'abonne aux quatre évènements pertinents et expose un
 /// `Stream` typé pour chacun. Un client n'a qu'à appeler [init] dans
 /// `initState`, lire les streams puis [dispose] dans `dispose`.
 ///
@@ -58,6 +66,7 @@ class OrderSocketController {
   final _driverPositionCtrl = StreamController<DriverPosition>.broadcast();
   final _orderAcceptedCtrl = StreamController<OrderAcceptedEvent>.broadcast();
   final _statusUpdatesCtrl = StreamController<OrderStatusUpdate>.broadcast();
+  final _newChatMessageCtrl = StreamController<NewChatMessageEvent>.broadcast();
 
   /// Stream des positions live du livreur (filtré par [activeOrderId]).
   Stream<DriverPosition> get driverPosition$ => _driverPositionCtrl.stream;
@@ -67,6 +76,9 @@ class OrderSocketController {
 
   /// Stream des nouveaux statuts (filtré par [activeOrderId]).
   Stream<OrderStatusUpdate> get statusUpdates$ => _statusUpdatesCtrl.stream;
+
+  /// Stream des nouveaux messages de chat reçus (pour badge non-lu).
+  Stream<NewChatMessageEvent> get newChatMessage$ => _newChatMessageCtrl.stream;
 
   /// Connecte le socket et abonne les listeners. À appeler une seule fois.
   Future<void> init() async {
@@ -113,6 +125,18 @@ class OrderSocketController {
         receivedAt: DateTime.now(),
       ));
     });
+
+    // Écouter les nouveaux messages du livreur pour afficher un badge non-lu.
+    socket.on('chat:message', (data) {
+      if (data is! Map) return;
+      final orderId = data['orderId']?.toString();
+      if (orderId == null) return;
+      if (activeOrderId != null && orderId != activeOrderId) return;
+      _newChatMessageCtrl.add(NewChatMessageEvent(
+        orderId: orderId,
+        raw: Map<String, dynamic>.from(data),
+      ));
+    });
   }
 
   Future<void> dispose() async {
@@ -121,5 +145,6 @@ class OrderSocketController {
     await _driverPositionCtrl.close();
     await _orderAcceptedCtrl.close();
     await _statusUpdatesCtrl.close();
+    await _newChatMessageCtrl.close();
   }
 }

@@ -1,3 +1,3 @@
 export const environment = {
-  apiUrl: 'http://localhost:3050'
+  apiUrl: 'https://zonzon-backend.fly.dev'
 };

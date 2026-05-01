@@ -18,6 +18,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/types';
 import { imageFileFilter, profilePhotoStorage } from './upload.config';
 import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Controller('users')
 @UseGuards(RolesGuard)
@@ -30,6 +31,14 @@ export class UsersController {
       password?: string;
     };
     return safe;
+  }
+
+  @Patch('me')
+  updateProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.usersService.updateProfile(user.id ?? user.sub, dto);
   }
 
   @Patch('me/fcm-token')
