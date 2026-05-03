@@ -23,6 +23,8 @@ import {
   Menu,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
+  Hash,
   Bike,
   FileText,
   Filter,
@@ -30,7 +32,8 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Eye
+  Eye,
+  ClipboardList
 } from 'lucide-angular';
 
 export const appIcons = {
@@ -55,6 +58,8 @@ export const appIcons = {
   Menu,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
+  Hash,
   Bike,
   FileText,
   Filter,
@@ -62,7 +67,8 @@ export const appIcons = {
   CheckCircle,
   XCircle,
   Clock,
-  Eye
+  Eye,
+  ClipboardList
 };
 
 export const provideLucideIcons = (): Provider => ({

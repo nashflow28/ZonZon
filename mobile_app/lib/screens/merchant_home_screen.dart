@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/env.dart';
 import '../models/product.dart';
 import '../models/shop.dart';
+import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../services/shops_service.dart';
-import 'login_screen.dart';
 import 'merchant_shop_form_screen.dart';
 import 'merchant_product_form_screen.dart';
 import '../utils/platform_adapter.dart';
@@ -44,10 +45,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   Future<void> _logout() async {
     await AuthService().logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    context.go(AppRoutes.login);
   }
 
   Future<void> _openShopForm() async {

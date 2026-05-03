@@ -6,11 +6,20 @@ class RatingsService {
   final ApiClient _api = ApiClient();
 
   /// Soumet une note pour la course [orderId].
+  ///
+  /// [score] : note globale (1-5, requise).
+  /// [comment] : commentaire libre optionnel.
+  /// [punctualityScore], [communicationScore], [courtesyScore] : sous-notes
+  /// par catégorie (1-5 chacune, optionnelles).
+  ///
   /// Renvoie `null` si l'API a refusé (course pas COMPLETED, déjà notée, etc.).
   Future<Rating?> submit({
     required String orderId,
     required int score,
     String? comment,
+    int? punctualityScore,
+    int? communicationScore,
+    int? courtesyScore,
   }) async {
     try {
       final res = await _api.post(
@@ -19,6 +28,10 @@ class RatingsService {
           'score': score,
           if (comment != null && comment.trim().isNotEmpty)
             'comment': comment.trim(),
+          if (punctualityScore != null) 'punctualityScore': punctualityScore,
+          if (communicationScore != null)
+            'communicationScore': communicationScore,
+          if (courtesyScore != null) 'courtesyScore': courtesyScore,
         },
       );
       if (res.statusCode != 200 && res.statusCode != 201) return null;

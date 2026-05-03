@@ -64,6 +64,61 @@ class ShopsService {
     }
   }
 
+  // ── Favoris ────────────────────────────────────────────────────────────
+
+  /// Liste les boutiques favorites de l'utilisateur connecté.
+  /// Throw en cas d'erreur réseau ou statut non 2xx (laisse l'écran appelant
+  /// gérer l'erreur, notamment pour afficher un état "Réessayer").
+  Future<List<Shop>> getFavorites() async {
+    final res = await _api.get('/shops/favorites');
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('Erreur ${res.statusCode}');
+    }
+    final data = jsonDecode(res.body);
+    if (data is! List) {
+      throw Exception('Réponse inattendue du serveur.');
+    }
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(Shop.fromJson)
+        .toList();
+  }
+
+  /// Charge uniquement les IDs des shops favoris (utile pour les listes).
+  /// Retourne un Set vide en cas d'erreur (silencieux).
+  Future<Set<String>> getFavoriteIds() async {
+    try {
+      final favs = await getFavorites();
+      return favs.map((s) => s.id).toSet();
+    } catch (_) {
+      return <String>{};
+    }
+  }
+
+  /// Ajoute une boutique aux favoris.
+  /// Throw en cas d'erreur réseau ou statut non 2xx, sauf 409 (déjà favori →
+  /// on swallow car l'état souhaité est obtenu).
+  Future<void> addFavorite(String shopId) async {
+    final res = await _api.post('/shops/$shopId/favorite');
+    if (res.statusCode == 409) return; // déjà favori, idempotent
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('Erreur ${res.statusCode}');
+    }
+  }
+
+  /// Retire une boutique des favoris.
+  /// Throw en cas d'erreur réseau ou statut non 2xx, sauf 404 (déjà absent →
+  /// on swallow car l'état souhaité est obtenu).
+  Future<void> removeFavorite(String shopId) async {
+    final res = await _api.delete('/shops/$shopId/favorite');
+    if (res.statusCode == 404) return; // déjà retiré
+    if (res.statusCode != 200 &&
+        res.statusCode != 201 &&
+        res.statusCode != 204) {
+      throw Exception('Erreur ${res.statusCode}');
+    }
+  }
+
   // ── Merchant ───────────────────────────────────────────────────────────
 
   Future<Shop?> getMyShop() async {
@@ -206,7 +261,7 @@ class ShopsService {
 
   Future<Map<String, dynamic>?> _uploadImageRaw(String path, String filePath) async {
     final token = await _auth.getToken();
-    final uri = Uri.parse('$apiUrl$path');
+    final uri = Uri.parse('$apiUrl$apiPrefix$path');
     final req = http.MultipartRequest('POST', uri);
     if (token != null) req.headers['Authorization'] = 'Bearer $token';
     req.files.add(await http.MultipartFile.fromPath(

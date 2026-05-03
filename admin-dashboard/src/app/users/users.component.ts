@@ -1,8 +1,9 @@
 import { Component, OnInit, OnDestroy, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subscription } from 'rxjs';
-import { RatingStats, User, UsersService } from './users.service';
+import { Subscription, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+import { User, UserExtendedStats, UsersService } from './users.service';
 import { LucideAngularModule } from 'lucide-angular';
 import { SkeletonRowComponent } from '../shared/skeleton/skeleton-row.component';
 import { PageActionsService } from '../shared/page-actions.service';
@@ -28,8 +29,9 @@ export class UsersComponent implements OnInit, OnDestroy {
   readonly roleFilter = signal<RoleFilter>('ALL');
   readonly search = signal<string>('');
 
-  /// Cache des stats de notation par livreurId (chargées à la volée).
-  readonly ratingStats = signal<Record<string, RatingStats>>({});
+  /// Cache des stats étendues par userId (chargées à la volée pour les livreurs).
+  /// Pour les autres rôles on ne stocke que rating average/count via le même format.
+  readonly extendedStats = signal<Record<string, UserExtendedStats>>({});
 
   readonly filteredUsers = computed<User[]>(() => {
     const role = this.roleFilter();
@@ -60,7 +62,7 @@ export class UsersComponent implements OnInit, OnDestroy {
       next: (data) => {
         this.users.set(data ?? []);
         this.isLoading.set(false);
-        this.loadDriverRatings();
+        this.loadDriverStats();
       },
       error: (err) => {
         console.error('Erreur chargement utilisateurs', err);
@@ -70,33 +72,153 @@ export class UsersComponent implements OnInit, OnDestroy {
     });
   }
 
-  /// Charge en parallèle les stats de notation pour chaque livreur, en
-  /// silence : si un appel échoue on laisse simplement la cellule vide.
-  private loadDriverRatings(): void {
+  /// Charge en parallèle les stats étendues pour chaque livreur. Si l'endpoint
+  /// `/users/:id/stats` n'est pas encore disponible (404/500 le temps que le
+  /// backend soit redéployé), on retombe sur l'ancien `/ratings/stats` pour
+  /// au moins afficher la note moyenne, et les colonnes "courses", "temps
+  /// moyen" et "taux d'annulation" affichent "—".
+  private loadDriverStats(): void {
     const drivers = this.users().filter((u) => u.role === 'LIVREUR');
     for (const driver of drivers) {
       if (!driver.id) continue;
-      this.usersService.getRatingStats(driver.id).subscribe({
-        next: (stats) => {
-          this.ratingStats.update((current) => ({
+      this.usersService
+        .getUserExtendedStats(driver.id)
+        .pipe(
+          catchError(() => {
+            // Fallback : ancien endpoint rating-only.
+            return this.usersService.getRatingStats(driver.id).pipe(
+              // map du RatingStats vers UserExtendedStats pour homogénéité
+              // tout en marquant les nouvelles données comme indisponibles.
+              catchError(() =>
+                of<UserExtendedStats>({
+                  ratingAverage: 0,
+                  ratingCount: 0,
+                  completedCount: 0,
+                  averageDurationMinutes: null,
+                  cancellationRate: 0,
+                }),
+              ),
+            );
+          }),
+        )
+        .subscribe((stats) => {
+          // Si on a reçu un RatingStats (legacy), on le convertit en
+          // UserExtendedStats minimal sans les nouvelles métriques.
+          const normalized: UserExtendedStats = this.normalizeStats(stats);
+          // Marqueur : si les nouvelles métriques étaient absentes du payload,
+          // on garde `averageDurationMinutes = null` et on flag implicitement
+          // l'absence via `_extended = false`.
+          this.extendedStats.update((current) => ({
             ...current,
-            [driver.id]: stats,
+            [driver.id]: normalized,
           }));
-        },
-        error: () => {
-          // ignore : la cellule reste vide ("—")
-        },
-      });
+        });
     }
+  }
+
+  /// Normalise une réponse potentielle. Si le payload contient les anciens
+  /// champs `average`/`count` (RatingStats) au lieu des nouveaux, on map.
+  private normalizeStats(raw: unknown): UserExtendedStats {
+    const obj = (raw ?? {}) as Record<string, unknown>;
+    const num = (v: unknown, def = 0): number =>
+      typeof v === 'number' && Number.isFinite(v) ? v : def;
+
+    // Détecter le format legacy (average/count au lieu de ratingAverage/ratingCount).
+    const hasNewFormat = 'ratingAverage' in obj || 'completedCount' in obj;
+    if (!hasNewFormat) {
+      return {
+        ratingAverage: num(obj['average']),
+        ratingCount: num(obj['count']),
+        completedCount: 0,
+        averageDurationMinutes: null,
+        cancellationRate: 0,
+      };
+    }
+
+    const avgDur = obj['averageDurationMinutes'];
+    return {
+      ratingAverage: num(obj['ratingAverage']),
+      ratingCount: num(obj['ratingCount']),
+      completedCount: num(obj['completedCount']),
+      averageDurationMinutes:
+        avgDur === null || avgDur === undefined ? null : num(avgDur, 0),
+      cancellationRate: num(obj['cancellationRate']),
+    };
+  }
+
+  /// Récupère les stats d'un livreur (helper pour le template).
+  statsFor(u: User): UserExtendedStats | undefined {
+    if (u.role !== 'LIVREUR') return undefined;
+    return this.extendedStats()[u.id];
   }
 
   /// Texte affiché dans la colonne "Note moyenne".
   ratingLabel(u: User): string {
     if (u.role !== 'LIVREUR') return '—';
-    const stats = this.ratingStats()[u.id];
-    if (!stats || stats.count === 0) return '—';
-    const avg = stats.average.toFixed(1);
-    return `${avg} ★ (${stats.count})`;
+    const stats = this.extendedStats()[u.id];
+    if (!stats || stats.ratingCount === 0) return '—';
+    const avg = stats.ratingAverage.toFixed(1);
+    return `${avg} ★ (${stats.ratingCount})`;
+  }
+
+  /// Nombre de courses terminées (livreur uniquement).
+  completedLabel(u: User): string {
+    if (u.role !== 'LIVREUR') return '—';
+    const stats = this.extendedStats()[u.id];
+    if (!stats) return '—';
+    return `${stats.completedCount}`;
+  }
+
+  /// Formate `averageDurationMinutes` :
+  ///   - null/undefined → "—"
+  ///   - < 60 min → "X min"
+  ///   - >= 60 min → "Yh" ou "Yh Zmin"
+  formatDuration(minutes: number | null | undefined): string {
+    if (minutes === null || minutes === undefined) return '—';
+    if (!Number.isFinite(minutes)) return '—';
+    const m = Math.round(minutes);
+    if (m < 60) return `${m} min`;
+    const h = Math.floor(m / 60);
+    const rem = m % 60;
+    return rem === 0 ? `${h}h` : `${h}h ${rem}min`;
+  }
+
+  /// Texte de la colonne "Temps moyen" pour un user.
+  durationLabel(u: User): string {
+    if (u.role !== 'LIVREUR') return '—';
+    const stats = this.extendedStats()[u.id];
+    if (!stats) return '—';
+    return this.formatDuration(stats.averageDurationMinutes);
+  }
+
+  /// Texte de la colonne "Taux d'annulation".
+  cancellationLabel(u: User): string {
+    if (u.role !== 'LIVREUR') return '—';
+    const stats = this.extendedStats()[u.id];
+    if (!stats) return '—';
+    const rate = stats.cancellationRate ?? 0;
+    return `${(rate * 100).toFixed(1)}%`;
+  }
+
+  /// Couleur Tailwind du badge taux d'annulation :
+  ///   - < 5%  → vert (`text-emerald-300`)
+  ///   - 5-15% → jaune (`text-yellow-300`)
+  ///   - > 15% → rouge (`text-red-300`)
+  cancellationRateColor(rate: number): string {
+    if (rate < 0.05) return 'text-emerald-300';
+    if (rate < 0.15) return 'text-yellow-300';
+    return 'text-red-300';
+  }
+
+  /// Classes du badge "taux d'annulation" (fond + texte).
+  cancellationBadge(u: User): string {
+    if (u.role !== 'LIVREUR') return 'text-slate-600';
+    const stats = this.extendedStats()[u.id];
+    if (!stats) return 'text-slate-600';
+    const rate = stats.cancellationRate ?? 0;
+    if (rate < 0.05) return 'bg-emerald-500/20 text-emerald-300';
+    if (rate < 0.15) return 'bg-yellow-500/20 text-yellow-300';
+    return 'bg-red-500/20 text-red-300';
   }
 
   initials(u: User): string {

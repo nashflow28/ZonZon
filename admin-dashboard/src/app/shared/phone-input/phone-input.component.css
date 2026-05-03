@@ -1,0 +1,33 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+/* Le wrapper relatif est dans le template, mais on précise quand même
+   `position: relative` au composant pour que le dropdown absolute soit
+   positionné par rapport à son hôte direct si jamais on encapsule. */
+.zz-phone-input {
+  position: relative;
+}
+
+/* Animation discrète d'apparition du dropdown */
+.zz-phone-input > div[role='listbox'] {
+  animation: zz-pi-fade 140ms ease-out;
+}
+
+@keyframes zz-pi-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zz-phone-input > div[role='listbox'] {
+    animation: none;
+  }
+}

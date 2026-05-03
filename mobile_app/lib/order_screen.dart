@@ -6,18 +6,21 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
+import 'package:go_router/go_router.dart';
 import 'controllers/order_socket_controller.dart';
 import 'models/place.dart';
 import 'models/product.dart' as catalog;
 import 'models/shop.dart';
+import 'router/app_router.dart';
 import 'screens/chat_screen.dart';
 import 'screens/location_picker_screen.dart';
-import 'screens/login_screen.dart';
+import 'screens/order_history_screen.dart';
 import 'screens/rating_screen.dart';
 import 'screens/shop_list_screen.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/estimate_service.dart';
+import 'services/eta_service.dart';
 import 'services/geocoding_service.dart';
 import 'services/whatsapp_service.dart';
 import 'utils/geo_utils.dart';
@@ -70,12 +73,17 @@ class _OrderScreenState extends State<OrderScreen> {
   final AuthService _auth = AuthService();
   final GeocodingService _geo = GeocodingService();
   final EstimateService _estimateSvc = EstimateService();
+  final EtaService _etaSvc = EtaService();
   final OrderSocketController _socketCtrl = OrderSocketController();
 
   StreamSubscription<DriverPosition>? _driverPosSub;
   StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
   StreamSubscription<OrderStatusUpdate>? _statusSub;
   StreamSubscription<NewChatMessageEvent>? _chatMsgSub;
+
+  /// ETA backend (refresh toutes les 30s + à chaque driver:location).
+  EtaResult? _eta;
+  Timer? _etaTimer;
 
   @override
   void initState() {
@@ -93,6 +101,9 @@ class _OrderScreenState extends State<OrderScreen> {
         _driverPosition = evt.location;
         _driverPositionAt = evt.receivedAt;
       });
+      // Refresh immédiat de l'ETA : la position du livreur vient de
+      // changer, le backend a la nouvelle valeur, on en profite.
+      _refreshEta();
     });
 
     _orderAcceptedSub = _socketCtrl.orderAccepted$.listen((_) async {
@@ -112,6 +123,8 @@ class _OrderScreenState extends State<OrderScreen> {
             _assignedLivreur = Map<String, dynamic>.from(mine['livreur']);
             _activeOrderStatus = mine['status']?.toString() ?? 'ACCEPTED';
           });
+          // Démarre le polling ETA dès que la course est ACCEPTED.
+          _startEtaPolling();
         }
       } catch (_) {}
     });
@@ -125,6 +138,12 @@ class _OrderScreenState extends State<OrderScreen> {
           _driverPositionAt = null;
         }
       });
+      if (evt.status == 'IN_PROGRESS') {
+        // Cible de l'ETA change (pickup → delivery), refresh immédiat.
+        _refreshEta();
+      } else if (evt.status == 'COMPLETED' || evt.status == 'CANCELLED') {
+        _stopEtaPolling();
+      }
       if (evt.status == 'COMPLETED') {
         hapticSuccess();
         _promptRatingForCompletedOrder();
@@ -169,12 +188,45 @@ class _OrderScreenState extends State<OrderScreen> {
     return haversineKm(p, pickup);
   }
 
+  /// Démarre le polling ETA toutes les 30 s + un refresh immédiat.
+  /// Idempotent : un appel multiple replace simplement le timer en cours.
+  void _startEtaPolling() {
+    _etaTimer?.cancel();
+    _etaTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _refreshEta(),
+    );
+    _refreshEta();
+  }
+
+  /// Stoppe le polling ETA et nettoie l'état affiché.
+  void _stopEtaPolling() {
+    _etaTimer?.cancel();
+    _etaTimer = null;
+    if (mounted && _eta != null) {
+      setState(() => _eta = null);
+    }
+  }
+
+  /// Récupère l'ETA depuis le backend pour la course active.
+  /// No-op si pas de course active ou statut hors ACCEPTED/IN_PROGRESS.
+  Future<void> _refreshEta() async {
+    final orderId = _activeOrderId;
+    if (orderId == null) return;
+    final status = _activeOrderStatus;
+    if (status != 'ACCEPTED' && status != 'IN_PROGRESS') return;
+    final result = await _etaSvc.fetchEta(orderId);
+    if (!mounted) return;
+    setState(() => _eta = result);
+  }
+
   @override
   void dispose() {
     _driverPosSub?.cancel();
     _orderAcceptedSub?.cancel();
     _statusSub?.cancel();
     _chatMsgSub?.cancel();
+    _etaTimer?.cancel();
     _estimateSvc.dispose();
     _socketCtrl.dispose();
     _descController.dispose();
@@ -343,6 +395,10 @@ class _OrderScreenState extends State<OrderScreen> {
     }
   }
 
+  void _openHistory() {
+    pushAdaptive<void>(context, const OrderHistoryScreen());
+  }
+
   Future<void> _confirmLogout() async {
     final ok = await showAdaptiveConfirmDialog(
       context,
@@ -358,10 +414,7 @@ class _OrderScreenState extends State<OrderScreen> {
   Future<void> _logout() async {
     await _auth.logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    context.go(AppRoutes.login);
   }
 
   void _openChat() {
@@ -383,6 +436,149 @@ class _OrderScreenState extends State<OrderScreen> {
         orderStatus: _activeOrderStatus ?? 'ACCEPTED',
       ),
     );
+  }
+
+  /// Extrait un message d'erreur lisible depuis une réponse HTTP backend.
+  /// Réplique la logique de [AuthService._extractError].
+  String _extractApiError(int statusCode, String body) {
+    try {
+      final data = jsonDecode(body);
+      if (data is Map && data['message'] != null) {
+        final msg = data['message'];
+        if (msg is List) return msg.join(', ');
+        return msg.toString();
+      }
+    } catch (_) {}
+    return 'Erreur $statusCode';
+  }
+
+  /// Reset complet de l'état après annulation : retour au formulaire vierge.
+  void _resetAfterCancellation() {
+    _socketCtrl.activeOrderId = null;
+    _etaTimer?.cancel();
+    _etaTimer = null;
+    setState(() {
+      isOrderAccepted = false;
+      _activeOrderId = null;
+      _activeOrderStatus = null;
+      _assignedLivreur = null;
+      _unreadChatCount = 0;
+      _driverPosition = null;
+      _driverPositionAt = null;
+      _eta = null;
+    });
+  }
+
+  /// Ouvre le dialog de confirmation et déclenche l'annulation côté backend.
+  Future<void> _confirmCancelOrder() async {
+    final orderId = _activeOrderId;
+    final status = _activeOrderStatus;
+    if (orderId == null) return;
+    if (status != 'PENDING' && status != 'ACCEPTED') return;
+
+    final reasonController = TextEditingController();
+    final message = status == 'PENDING'
+        ? 'Aucun livreur n\'a encore accepté votre course.'
+        : 'Le livreur s\'est déjà mis en route. Êtes-vous sûr ?';
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text(
+          'Annuler la commande ?',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              message,
+              style: const TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: reasonController,
+              maxLines: 2,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                labelText: 'Raison (facultatif)',
+                labelStyle: const TextStyle(color: Colors.white70),
+                hintText: 'Pourquoi annulez-vous ?',
+                hintStyle: const TextStyle(color: Colors.white38),
+                filled: true,
+                fillColor: Colors.white.withValues(alpha: 0.05),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.15),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(
+                    color: Colors.white.withValues(alpha: 0.15),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF0EA5E9),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Garder la commande'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Annuler la commande'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      reasonController.dispose();
+      return;
+    }
+
+    final rawReason = reasonController.text.trim();
+    reasonController.dispose();
+
+    try {
+      final body = <String, dynamic>{'status': 'CANCELLED'};
+      if (rawReason.isNotEmpty) {
+        body['cancellationReason'] = rawReason;
+      }
+      final res = await _api.patch('/orders/$orderId/status', body: body);
+      if (!mounted) return;
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        _resetAfterCancellation();
+        hapticSuccess();
+        showAdaptiveSnack(context, 'Commande annulée');
+      } else {
+        hapticError();
+        showAdaptiveSnack(
+          context,
+          _extractApiError(res.statusCode, res.body),
+          isError: true,
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      hapticError();
+      showAdaptiveSnack(context, 'Erreur : $e', isError: true);
+    }
   }
 
   /// Ouvre WhatsApp côté client pour contacter le livreur assigné. Visible
@@ -480,7 +676,10 @@ class _OrderScreenState extends State<OrderScreen> {
               color: const Color(0xFF0F172A).withValues(alpha: 0.8),
               child: Center(child: adaptiveLoader()),
             ),
-          OrderHeader(onLogout: _confirmLogout),
+          OrderHeader(
+            onLogout: _confirmLogout,
+            onOpenHistory: _openHistory,
+          ),
           OrderBottomSheet(
             child: isOrderAccepted
                 ? OrderAcceptedSection(
@@ -490,8 +689,10 @@ class _OrderScreenState extends State<OrderScreen> {
                     driverPositionAt: _driverPositionAt,
                     distanceKm: _distanceDriverToPickup(),
                     unreadChatCount: _unreadChatCount,
+                    eta: _eta,
                     onOpenChat: _openChat,
                     onOpenWhatsapp: _openWhatsappToLivreur,
+                    onCancelOrder: _confirmCancelOrder,
                   )
                 : OrderFormSection(
                     pickup: _pickup,

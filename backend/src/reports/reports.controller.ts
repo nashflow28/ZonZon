@@ -11,6 +11,8 @@ import { ReportsService } from './reports.service';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types';
 
 @Controller('reports')
 @UseGuards(RolesGuard)
@@ -24,13 +26,19 @@ export class ReportsController {
   }
 
   @Post('commissions/:id/pay')
-  payCommission(@Param('id') id: string) {
-    return this.reportsService.markPaid(id);
+  payCommission(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reportsService.markPaid(id, (user.id ?? user.sub) as string);
   }
 
   @Post('commissions/:id/mark-paid')
-  markPaidCommission(@Param('id') id: string) {
-    return this.reportsService.markPaid(id);
+  markPaidCommission(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.reportsService.markPaid(id, (user.id ?? user.sub) as string);
   }
 
   @Post('snapshot')

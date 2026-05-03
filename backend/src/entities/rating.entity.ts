@@ -45,6 +45,20 @@ export class Rating {
   @Column({ type: 'text', nullable: true })
   comment: string | null;
 
+  /**
+   * Sous-notes par catégorie (1-5), toutes optionnelles.
+   * Permettent à l'utilisateur d'évaluer plus finement chaque aspect de la course.
+   * `score` reste le rating principal ; ces colonnes sont strictement additionnelles.
+   */
+  @Column({ type: 'tinyint', nullable: true })
+  punctualityScore: number | null;
+
+  @Column({ type: 'tinyint', nullable: true })
+  communicationScore: number | null;
+
+  @Column({ type: 'tinyint', nullable: true })
+  courtesyScore: number | null;
+
   @CreateDateColumn()
   createdAt: Date;
 }

@@ -31,7 +31,7 @@ export class AuthService {
 
   login(phone: string, password: string): Observable<LoginResponse> {
     return this.http
-      .post<LoginResponse>(`${environment.apiUrl}/auth/login`, { phone, password })
+      .post<LoginResponse>(`${environment.apiUrl}${environment.apiPrefix}/auth/login`, { phone, password })
       .pipe(
         tap((res) => {
           localStorage.setItem(TOKEN_KEY, res.access_token);

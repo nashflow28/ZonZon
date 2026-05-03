@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   ManyToOne,
 } from 'typeorm';
 import { User } from './user.entity';
@@ -67,9 +68,21 @@ export class DeliveryOrder {
   })
   cancelledBy: 'CLIENT' | 'LIVREUR' | 'ADMIN' | null;
 
+  @Column({ type: 'datetime', nullable: true })
+  acceptedAt: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  inProgressAt: Date | null;
+
+  @Column({ type: 'datetime', nullable: true })
+  completedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date | null;
 }

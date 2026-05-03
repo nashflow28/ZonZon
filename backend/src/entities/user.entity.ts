@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   OneToOne,
   OneToMany,
 } from 'typeorm';
@@ -40,6 +41,12 @@ export class User {
   @Column({ nullable: true })
   profilePhotoUrl: string;
 
+  /**
+   * @deprecated Champ legacy mono-token. Conservé en lecture/écriture pour la
+   * rétro-compatibilité avec les anciens APK. Les nouvelles écritures passent
+   * par la table `device_tokens` (multi-devices). À supprimer dans une migration
+   * de cleanup une fois que tous les clients mobiles auront migré.
+   */
   @Column({ type: 'varchar', length: 255, nullable: true })
   fcmToken?: string | null;
 
@@ -57,4 +64,7 @@ export class User {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn()
+  deletedAt: Date | null;
 }

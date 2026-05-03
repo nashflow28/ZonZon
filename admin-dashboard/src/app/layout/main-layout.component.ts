@@ -36,7 +36,8 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     { path: 'shops', label: 'Boutiques', icon: 'store' },
     { path: 'reports', label: 'Comptabilité', icon: 'banknote' },
     { path: 'users', label: 'Utilisateurs', icon: 'users-icon' },
-    { path: 'archives', label: 'Archives', icon: 'archive' }
+    { path: 'archives', label: 'Archives', icon: 'archive' },
+    { path: 'audit-logs', label: 'Journal d\'audit', icon: 'clipboard-list' }
   ];
 
   private routerSub?: Subscription;

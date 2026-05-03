@@ -8,7 +8,7 @@
           Du
         </label>
         <input type="date"
-               class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+               class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
                [ngModel]="fromDate()" (ngModelChange)="onFromChange($event)" />
       </div>
       <div>
@@ -17,7 +17,7 @@
           Au
         </label>
         <input type="date"
-               class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+               class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
                [ngModel]="toDate()" (ngModelChange)="onToChange($event)" />
       </div>
       <div>
@@ -26,9 +26,12 @@
           Statut
         </label>
         <select
-          class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
           [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)">
           <option value="ALL">Tous</option>
+          <option value="PENDING">En attente</option>
+          <option value="ACCEPTED">Acceptées</option>
+          <option value="IN_PROGRESS">En cours</option>
           <option value="COMPLETED">Terminées</option>
           <option value="CANCELLED">Annulées</option>
         </select>
@@ -42,12 +45,12 @@
       </div>
     </div>
 
-    <!-- Stats cards (revenu cumulé sur la sélection) -->
+    <!-- Stats cards (revenu cumulé sur la page courante) -->
     <div *ngIf="!isLoading() && !errored()" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       <div class="bg-gradient-to-br from-emerald-900/40 to-emerald-800/10 p-5 rounded-2xl border border-emerald-500/30">
         <div class="text-xs uppercase tracking-wider text-emerald-300/80 font-semibold flex items-center gap-2">
           <lucide-icon name="banknote" class="w-3.5 h-3.5"></lucide-icon>
-          Revenu total (terminées)
+          Revenu (page courante)
         </div>
         <div class="mt-2 text-3xl font-extrabold text-white tabular-nums">
           {{ totalRevenue() | number:'1.0-0' }}
@@ -57,7 +60,7 @@
       <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl border border-slate-700/60">
         <div class="text-xs uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-2">
           <lucide-icon name="check" class="w-3.5 h-3.5"></lucide-icon>
-          Terminées
+          Terminées (page)
         </div>
         <div class="mt-2 text-3xl font-extrabold text-white tabular-nums">
           {{ completedCount() }}
@@ -65,11 +68,11 @@
       </div>
       <div class="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl border border-slate-700/60">
         <div class="text-xs uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-2">
-          <lucide-icon name="x" class="w-3.5 h-3.5"></lucide-icon>
-          Annulées
+          <lucide-icon name="hash" class="w-3.5 h-3.5"></lucide-icon>
+          Total filtré
         </div>
         <div class="mt-2 text-3xl font-extrabold text-white tabular-nums">
-          {{ cancelledCount() }}
+          {{ total() }}
         </div>
       </div>
     </div>
@@ -101,15 +104,15 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700/50 text-slate-300">
-            <tr *ngIf="filtered().length === 0">
+            <tr *ngIf="orders().length === 0">
               <td colspan="7" class="p-0">
                 <app-empty-state
-                  title="Aucune archive pour ces filtres"
+                  title="Aucune course pour ces filtres"
                   description="Ajustez la plage de dates ou le statut pour retrouver une course.">
                 </app-empty-state>
               </td>
             </tr>
-            <tr *ngFor="let o of filtered()"
+            <tr *ngFor="let o of orders()"
                 (click)="onRowClick(o)"
                 class="hover:bg-slate-700/20 transition-colors cursor-pointer">
               <td class="p-5 text-xs font-mono text-slate-400">
@@ -131,7 +134,7 @@
               </td>
               <td class="p-5 max-w-sm">
                 <div class="flex items-center gap-2 mb-1">
-                  <div class="w-2 h-2 rounded-full bg-blue-500"></div>
+                  <div class="w-2 h-2 rounded-full bg-sky-500"></div>
                   <span class="text-sm truncate">{{ o.pickupAddress }}</span>
                 </div>
                 <div class="flex items-center gap-2">
@@ -148,6 +151,32 @@
             </tr>
           </tbody>
         </table>
+      </div>
+
+      <!-- Pagination -->
+      <div *ngIf="total() > 0"
+           class="flex items-center justify-between gap-3 p-4 border-t border-slate-700/50 bg-slate-900/30 text-sm text-slate-400">
+        <div>
+          Page <span class="text-sky-400 font-semibold">{{ page() }}</span>
+          sur <span class="text-sky-400 font-semibold">{{ totalPages() }}</span>
+          <span class="hidden sm:inline">— {{ total() }} résultat(s)</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            (click)="prevPage()"
+            [disabled]="!canPrev()"
+            class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+            <lucide-icon name="chevron-left" class="w-4 h-4"></lucide-icon>
+            Précédent
+          </button>
+          <button
+            (click)="nextPage()"
+            [disabled]="!canNext()"
+            class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+            Suivant
+            <lucide-icon name="chevron-right" class="w-4 h-4"></lucide-icon>
+          </button>
+        </div>
       </div>
     </div>
   </div>

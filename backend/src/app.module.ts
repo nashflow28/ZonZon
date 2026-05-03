@@ -16,7 +16,11 @@ import { Message } from './entities/message.entity';
 import { SavedAddress } from './entities/saved-address.entity';
 import { Shop } from './entities/shop.entity';
 import { Product } from './entities/product.entity';
+import { FavoriteShop } from './entities/favorite-shop.entity';
 import { Rating } from './entities/rating.entity';
+import { AdminAuditLog } from './entities/admin-audit-log.entity';
+import { DriverPosition } from './entities/driver-position.entity';
+import { DeviceToken } from './entities/device-token.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -27,6 +31,7 @@ import { AddressesModule } from './addresses/addresses.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ShopsModule } from './shops/shops.module';
 import { RatingsModule } from './ratings/ratings.module';
+import { AuditLogModule } from './audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -80,7 +85,11 @@ import { RatingsModule } from './ratings/ratings.module';
         SavedAddress,
         Shop,
         Product,
+        FavoriteShop,
         Rating,
+        AdminAuditLog,
+        DriverPosition,
+        DeviceToken,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',
@@ -100,6 +109,7 @@ import { RatingsModule } from './ratings/ratings.module';
     NotificationsModule,
     ShopsModule,
     RatingsModule,
+    AuditLogModule,
   ],
   controllers: [AppController],
   providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'order_screen.dart';
 import 'driver_screen.dart';
-import 'screens/login_screen.dart';
+import 'router/app_router.dart';
 import 'screens/merchant_home_screen.dart';
 import 'services/auth_service.dart';
 import 'utils/platform_adapter.dart';
@@ -40,10 +41,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _logout() async {
     await AuthService().logout();
     if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    context.go(AppRoutes.login);
   }
 
   @override

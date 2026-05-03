@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:geolocator/geolocator.dart';
-import 'config/env.dart';
+import 'controllers/order_socket_controller.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/whatsapp_service.dart';
@@ -21,11 +20,21 @@ class DriverScreen extends StatefulWidget {
 
 class _DriverScreenState extends State<DriverScreen> {
   int _currentTab = 0;
-  IO.Socket? socket;
   List<dynamic> availableOrders = [];
   String? currentDriverId;
   final ApiClient _api = ApiClient();
   final AuthService _authService = AuthService();
+
+  /// Socket unifié partagé avec `order_screen.dart`. Côté livreur on ne
+  /// définit jamais `activeOrderId` (on n'a pas de course "à suivre" comme
+  /// le client) → tous les events `orderAccepted` / `orderStatusUpdated`
+  /// remontent, ce qui permet de retirer une course du radar dès qu'un
+  /// autre livreur l'a prise.
+  final OrderSocketController _socketCtrl = OrderSocketController();
+
+  StreamSubscription<NewOrderEvent>? _newOrderSub;
+  StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
+  StreamSubscription<void>? _connectedSub;
 
   /// Stream de positions (remplace l'ancien Timer.periodic 30s pour économiser
   /// la batterie : on n'émet que quand le livreur a réellement bougé).
@@ -38,6 +47,37 @@ class _DriverScreenState extends State<DriverScreen> {
   Position? _lastKnownPosition;
   DateTime? _lastEmittedAt;
 
+  /// Géofencing pickup — coordonnées du point de retrait de la course
+  /// actuellement ACCEPTED (dialog ouvert). Reset quand la course passe
+  /// IN_PROGRESS / COMPLETED / CANCELLED ou qu'aucune course n'est active.
+  double? _currentPickupLat;
+  double? _currentPickupLng;
+
+  /// Identifiant de la course actuellement traquée pour le géofencing.
+  /// Sert à éviter qu'un trigger reste actif après changement de course.
+  String? _geofenceOrderId;
+
+  /// Une fois passé à `true` pour la course en cours, on ne propose plus
+  /// "Vous êtes arrivé(e)" tant qu'une nouvelle course n'est pas acceptée.
+  /// Évite les répétitions si le livreur sort puis revient dans le rayon.
+  bool _geofenceTriggered = false;
+
+  /// Rayon (en mètres) sous lequel on considère que le livreur est arrivé
+  /// au point de retrait. 80 m est un bon compromis : assez large pour
+  /// absorber l'imprécision GPS (15-30 m typique en ville), assez serré
+  /// pour ne pas se déclencher quand le livreur passe juste devant.
+  static const double _pickupGeofenceMeters = 80;
+
+  /// ScaffoldMessenger key pour pouvoir afficher un Snackbar par-dessus
+  /// un dialog modal (le dialog masque le Scaffold ambient).
+  final GlobalKey<ScaffoldMessengerState> _messengerKey =
+      GlobalKey<ScaffoldMessengerState>();
+
+  /// Callback fourni par le `_showSuccessDialog` pour faire avancer
+  /// `dialogStatus` quand la transition vient de la suggestion de
+  /// géofencing (sans devoir cliquer le bouton du dialog).
+  void Function(String status)? _onGeofenceTransitioned;
+
   @override
   void initState() {
     super.initState();
@@ -49,13 +89,13 @@ class _DriverScreenState extends State<DriverScreen> {
     if (user != null) {
       currentDriverId = user.id;
     }
-    await _initWebSocket();
+    await _initSocket();
     await _loadAvailableOrders();
   }
 
   Future<void> _loadAvailableOrders() async {
     try {
-      final res = await _api.get('/orders');
+      final res = await _api.get('/orders/available');
       if (res.statusCode == 200 || res.statusCode == 201) {
         final data = jsonDecode(res.body);
         if (data is List && mounted) {
@@ -67,36 +107,36 @@ class _DriverScreenState extends State<DriverScreen> {
     } catch (_) {}
   }
 
-  Future<void> _initWebSocket() async {
-    final token = await _authService.getToken();
-    socket = IO.io(apiUrl, <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': false,
-      'auth': {'token': token},
-    });
+  /// Initialise `OrderSocketController` et abonne les streams pertinents
+  /// pour le livreur (nouvelle course / acceptation par un autre / connexion).
+  /// L'ancien `socket.on('orderStatusUpdated')` n'était pas utilisé côté
+  /// livreur (les transitions sont déclenchées par le livreur lui-même via
+  /// `_updateStatus`), donc on n'écoute pas `statusUpdates$` ici.
+  Future<void> _initSocket() async {
+    await _socketCtrl.init();
 
-    socket!.connect();
-
-    socket!.onConnect((_) {
-      print('Connecté aux WebSockets du serveur !');
+    // Démarrer le tracking GPS dès que le socket est effectivement connecté
+    // (comportement identique à l'ancien `socket.onConnect`).
+    _connectedSub = _socketCtrl.connected$.listen((_) {
+      debugPrint('Connecté aux WebSockets du serveur !');
       _startLocationUpdates();
     });
 
-    socket!.on('newOrderAvailable', (data) {
-      if (mounted) {
-        setState(() {
-          availableOrders.insert(0, data);
-        });
-        showAdaptiveSnack(context, '🔔 Nouvelle course disponible !');
-      }
+    _newOrderSub = _socketCtrl.newOrderAvailable$.listen((evt) {
+      if (!mounted) return;
+      setState(() {
+        availableOrders.insert(0, evt.raw);
+      });
+      showAdaptiveSnack(context, '🔔 Nouvelle course disponible !');
     });
 
-    socket!.on('orderAccepted', (data) {
-      if (mounted) {
-        setState(() {
-          availableOrders.removeWhere((order) => order['id'] == data['orderId']);
-        });
-      }
+    _orderAcceptedSub = _socketCtrl.orderAccepted$.listen((evt) {
+      if (!mounted) return;
+      setState(() {
+        availableOrders.removeWhere(
+          (order) => order['id']?.toString() == evt.orderId,
+        );
+      });
     });
   }
 
@@ -114,12 +154,86 @@ class _DriverScreenState extends State<DriverScreen> {
   }
 
   void _emitPosition(Position pos) {
-    socket?.emit('driver:location', {
-      'lat': pos.latitude,
-      'lng': pos.longitude,
-    });
+    _socketCtrl.emitDriverLocation(pos.latitude, pos.longitude);
     _lastKnownPosition = pos;
     _lastEmittedAt = DateTime.now();
+    _checkPickupGeofence(pos.latitude, pos.longitude);
+  }
+
+  /// Vérifie si la position actuelle se trouve dans le rayon du pickup
+  /// d'une course ACCEPTED. Si oui (et que le trigger n'a pas déjà été
+  /// déclenché pour cette course), propose au livreur de marquer la
+  /// course "En cours" via [_suggestArrival].
+  void _checkPickupGeofence(double lat, double lng) {
+    if (_currentPickupLat == null || _currentPickupLng == null) return;
+    if (_geofenceTriggered) return;
+    final distance = Geolocator.distanceBetween(
+      lat,
+      lng,
+      _currentPickupLat!,
+      _currentPickupLng!,
+    );
+    if (distance <= _pickupGeofenceMeters) {
+      _geofenceTriggered = true;
+      _suggestArrival();
+    }
+  }
+
+  /// Affiche un Snackbar non-bloquant suggérant au livreur de passer la
+  /// course en `IN_PROGRESS`. Pas d'auto-transition : on attend une
+  /// confirmation explicite via le bouton "Démarrer".
+  void _suggestArrival() {
+    final orderId = _geofenceOrderId;
+    if (orderId == null) return;
+    final messenger = _messengerKey.currentState;
+    if (messenger == null) return;
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF1E293B),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFF10B981), width: 1),
+        ),
+        content: const Text(
+          '✅ Vous êtes arrivé(e) au point de retrait. '
+          'Marquer la course comme « En cours » ?',
+          style: TextStyle(color: Colors.white),
+        ),
+        action: SnackBarAction(
+          label: 'Démarrer',
+          textColor: const Color(0xFF10B981),
+          onPressed: () => _confirmArrival(orderId),
+        ),
+      ),
+    );
+  }
+
+  /// Déclenche la transition `IN_PROGRESS` après confirmation utilisateur.
+  /// Notifie le dialog ouvert pour qu'il mette à jour son `dialogStatus`.
+  Future<void> _confirmArrival(String orderId) async {
+    final ok = await _updateStatus(orderId, 'IN_PROGRESS');
+    if (!ok) {
+      // Échec serveur : on ré-arme pour permettre une nouvelle tentative.
+      _geofenceTriggered = false;
+      return;
+    }
+    _onGeofenceTransitioned?.call('IN_PROGRESS');
+    // Plus besoin de surveiller le pickup une fois en livraison.
+    _currentPickupLat = null;
+    _currentPickupLng = null;
+  }
+
+  /// Réinitialise l'état de géofencing. Appelé à la fermeture du dialog
+  /// (course terminée/annulée) ou avant d'amorcer une nouvelle course.
+  void _resetGeofenceState() {
+    _currentPickupLat = null;
+    _currentPickupLng = null;
+    _geofenceOrderId = null;
+    _geofenceTriggered = false;
+    _onGeofenceTransitioned = null;
   }
 
   Future<void> _startLocationUpdates() async {
@@ -162,11 +276,11 @@ class _DriverScreenState extends State<DriverScreen> {
       if (last == null) return;
       if (lastAt == null ||
           DateTime.now().difference(lastAt) >= const Duration(seconds: 90)) {
-        socket?.emit('driver:location', {
-          'lat': last.latitude,
-          'lng': last.longitude,
-          'heartbeat': true,
-        });
+        _socketCtrl.emitDriverLocation(
+          last.latitude,
+          last.longitude,
+          heartbeat: true,
+        );
         _lastEmittedAt = DateTime.now();
       }
     });
@@ -263,6 +377,24 @@ class _DriverScreenState extends State<DriverScreen> {
         ? '${client['firstName'] ?? ''} ${client['lastName'] ?? ''}'.trim()
         : 'Client';
 
+    // ── Géofencing : on stocke les coords pickup tant que la course est
+    // ACCEPTED. Reset à la fermeture du dialog.
+    final pickupLat = (orderData['pickupLat'] as num?)?.toDouble();
+    final pickupLng = (orderData['pickupLng'] as num?)?.toDouble();
+    _resetGeofenceState();
+    if (dialogStatus == 'ACCEPTED' && pickupLat != null && pickupLng != null) {
+      _currentPickupLat = pickupLat;
+      _currentPickupLng = pickupLng;
+      _geofenceOrderId = orderId;
+      // Edge case : si le livreur est déjà tout proche au moment de l'accept
+      // (ex. course créée dans la même rue), on déclenche immédiatement la
+      // suggestion sur la base de la dernière position connue.
+      final last = _lastKnownPosition;
+      if (last != null) {
+        _checkPickupGeofence(last.latitude, last.longitude);
+      }
+    }
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -280,11 +412,20 @@ class _DriverScreenState extends State<DriverScreen> {
               return;
             }
             if (targetStatus == 'COMPLETED' || targetStatus == 'CANCELLED') {
+              _resetGeofenceState();
               if (dlgCtx.mounted) Navigator.pop(dlgCtx);
               if (targetStatus == 'COMPLETED') {
                 await _promptRatingForClient(orderData);
               }
             } else {
+              // IN_PROGRESS atteint via le dialog manuel : plus besoin
+              // de surveiller le pickup (mais on garde _geofenceTriggered
+              // à true pour ne pas re-trigger si jamais le statut revient).
+              if (targetStatus == 'IN_PROGRESS') {
+                _currentPickupLat = null;
+                _currentPickupLng = null;
+                _geofenceTriggered = true;
+              }
               if (dlgCtx.mounted) {
                 setDialogState(() {
                   dialogStatus = targetStatus;
@@ -293,6 +434,16 @@ class _DriverScreenState extends State<DriverScreen> {
               }
             }
           }
+
+          // Branche du callback de géofencing pour que le dialog reste
+          // synchronisé quand la transition est faite via le Snackbar.
+          _onGeofenceTransitioned = (newStatus) {
+            if (!dlgCtx.mounted) return;
+            setDialogState(() {
+              dialogStatus = newStatus;
+              dialogProcessing = false;
+            });
+          };
 
           return AlertDialog(
             backgroundColor: const Color(0xFF1E293B),
@@ -425,34 +576,42 @@ class _DriverScreenState extends State<DriverScreen> {
   void dispose() {
     _positionSub?.cancel();
     _heartbeatTimer?.cancel();
-    socket?.disconnect();
+    _newOrderSub?.cancel();
+    _orderAcceptedSub?.cancel();
+    _connectedSub?.cancel();
+    _socketCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
-      appBar: AppBar(
-        title: Text(
-          _currentTab == 0 ? 'Radar Livreur' : 'Mon Profil',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+    return ScaffoldMessenger(
+      // Une key dédiée au géofencing : permet de pousser un Snackbar même
+      // quand un AlertDialog modal est ouvert par-dessus.
+      key: _messengerKey,
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0F172A),
+        appBar: AppBar(
+          title: Text(
+            _currentTab == 0 ? 'Radar Livreur' : 'Mon Profil',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          backgroundColor: const Color(0xFF1E293B),
+          iconTheme: const IconThemeData(color: Colors.white),
+          automaticallyImplyLeading: false,
         ),
-        backgroundColor: const Color(0xFF1E293B),
-        iconTheme: const IconThemeData(color: Colors.white),
-        automaticallyImplyLeading: false,
-      ),
-      body: _currentTab == 0 ? _buildRadar() : const DriverProfileScreen(),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentTab,
-        onTap: (i) => setState(() => _currentTab = i),
-        backgroundColor: const Color(0xFF1E293B),
-        selectedItemColor: const Color(0xFF10B981),
-        unselectedItemColor: Colors.white60,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'Radar'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
-        ],
+        body: _currentTab == 0 ? _buildRadar() : const DriverProfileScreen(),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _currentTab,
+          onTap: (i) => setState(() => _currentTab = i),
+          backgroundColor: const Color(0xFF1E293B),
+          selectedItemColor: const Color(0xFF10B981),
+          unselectedItemColor: Colors.white60,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'Radar'),
+            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
+          ],
+        ),
       ),
     );
   }

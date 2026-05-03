@@ -8,7 +8,23 @@ import '../utils/platform_adapter.dart';
 class ShopDetailScreen extends StatefulWidget {
   final String shopId;
   final Shop? preview;
-  const ShopDetailScreen({super.key, required this.shopId, this.preview});
+
+  /// État favori initial transmis par l'écran appelant (`ShopListScreen`) pour
+  /// éviter un re-fetch de la liste des favoris quand on ouvre une boutique.
+  /// Si `null`, l'écran charge `getFavoriteIds()` au `initState`.
+  final bool? isFavoriteInitial;
+
+  /// Callback optionnel : prévient l'écran appelant quand l'état favori change
+  /// (utile pour mettre à jour le `Set<String>` local sans refetch).
+  final void Function(bool isFavorite)? onFavoriteChanged;
+
+  const ShopDetailScreen({
+    super.key,
+    required this.shopId,
+    this.preview,
+    this.isFavoriteInitial,
+    this.onFavoriteChanged,
+  });
 
   @override
   State<ShopDetailScreen> createState() => _ShopDetailScreenState();
@@ -17,13 +33,21 @@ class ShopDetailScreen extends StatefulWidget {
 class _ShopDetailScreenState extends State<ShopDetailScreen> {
   final ShopsService _service = ShopsService();
   Shop? _shop;
-  bool _loading = true;
+  bool _isFavorite = false;
+  bool _favoriteLoaded = false;
 
   @override
   void initState() {
     super.initState();
     _shop = widget.preview;
+    if (widget.isFavoriteInitial != null) {
+      _isFavorite = widget.isFavoriteInitial!;
+      _favoriteLoaded = true;
+    }
     _load();
+    if (!_favoriteLoaded) {
+      _loadFavoriteStatus();
+    }
   }
 
   Future<void> _load() async {
@@ -31,8 +55,36 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
     if (!mounted) return;
     setState(() {
       _shop = s ?? _shop;
-      _loading = false;
     });
+  }
+
+  Future<void> _loadFavoriteStatus() async {
+    final ids = await _service.getFavoriteIds();
+    if (!mounted) return;
+    setState(() {
+      _isFavorite = ids.contains(widget.shopId);
+      _favoriteLoaded = true;
+    });
+  }
+
+  Future<void> _toggleFavorite() async {
+    final wasFav = _isFavorite;
+    setState(() => _isFavorite = !wasFav);
+    widget.onFavoriteChanged?.call(!wasFav);
+    hapticLight();
+    try {
+      if (wasFav) {
+        await _service.removeFavorite(widget.shopId);
+      } else {
+        await _service.addFavorite(widget.shopId);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      // Revert.
+      setState(() => _isFavorite = wasFav);
+      widget.onFavoriteChanged?.call(wasFav);
+      showAdaptiveSnack(context, 'Erreur, veuillez réessayer.', isError: true);
+    }
   }
 
   void _selectProduct(Product p) {
@@ -53,6 +105,22 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                   pinned: true,
                   backgroundColor: const Color(0xFF1E293B),
                   iconTheme: const IconThemeData(color: Colors.white),
+                  actions: [
+                    IconButton(
+                      tooltip: _isFavorite
+                          ? 'Retirer des favoris'
+                          : 'Ajouter aux favoris',
+                      icon: Icon(
+                        _isFavorite
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                        color: _isFavorite
+                            ? const Color(0xFFEF4444)
+                            : Colors.white,
+                      ),
+                      onPressed: _favoriteLoaded ? _toggleFavorite : null,
+                    ),
+                  ],
                   flexibleSpace: FlexibleSpaceBar(
                     title: Text(s.name,
                         style: const TextStyle(

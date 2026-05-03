@@ -34,7 +34,7 @@ export interface SnapshotResponse {
 @Injectable({ providedIn: 'root' })
 export class ReportsService {
   private http = inject(HttpClient);
-  private baseUrl = `${environment.apiUrl}/reports`;
+  private baseUrl = `${environment.apiUrl}${environment.apiPrefix}/reports`;
 
   getWeekly(from: string, to: string): Observable<WeeklyReport> {
     const params = new URLSearchParams({ from, to }).toString();

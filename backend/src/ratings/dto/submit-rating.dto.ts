@@ -17,4 +17,22 @@ export class SubmitRatingDto {
   @IsString()
   @MaxLength(500)
   comment?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  punctualityScore?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  communicationScore?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  courtesyScore?: number;
 }

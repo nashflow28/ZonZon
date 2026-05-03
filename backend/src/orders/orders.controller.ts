@@ -3,8 +3,10 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -12,6 +14,7 @@ import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { EstimateOrderDto } from './dto/estimate-order.dto';
+import { ListOrdersDto } from './dto/list-orders.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
@@ -42,8 +45,14 @@ export class OrdersController {
 
   @Roles(UserRole.ADMIN, UserRole.LIVREUR)
   @Get()
-  findAll() {
-    return this.ordersService.findAll();
+  findAll(@Query() query: ListOrdersDto) {
+    return this.ordersService.findAll(query);
+  }
+
+  @Roles(UserRole.LIVREUR)
+  @Get('available')
+  findAvailable() {
+    return this.ordersService.findAvailable();
   }
 
   @Get('mine')
@@ -55,6 +64,14 @@ export class OrdersController {
   @Post(':id/accept')
   accept(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.ordersService.acceptOrder(id, user.id ?? user.sub);
+  }
+
+  @Get(':id/eta')
+  getEta(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.computeEta(id, user);
   }
 
   @Patch(':id/status')

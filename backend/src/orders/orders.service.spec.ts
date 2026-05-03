@@ -10,6 +10,7 @@ import axios from 'axios';
 
 import { OrdersService } from './orders.service';
 import { OrdersGateway } from './orders.gateway';
+import { PositionsService } from './positions.service';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
@@ -18,13 +19,27 @@ import { UserRole } from '../entities/user.entity';
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
-const mockRepo = () => ({
-  find: jest.fn(),
-  findOne: jest.fn(),
-  save: jest.fn(),
-  create: jest.fn((fn: any) => fn),
-  update: jest.fn(),
-});
+const mockRepo = () => {
+  const updateExecute = jest.fn();
+  const qb: any = {
+    update: jest.fn().mockReturnThis(),
+    set: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    execute: updateExecute,
+  };
+  return {
+    find: jest.fn(),
+    findAndCount: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn((fn: any) => fn),
+    update: jest.fn(),
+    createQueryBuilder: jest.fn(() => qb),
+    __qb: qb,
+    __updateExecute: updateExecute,
+  };
+};
 
 const clientUser = {
   id: 'client-1',
@@ -51,7 +66,10 @@ const adminUser = {
 describe('OrdersService', () => {
   let service: OrdersService;
   let ordersRepository: ReturnType<typeof mockRepo>;
-  let usersService: { findOne: jest.Mock };
+  let usersService: {
+    findOne: jest.Mock;
+    findLivreursWithFcmToken: jest.Mock;
+  };
   let gateway: {
     broadcastNewOrder: jest.Mock;
     broadcastOrderAccepted: jest.Mock;
@@ -59,6 +77,11 @@ describe('OrdersService', () => {
     isUserConnected: jest.Mock;
   };
   let notifications: { sendToUser: jest.Mock };
+  let positionsService: {
+    upsertPosition: jest.Mock;
+    findRecentLivreurPositions: jest.Mock;
+    findLatestForLivreur: jest.Mock;
+  };
   let originalOrsKey: string | undefined;
 
   beforeAll(() => {
@@ -83,7 +106,10 @@ describe('OrdersService', () => {
     }) as any);
 
     ordersRepository = mockRepo();
-    usersService = { findOne: jest.fn() };
+    usersService = {
+      findOne: jest.fn(),
+      findLivreursWithFcmToken: jest.fn().mockResolvedValue([]),
+    } as any;
     gateway = {
       broadcastNewOrder: jest.fn(),
       broadcastOrderAccepted: jest.fn(),
@@ -91,6 +117,14 @@ describe('OrdersService', () => {
       isUserConnected: jest.fn().mockReturnValue(true),
     };
     notifications = { sendToUser: jest.fn().mockResolvedValue(undefined) };
+    positionsService = {
+      upsertPosition: jest.fn().mockResolvedValue(undefined),
+      // Default : aucune position récente → fallback "global" (rétro-compat
+      // avec les tests pré-persistance qui s'attendent au comportement
+      // "tous les livreurs offline avec un fcmToken sont notifiés").
+      findRecentLivreurPositions: jest.fn().mockResolvedValue([]),
+      findLatestForLivreur: jest.fn().mockResolvedValue(null),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -102,6 +136,7 @@ describe('OrdersService', () => {
         { provide: UsersService, useValue: usersService },
         { provide: OrdersGateway, useValue: gateway },
         { provide: NotificationsService, useValue: notifications },
+        { provide: PositionsService, useValue: positionsService },
       ],
     }).compile();
 
@@ -205,6 +240,130 @@ describe('OrdersService', () => {
       expect(mockedAxios.get).toHaveBeenCalledTimes(1);
     });
 
+    it('FCM fallback: envoie une push aux livreurs avec token mais offline', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-fcm',
+        pickupAddress: 'Marché de Lomé',
+        ...o,
+      }));
+
+      const livreurOffline = {
+        id: 'livreur-off',
+        firstName: 'Bob',
+        fcmToken: 'tok-off',
+      };
+      const livreurOnline = {
+        id: 'livreur-on',
+        firstName: 'Alice',
+        fcmToken: 'tok-on',
+      };
+      usersService.findLivreursWithFcmToken.mockResolvedValue([
+        livreurOffline,
+        livreurOnline,
+      ]);
+      // livreurOnline est connecté au WS, livreurOffline non
+      gateway.isUserConnected.mockImplementation(
+        (id: string) => id === livreurOnline.id,
+      );
+
+      await service.createOrder(clientUser.id, dto);
+      // Le notifyOfflineLivreurs est fire-and-forget : on flush la microtask queue
+      await new Promise((r) => setImmediate(r));
+
+      const calls = (notifications.sendToUser as jest.Mock).mock.calls;
+      const ids = calls.map((c) => c[0]);
+      expect(ids).toContain('livreur-off');
+      expect(ids).not.toContain('livreur-on');
+      const off = calls.find((c) => c[0] === 'livreur-off');
+      expect(off[1].title).toBe('Nouvelle course disponible');
+      expect(off[1].data.kind).toBe('new_order');
+      expect(off[1].data.orderId).toBe('ord-fcm');
+    });
+
+    it('FCM fallback: aucun envoi si tous les livreurs sont connectés', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-fcm-2',
+        pickupAddress: 'X',
+        ...o,
+      }));
+      usersService.findLivreursWithFcmToken.mockResolvedValue([
+        { id: 'l1', firstName: 'A', fcmToken: 't1' },
+      ]);
+      gateway.isUserConnected.mockReturnValue(true); // tous online
+
+      await service.createOrder(clientUser.id, dto);
+      await new Promise((r) => setImmediate(r));
+
+      expect(notifications.sendToUser).not.toHaveBeenCalled();
+    });
+
+    it('FCM fallback géo: filtre par rayon NOTIFY_RADIUS_KM quand des positions récentes existent', async () => {
+      const oldRadius = process.env.NOTIFY_RADIUS_KM;
+      process.env.NOTIFY_RADIUS_KM = '5';
+      try {
+        usersService.findOne.mockResolvedValue(clientUser);
+        mockedAxios.get.mockResolvedValue({
+          data: {
+            features: [{ properties: { summary: { distance: 3000 } } }],
+          },
+        });
+        const orderDto = {
+          ...dto,
+          pickupLat: 6.13,
+          pickupLng: 1.22,
+          deliveryLat: 6.18,
+          deliveryLng: 1.23,
+        };
+        ordersRepository.save.mockImplementation(async (o: any) => ({
+          id: 'ord-geo',
+          pickupAddress: 'Marché de Lomé',
+          pickupLat: 6.13,
+          pickupLng: 1.22,
+          ...o,
+        }));
+
+        // 3 livreurs avec positions récentes :
+        //   - near : ~1km du pickup → in radius
+        //   - far : ~50km → out of radius
+        //   - online : in radius mais connecté au WS → exclu
+        positionsService.findRecentLivreurPositions.mockResolvedValue([
+          { livreurId: 'driver-near', lat: 6.135, lng: 1.225 },
+          { livreurId: 'driver-far', lat: 6.6, lng: 1.22 },
+          { livreurId: 'driver-online', lat: 6.131, lng: 1.221 },
+        ]);
+        gateway.isUserConnected.mockImplementation(
+          (id: string) => id === 'driver-online',
+        );
+
+        await service.createOrder(clientUser.id, orderDto);
+        await new Promise((r) => setImmediate(r));
+
+        const calls = (notifications.sendToUser as jest.Mock).mock.calls;
+        const ids = calls.map((c) => c[0]);
+        expect(ids).toContain('driver-near');
+        expect(ids).not.toContain('driver-far');
+        expect(ids).not.toContain('driver-online');
+        // Le fallback "global" via findLivreursWithFcmToken ne doit PAS être
+        // utilisé puisqu'on a des positions récentes.
+        expect(usersService.findLivreursWithFcmToken).not.toHaveBeenCalled();
+      } finally {
+        if (oldRadius === undefined) delete process.env.NOTIFY_RADIUS_KM;
+        else process.env.NOTIFY_RADIUS_KM = oldRadius;
+      }
+    });
+
     it('fallback Haversine si axios throw 3 fois', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
       mockedAxios.get.mockRejectedValue(new Error('network down'));
@@ -237,19 +396,28 @@ describe('OrdersService', () => {
   });
 
   describe('acceptOrder', () => {
-    it('passe PENDING → ACCEPTED', async () => {
-      const order: any = {
-        id: 'ord-1',
-        status: OrderStatus.PENDING,
-        client: { id: clientUser.id },
-      };
-      ordersRepository.findOne.mockResolvedValue(order);
+    it('passe PENDING → ACCEPTED via UPDATE atomique', async () => {
+      // 1er findOne : check d'existence (avant UPDATE)
+      // 2e findOne : reload après UPDATE pour broadcast/notif
+      ordersRepository.findOne
+        .mockResolvedValueOnce({
+          id: 'ord-1',
+          status: OrderStatus.PENDING,
+          client: { id: clientUser.id },
+        })
+        .mockResolvedValueOnce({
+          id: 'ord-1',
+          status: OrderStatus.ACCEPTED,
+          client: { id: clientUser.id },
+          livreur: livreurUser,
+        });
+      ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
       usersService.findOne.mockResolvedValue(livreurUser);
-      ordersRepository.save.mockImplementation(async (o: any) => o);
 
       const result = await service.acceptOrder('ord-1', livreurUser.id);
       expect(result.status).toBe(OrderStatus.ACCEPTED);
       expect(result.livreur).toEqual(livreurUser);
+      expect(ordersRepository.__updateExecute).toHaveBeenCalledTimes(1);
       expect(gateway.broadcastOrderAccepted).toHaveBeenCalledWith(
         'ord-1',
         livreurUser.id,
@@ -257,15 +425,17 @@ describe('OrdersService', () => {
       );
     });
 
-    it('throw ConflictException si déjà ACCEPTED', async () => {
-      ordersRepository.findOne.mockResolvedValue({
+    it('throw ConflictException si UPDATE n’affecte aucune ligne (déjà prise)', async () => {
+      ordersRepository.findOne.mockResolvedValueOnce({
         id: 'o',
         status: OrderStatus.ACCEPTED,
         client: { id: clientUser.id },
       });
+      ordersRepository.__updateExecute.mockResolvedValue({ affected: 0 });
       await expect(
         service.acceptOrder('o', livreurUser.id),
       ).rejects.toBeInstanceOf(ConflictException);
+      expect(ordersRepository.save).not.toHaveBeenCalled();
     });
 
     it('throw NotFoundException si introuvable', async () => {
@@ -273,6 +443,8 @@ describe('OrdersService', () => {
       await expect(
         service.acceptOrder('o', livreurUser.id),
       ).rejects.toBeInstanceOf(NotFoundException);
+      // L'UPDATE ne doit pas être tenté si l'order n'existe pas
+      expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
     });
 
     it('atomicité : 2 livreurs en concurrence → 1 seul gagne, l’autre reçoit ConflictException', async () => {
@@ -284,8 +456,7 @@ describe('OrdersService', () => {
         phone: '+22890000004',
       };
 
-      // 1er findOne : commande PENDING (livreur 1 va gagner)
-      // 2ème findOne : commande déjà ACCEPTED (par livreur 1)
+      // Existence checks pour les 2 appels + reload pour le gagnant
       ordersRepository.findOne
         .mockResolvedValueOnce({
           id: 'ord-concurrent',
@@ -297,16 +468,25 @@ describe('OrdersService', () => {
           status: OrderStatus.ACCEPTED,
           client: { id: clientUser.id },
           livreur: livreurUser,
+        })
+        .mockResolvedValueOnce({
+          id: 'ord-concurrent',
+          status: OrderStatus.ACCEPTED,
+          client: { id: clientUser.id },
+          livreur: livreurUser,
         });
+
+      // 1er UPDATE : 1 ligne affectée (gagne) ; 2e : 0 ligne (perd)
+      ordersRepository.__updateExecute
+        .mockResolvedValueOnce({ affected: 1 })
+        .mockResolvedValueOnce({ affected: 0 });
 
       usersService.findOne.mockImplementation(async (id: string) => {
         if (id === livreurUser.id) return livreurUser;
         if (id === livreur2.id) return livreur2;
         return null;
       });
-      ordersRepository.save.mockImplementation(async (o: any) => o);
 
-      // Le 1er livreur gagne
       const winner = await service.acceptOrder(
         'ord-concurrent',
         livreurUser.id,
@@ -314,13 +494,10 @@ describe('OrdersService', () => {
       expect(winner.status).toBe(OrderStatus.ACCEPTED);
       expect(winner.livreur).toEqual(livreurUser);
 
-      // Le 2e livreur perd → ConflictException
       await expect(
         service.acceptOrder('ord-concurrent', livreur2.id),
       ).rejects.toBeInstanceOf(ConflictException);
 
-      // save() doit n'avoir été appelé qu'une seule fois (le gagnant)
-      expect(ordersRepository.save).toHaveBeenCalledTimes(1);
       // broadcastOrderAccepted n'est appelé que par le gagnant
       expect(gateway.broadcastOrderAccepted).toHaveBeenCalledTimes(1);
       expect(gateway.broadcastOrderAccepted).toHaveBeenCalledWith(
@@ -416,6 +593,243 @@ describe('OrdersService', () => {
       await expect(
         service.updateStatus('o', OrderStatus.COMPLETED, adminUser),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('envoie une push au LIVREUR quand le CLIENT annule une course ACCEPTED (livreur offline)', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildOrder(OrderStatus.ACCEPTED),
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      // Client connecté (pas de push client) ; livreur déconnecté → push livreur
+      gateway.isUserConnected.mockImplementation(
+        (id: string) => id === clientUser.id,
+      );
+
+      await service.updateStatus(
+        'o',
+        OrderStatus.CANCELLED,
+        clientUser,
+      );
+
+      const calls = (notifications.sendToUser as jest.Mock).mock.calls;
+      const livreurCall = calls.find((c) => c[0] === livreurUser.id);
+      expect(livreurCall).toBeDefined();
+      expect(livreurCall[1].title).toBe('Course annulée');
+      expect(livreurCall[1].body).toBe(
+        'Le client a annulé la course en cours.',
+      );
+      expect(livreurCall[1].data.kind).toBe('order_cancelled');
+    });
+
+    it("envoie une push au LIVREUR quand l'ADMIN annule (livreur offline)", async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      gateway.isUserConnected.mockReturnValue(false);
+
+      await service.updateStatus('o', OrderStatus.CANCELLED, adminUser);
+
+      const calls = (notifications.sendToUser as jest.Mock).mock.calls;
+      const livreurCall = calls.find((c) => c[0] === livreurUser.id);
+      expect(livreurCall).toBeDefined();
+      expect(livreurCall[1].body).toBe(
+        "La course a été annulée par l'administration.",
+      );
+    });
+
+    it("n'envoie PAS de push au livreur si c'est lui qui annule", async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      gateway.isUserConnected.mockReturnValue(false);
+
+      await service.updateStatus('o', OrderStatus.CANCELLED, livreurUser);
+
+      const calls = (notifications.sendToUser as jest.Mock).mock.calls;
+      const livreurCall = calls.find((c) => c[0] === livreurUser.id);
+      expect(livreurCall).toBeUndefined();
+    });
+  });
+
+  describe('findAll (paginated)', () => {
+    it('renvoie { items, total, page, limit, hasMore } avec defaults', async () => {
+      ordersRepository.findAndCount.mockResolvedValue([[{ id: 'a' }], 1]);
+      const result = await service.findAll();
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(20);
+      expect(result.hasMore).toBe(false);
+      // Vérifie que take/skip sont appliqués
+      const callArg = ordersRepository.findAndCount.mock.calls[0][0];
+      expect(callArg.take).toBe(20);
+      expect(callArg.skip).toBe(0);
+      expect(callArg.order).toEqual({ createdAt: 'DESC' });
+    });
+
+    it('hasMore=true quand total > page*limit', async () => {
+      ordersRepository.findAndCount.mockResolvedValue([
+        new Array(20).fill({}),
+        50,
+      ]);
+      const result = await service.findAll({ page: 1, limit: 20 });
+      expect(result.hasMore).toBe(true);
+      expect(result.total).toBe(50);
+    });
+
+    it('applique le filtre status', async () => {
+      ordersRepository.findAndCount.mockResolvedValue([[], 0]);
+      await service.findAll({ status: OrderStatus.PENDING });
+      const arg = ordersRepository.findAndCount.mock.calls[0][0];
+      expect(arg.where.status).toBe(OrderStatus.PENDING);
+    });
+
+    it('applique le filtre from/to (createdAt Between)', async () => {
+      ordersRepository.findAndCount.mockResolvedValue([[], 0]);
+      await service.findAll({ from: '2026-01-01', to: '2026-01-31' });
+      const arg = ordersRepository.findAndCount.mock.calls[0][0];
+      // TypeORM Between produit un FindOperator
+      expect(arg.where.createdAt).toBeDefined();
+    });
+  });
+
+  describe('computeEta', () => {
+    // Pickup à Lomé centre, delivery à ~5 km au nord.
+    const pickupLat = 6.13;
+    const pickupLng = 1.22;
+    const deliveryLat = 6.18;
+    const deliveryLng = 1.23;
+
+    const buildOrder = (
+      status: OrderStatus,
+      withLivreur = true,
+    ): any => ({
+      id: 'ord-eta',
+      status,
+      pickupLat,
+      pickupLng,
+      deliveryLat,
+      deliveryLng,
+      client: { id: clientUser.id },
+      livreur: withLivreur ? { id: livreurUser.id } : null,
+    });
+
+    it('ACCEPTED + position récente livreur → ETA livreur→pickup', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder(OrderStatus.ACCEPTED));
+      // Livreur ~1 km du pickup (≈ 0.01° de latitude)
+      positionsService.findLatestForLivreur.mockResolvedValue({
+        livreurId: livreurUser.id,
+        lat: 6.14,
+        lng: 1.22,
+        updatedAt: new Date(),
+      });
+
+      const result = await service.computeEta('ord-eta', clientUser);
+
+      expect(result.basedOn).toBe('driver_position');
+      expect(result.distanceKm).toBeGreaterThan(0);
+      expect(result.distanceKm).toBeLessThan(2);
+      expect(result.etaMinutes).toBeGreaterThanOrEqual(1);
+      // ~1 km / 25 km/h * 60 = ~2.7 min
+      expect(result.etaMinutes).toBeLessThanOrEqual(5);
+    });
+
+    it('IN_PROGRESS + position récente livreur → ETA livreur→delivery', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.IN_PROGRESS),
+      );
+      // Livreur très proche de la delivery
+      positionsService.findLatestForLivreur.mockResolvedValue({
+        livreurId: livreurUser.id,
+        lat: 6.181,
+        lng: 1.231,
+        updatedAt: new Date(),
+      });
+
+      const result = await service.computeEta('ord-eta', clientUser);
+
+      expect(result.basedOn).toBe('driver_position');
+      expect(result.distanceKm).toBeLessThan(0.5);
+      expect(result.etaMinutes).toBe(1); // Math.max(1, ...)
+    });
+
+    it('PENDING → basedOn=unavailable', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildOrder(OrderStatus.PENDING, false),
+      });
+      const result = await service.computeEta('ord-eta', clientUser);
+      expect(result).toEqual({
+        distanceKm: null,
+        etaMinutes: null,
+        basedOn: 'unavailable',
+      });
+    });
+
+    it('ACCEPTED sans position fraîche → basedOn=unavailable', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder(OrderStatus.ACCEPTED));
+      // Position trop vieille (> 5 min)
+      positionsService.findLatestForLivreur.mockResolvedValue({
+        livreurId: livreurUser.id,
+        lat: 6.14,
+        lng: 1.22,
+        updatedAt: new Date(Date.now() - 10 * 60 * 1000),
+      });
+
+      const result = await service.computeEta('ord-eta', clientUser);
+      expect(result.basedOn).toBe('unavailable');
+      expect(result.etaMinutes).toBeNull();
+    });
+
+    it('IN_PROGRESS sans position fraîche → fallback pickup', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.IN_PROGRESS),
+      );
+      positionsService.findLatestForLivreur.mockResolvedValue(null);
+
+      const result = await service.computeEta('ord-eta', clientUser);
+      expect(result.basedOn).toBe('pickup');
+      expect(result.distanceKm).toBeGreaterThan(0);
+      expect(result.etaMinutes).toBeGreaterThanOrEqual(1);
+    });
+
+    it('actor non autorisé → ForbiddenException', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      const stranger = {
+        id: 'stranger-1',
+        role: UserRole.CLIENT,
+        firstName: 'X',
+        lastName: 'Y',
+        phone: '+22890000099',
+      };
+      await expect(
+        service.computeEta('ord-eta', stranger),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('order introuvable → NotFoundException', async () => {
+      ordersRepository.findOne.mockResolvedValue(null);
+      await expect(
+        service.computeEta('missing', clientUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('admin peut consulter même sans être client/livreur', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      positionsService.findLatestForLivreur.mockResolvedValue({
+        livreurId: livreurUser.id,
+        lat: 6.14,
+        lng: 1.22,
+        updatedAt: new Date(),
+      });
+
+      const result = await service.computeEta('ord-eta', adminUser);
+      expect(result.basedOn).toBe('driver_position');
     });
   });
 });

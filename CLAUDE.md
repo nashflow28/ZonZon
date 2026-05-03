@@ -2,21 +2,28 @@
 
 ## ⚠️ RÈGLE OBLIGATOIRE — À LIRE EN PREMIER
 
-**Avant toute chose, lis le fichier `PROGRESS.md`** à la racine du projet.  
-**Après chaque avancée importante, mets à jour `PROGRESS.md`** avant de terminer la session.
+**Avant toute chose, lis ces deux fichiers à la racine du projet :**
+1. **`PROGRESS.md`** → état actuel, URLs, commandes, historique
+2. **`TODO.md`** → tableau des tâches (Trello) avec cases à cocher
+
+**Après chaque avancée importante, mets à jour les deux fichiers** avant de terminer la session.
 
 Cette règle est non négociable. Elle garantit que chaque instance de Claude Code qui travaille sur ce projet dispose du contexte complet sans avoir à relire l'historique des conversations.
 
 ### Ce que tu dois faire systématiquement :
-1. **Au démarrage** → Lire `PROGRESS.md` pour connaître l'état du projet
-2. **Pendant le travail** → Référencer `PROGRESS.md` pour les URLs, commandes, comptes
-3. **Avant de terminer** → Mettre à jour `PROGRESS.md` avec toutes les nouvelles avancées :
-   - Nouvelles fonctionnalités ajoutées
-   - Bugs corrigés
-   - Fichiers modifiés importants
-   - Nouvelles commandes utiles
-   - Nouvelles limitations découvertes
-   - Nouvelle entrée dans "Historique des sessions"
+1. **Au démarrage** → Lire `PROGRESS.md` (état) puis `TODO.md` (quoi faire)
+2. **Pendant le travail** :
+   - Marquer les tâches `TODO.md` en `[~]` (en cours) puis `[x]` (fait) au fur et à mesure
+   - Référencer `PROGRESS.md` pour les URLs, commandes, comptes
+3. **Avant de terminer** :
+   - Cocher les tâches finies dans `TODO.md` (et déplacer vers la section "Déjà fait" si pertinent)
+   - Mettre à jour `PROGRESS.md` avec :
+     - Nouvelles fonctionnalités ajoutées
+     - Bugs corrigés
+     - Fichiers modifiés importants
+     - Nouvelles commandes utiles
+     - Nouvelles limitations découvertes
+     - Nouvelle entrée dans "Historique des sessions"
 
 ---
 
@@ -54,7 +61,8 @@ ZonZon/
 ├── mobile_app/       # Flutter (Android)
 ├── .agents/skills/   # Flutter Skills officiels installés
 ├── CLAUDE.md         # Ce fichier — instructions Claude Code
-└── PROGRESS.md       # Journal de progression — À LIRE ET MAINTENIR
+├── PROGRESS.md       # Journal de progression — À LIRE ET MAINTENIR
+└── TODO.md           # Tableau des tâches (Trello) — À LIRE ET MAINTENIR
 ```
 
 ### URLs de production
@@ -110,3 +118,4 @@ flyctl logs --app zonzon-backend --no-tail
 ---
 
 > Pour tout le détail (historique complet, endpoints, architecture, variables d'env), consulte **`PROGRESS.md`**.
+> Pour la liste des tâches à faire / en cours / à reprogrammer, consulte **`TODO.md`**.

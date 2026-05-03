@@ -5,6 +5,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
 import { Commission, CommissionStatus } from '../entities/commission.entity';
 import { User, UserRole } from '../entities/user.entity';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 @Injectable()
 export class ReportsService {
@@ -17,6 +18,7 @@ export class ReportsService {
     private commissionsRepo: Repository<Commission>,
     @InjectRepository(User)
     private usersRepo: Repository<User>,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   private get commissionRate(): number {
@@ -154,14 +156,22 @@ export class ReportsService {
     return saved;
   }
 
-  async markPaid(commissionId: string) {
+  async markPaid(commissionId: string, adminId: string) {
     const c = await this.commissionsRepo.findOne({
       where: { id: commissionId },
     });
     if (!c) throw new NotFoundException('Commission introuvable');
     c.status = CommissionStatus.PAID;
     c.paidAt = new Date();
-    return this.commissionsRepo.save(c);
+    const saved = await this.commissionsRepo.save(c);
+    void this.auditLog.log({
+      adminId,
+      action: 'COMMISSION_MARK_PAID',
+      targetType: 'Commission',
+      targetId: commissionId,
+      metadata: { commissionDue: Number(saved.commissionDue) },
+    });
+    return saved;
   }
 
   @Cron(CronExpression.EVERY_WEEK, { name: 'weekly-commission-snapshot' })

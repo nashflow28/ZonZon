@@ -1,0 +1,53 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile_app/**'
+  pull_request:
+    paths:
+      - 'mobile_app/**'
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    name: Test & Build APK (Flutter → Android)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile_app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test test/
+
+      - name: Decode google-services.json
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > android/app/google-services.json
+
+      - name: Build APK (release)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: flutter build apk --release --dart-define=API_URL=https://zonzon-backend.fly.dev
+
+      - name: Upload APK artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: mobile_app/build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30

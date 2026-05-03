@@ -1,0 +1,44 @@
+name: Admin CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'admin-dashboard/**'
+  pull_request:
+    paths:
+      - 'admin-dashboard/**'
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    name: Build & Deploy (Angular → Cloudflare Pages)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: admin-dashboard
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'admin-dashboard/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build -- --configuration production
+
+      - name: Deploy to Cloudflare Pages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist/admin-dashboard/browser --project-name=zonzon-admin

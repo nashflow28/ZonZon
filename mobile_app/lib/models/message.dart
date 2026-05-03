@@ -1,18 +1,31 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'message.g.dart';
+
 enum MessageStatus { pending, sent, failed }
 
+@JsonSerializable(createFactory: false)
 class ChatMessage {
   final String id;
   final String orderId;
   final String? senderId;
+
+  /// Extracted from the nested `sender` object in the API response.
+  /// Not included in toJson (client-side display field only).
+  @JsonKey(includeToJson: false)
   final String? senderFirstName;
+
   final String type;
   final String content;
   final DateTime createdAt;
   final DateTime? readAt;
+
+  /// Client-side status — not part of the server payload.
+  @JsonKey(includeToJson: false)
   final MessageStatus status;
 
-  /// Identifiant temporaire (côté client) pour matcher le retour serveur
-  /// quand on envoie de manière optimiste.
+  /// Client-side optimistic ID — not part of the server payload.
+  @JsonKey(includeToJson: false)
   final String? localId;
 
   ChatMessage({
@@ -28,6 +41,9 @@ class ChatMessage {
     this.localId,
   });
 
+  /// Hand-written because `senderFirstName` comes from the nested `sender`
+  /// object, which cannot be auto-mapped by json_serializable without a
+  /// custom converter.
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     final sender = json['sender'] as Map<String, dynamic>?;
     return ChatMessage(
@@ -37,13 +53,16 @@ class ChatMessage {
       senderFirstName: sender?['firstName'] as String?,
       type: json['type']?.toString() ?? 'TEXT',
       content: json['content']?.toString() ?? '',
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
       readAt: json['readAt'] != null
           ? DateTime.tryParse(json['readAt'].toString())
           : null,
       status: MessageStatus.sent,
     );
   }
+
+  Map<String, dynamic> toJson() => _$ChatMessageToJson(this);
 
   ChatMessage copyWith({
     String? id,

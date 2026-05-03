@@ -9,12 +9,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Shop, ShopCategory, ShopStatus } from '../entities/shop.entity';
 import { Product } from '../entities/product.entity';
+import { FavoriteShop } from '../entities/favorite-shop.entity';
 import { UserRole } from '../entities/user.entity';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { haversineKm } from '../common/geo';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 interface ActorPayload {
   id?: string;
@@ -27,6 +29,9 @@ export class ShopsService {
   constructor(
     @InjectRepository(Shop) private shopsRepo: Repository<Shop>,
     @InjectRepository(Product) private productsRepo: Repository<Product>,
+    @InjectRepository(FavoriteShop)
+    private favoritesRepo: Repository<FavoriteShop>,
+    private readonly auditLog: AuditLogService,
   ) {}
 
   private actorId(actor: ActorPayload): string {
@@ -222,26 +227,118 @@ export class ShopsService {
     });
   }
 
-  async adminApprove(id: string): Promise<Shop> {
+  async adminApprove(id: string, adminId: string): Promise<Shop> {
     const shop = await this.shopsRepo.findOne({ where: { id } });
     if (!shop) throw new NotFoundException();
     shop.status = ShopStatus.APPROVED;
     shop.rejectionReason = null;
-    return this.shopsRepo.save(shop);
+    const saved = await this.shopsRepo.save(shop);
+    void this.auditLog.log({
+      adminId,
+      action: 'SHOP_APPROVE',
+      targetType: 'Shop',
+      targetId: id,
+    });
+    return saved;
   }
 
-  async adminReject(id: string, reason?: string): Promise<Shop> {
+  async adminReject(
+    id: string,
+    adminId: string,
+    reason?: string,
+  ): Promise<Shop> {
     const shop = await this.shopsRepo.findOne({ where: { id } });
     if (!shop) throw new NotFoundException();
     shop.status = ShopStatus.REJECTED;
     shop.rejectionReason = reason ?? null;
-    return this.shopsRepo.save(shop);
+    const saved = await this.shopsRepo.save(shop);
+    void this.auditLog.log({
+      adminId,
+      action: 'SHOP_REJECT',
+      targetType: 'Shop',
+      targetId: id,
+      metadata: { reason: reason ?? null },
+    });
+    return saved;
   }
 
-  async adminSuspend(id: string): Promise<Shop> {
+  async adminSuspend(id: string, adminId: string): Promise<Shop> {
     const shop = await this.shopsRepo.findOne({ where: { id } });
     if (!shop) throw new NotFoundException();
     shop.status = ShopStatus.SUSPENDED;
-    return this.shopsRepo.save(shop);
+    const saved = await this.shopsRepo.save(shop);
+    void this.auditLog.log({
+      adminId,
+      action: 'SHOP_SUSPEND',
+      targetType: 'Shop',
+      targetId: id,
+    });
+    return saved;
+  }
+
+  // ── Favoris boutiques ────────────────────────────────────────────────────
+
+  /**
+   * Ajoute la boutique aux favoris du user.
+   * Idempotent : un double-clic ne déclenche pas d'erreur (UNIQUE en base
+   * gère le cas, on swallow le ConflictException issu du conflit clé unique).
+   */
+  async addFavorite(
+    userId: string,
+    shopId: string,
+  ): Promise<{ ok: boolean }> {
+    const shop = await this.shopsRepo.findOne({
+      where: { id: shopId, status: ShopStatus.APPROVED },
+    });
+    if (!shop) {
+      throw new NotFoundException('Boutique introuvable ou non approuvée');
+    }
+
+    // INSERT … ON DUPLICATE KEY UPDATE → idempotent par construction.
+    // On laisse `id` être généré par la PK (uuid) à la première insertion.
+    try {
+      await this.favoritesRepo.insert({ userId, shopId });
+    } catch (err: any) {
+      // ER_DUP_ENTRY (1062) ou QueryFailedError de TypeORM → favori déjà existant
+      const code = err?.code ?? err?.driverError?.code;
+      if (code === 'ER_DUP_ENTRY' || code === '23505') {
+        return { ok: true };
+      }
+      throw err;
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Retire la boutique des favoris. No-op si le favori n'existait pas.
+   */
+  async removeFavorite(
+    userId: string,
+    shopId: string,
+  ): Promise<{ ok: boolean }> {
+    await this.favoritesRepo.delete({ userId, shopId });
+    return { ok: true };
+  }
+
+  /**
+   * Liste des boutiques favorites du user (uniquement les APPROVED, triées
+   * par date d'ajout du favori décroissante).
+   */
+  async listFavorites(userId: string): Promise<Shop[]> {
+    const rows = await this.favoritesRepo
+      .createQueryBuilder('f')
+      .innerJoinAndSelect('f.shop', 'shop')
+      .where('f.userId = :userId', { userId })
+      .andWhere('shop.status = :status', { status: ShopStatus.APPROVED })
+      .orderBy('f.createdAt', 'DESC')
+      .getMany();
+    return rows.map((f) => f.shop);
+  }
+
+  async isFavorite(userId: string, shopId: string): Promise<boolean> {
+    const count = await this.favoritesRepo.count({
+      where: { userId, shopId },
+    });
+    return count > 0;
   }
 }

@@ -1,0 +1,120 @@
+<div
+  class="zz-phone-input relative"
+  data-phone-input-root>
+
+  <!-- ====== Wrapper : bouton pays + input numéro ====== -->
+  <div
+    class="flex items-stretch w-full bg-slate-900/60 border rounded-xl overflow-hidden transition focus-within:ring-2 focus-within:ring-sky-500 focus-within:border-transparent"
+    [class.border-slate-700]="!hasLengthWarning()"
+    [class.border-amber-500/60]="hasLengthWarning()"
+    [class.opacity-60]="isDisabled()"
+    [class.cursor-not-allowed]="isDisabled()">
+
+    <!-- Bouton drapeau + indicatif -->
+    <button
+      type="button"
+      class="flex items-center gap-2 px-3 py-3 text-white hover:bg-slate-700/50 transition-colors border-r border-slate-700"
+      [disabled]="isDisabled()"
+      [attr.aria-haspopup]="'listbox'"
+      [attr.aria-expanded]="isOpen()"
+      (click)="toggleDropdown(); $event.stopPropagation()">
+      <span class="text-xl leading-none" aria-hidden="true">{{ selectedCountry().flag }}</span>
+      <span class="text-sm font-semibold text-sky-400">{{ selectedCountry().dialCode }}</span>
+      <svg
+        class="w-3.5 h-3.5 text-slate-400 transition-transform"
+        [class.rotate-180]="isOpen()"
+        viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline points="6 9 12 15 18 9"></polyline>
+      </svg>
+    </button>
+
+    <!-- Input numéro local -->
+    <input
+      [id]="inputId || null"
+      type="tel"
+      inputmode="numeric"
+      autocomplete="tel-national"
+      class="flex-1 bg-transparent px-4 py-3 text-white placeholder-slate-500 focus:outline-none"
+      [placeholder]="placeholder"
+      [disabled]="isDisabled()"
+      [ngModel]="localNumber()"
+      (ngModelChange)="onLocalInput($event)"
+      (blur)="onBlur()" />
+  </div>
+
+  <!-- ====== Soft warning longueur ====== -->
+  <p
+    *ngIf="hasLengthWarning()"
+    class="mt-1.5 text-xs text-amber-400 flex items-center gap-1.5"
+    role="status">
+    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+      <line x1="12" y1="9" x2="12" y2="13"/>
+      <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </svg>
+    Longueur inhabituelle pour {{ selectedCountry().name }}
+    <ng-container *ngIf="selectedCountry().minLength === selectedCountry().maxLength">
+      ({{ selectedCountry().minLength }} chiffres attendus)
+    </ng-container>
+    <ng-container *ngIf="selectedCountry().minLength !== selectedCountry().maxLength">
+      ({{ selectedCountry().minLength }}-{{ selectedCountry().maxLength }} chiffres)
+    </ng-container>
+  </p>
+
+  <!-- ====== Dropdown ====== -->
+  <div
+    *ngIf="isOpen()"
+    class="absolute z-30 left-0 right-0 mt-2 bg-slate-800/95 backdrop-blur-xl border border-slate-700/70 rounded-xl shadow-2xl overflow-hidden"
+    role="listbox">
+    <!-- Champ recherche -->
+    <div class="p-2 border-b border-slate-700/70">
+      <div class="relative">
+        <svg
+          class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+          viewBox="0 0 24 24" fill="none" stroke="currentColor"
+          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input
+          #searchInput
+          type="text"
+          class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500 placeholder-slate-500"
+          placeholder="Rechercher un pays ou code…"
+          [ngModel]="searchTerm()"
+          (ngModelChange)="onSearchChange($event)"
+          (click)="$event.stopPropagation()" />
+      </div>
+    </div>
+
+    <!-- Liste pays -->
+    <ul class="max-h-[300px] overflow-y-auto py-1" role="listbox">
+      <li *ngIf="filteredCountries().length === 0"
+          class="px-4 py-3 text-sm text-slate-500 text-center">
+        Aucun pays trouvé.
+      </li>
+      <li
+        *ngFor="let country of filteredCountries(); trackBy: trackByCode"
+        role="option"
+        [attr.aria-selected]="country.code === selectedCountry().code">
+        <button
+          type="button"
+          class="w-full flex items-center gap-3 px-4 py-2.5 text-left text-white hover:bg-slate-700/70 transition-colors"
+          [class.bg-sky-500\/10]="country.code === selectedCountry().code"
+          (click)="selectCountry(country); $event.stopPropagation()">
+          <span class="text-xl leading-none" aria-hidden="true">{{ country.flag }}</span>
+          <span class="flex-1 text-sm">{{ country.name }}</span>
+          <span class="text-sm font-mono text-slate-400">{{ country.dialCode }}</span>
+          <svg
+            *ngIf="country.code === selectedCountry().code"
+            class="w-4 h-4 text-sky-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </button>
+      </li>
+    </ul>
+  </div>
+</div>

@@ -1,12 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'home_screen.dart';
-import 'screens/login_screen.dart';
-import 'services/auth_service.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
+import 'config/env.dart';
+import 'router/app_router.dart';
 import 'services/push_service.dart';
-import 'utils/platform_adapter.dart';
 
-void main() async {
+Future<void> main() async {
+  if (sentryDsn.isNotEmpty) {
+    await SentryFlutter.init(
+      (options) {
+        options.dsn = sentryDsn;
+        options.environment = const String.fromEnvironment(
+          'FLUTTER_ENV',
+          defaultValue: 'production',
+        );
+        options.tracesSampleRate = 0.1;
+        options.attachScreenshot = true;
+        options.attachViewHierarchy = true;
+      },
+      appRunner: () => _runApp(),
+    );
+  } else {
+    _runApp();
+  }
+}
+
+void _runApp() {
   WidgetsFlutterBinding.ensureInitialized();
   // Background handler doit être enregistré avant runApp
   try {
@@ -43,12 +62,13 @@ class ZonZonApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'ZonZon',
       debugShowCheckedModeBanner: false,
       theme: _baseTheme(Brightness.light),
       darkTheme: _baseTheme(Brightness.dark),
       themeMode: ThemeMode.system,
+      routerConfig: appRouter,
       builder: (context, child) {
         // Clamp Dynamic Type pour éviter de casser les layouts compacts
         // tout en respectant l'accessibilité (WCAG / iOS Larger Text).
@@ -61,38 +81,6 @@ class ZonZonApp extends StatelessWidget {
           data: mq.copyWith(textScaler: clamped),
           child: child ?? const SizedBox.shrink(),
         );
-      },
-      home: const _AuthGate(),
-    );
-  }
-}
-
-class _AuthGate extends StatefulWidget {
-  const _AuthGate();
-
-  @override
-  State<_AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<_AuthGate> {
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<String?>(
-      future: AuthService().getToken(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return Scaffold(
-            backgroundColor: const Color(0xFF0F172A),
-            body: Center(child: adaptiveLoader()),
-          );
-        }
-        final token = snapshot.data;
-        if (token != null && token.isNotEmpty) {
-          // Init push une fois qu'on est authentifié (le token FCM doit être lié au user)
-          PushService.instance.init();
-          return const HomeScreen();
-        }
-        return const LoginScreen();
       },
     );
   }

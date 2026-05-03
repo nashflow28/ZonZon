@@ -17,7 +17,7 @@ class AuthService {
 
   Future<AuthResult> login(String phone, String password) async {
     final res = await http.post(
-      Uri.parse('$apiUrl/auth/login'),
+      Uri.parse('$apiUrl$apiPrefix/auth/login'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'phone': phone, 'password': password}),
     );
@@ -49,7 +49,7 @@ class AuthService {
     if (vehicleType != null) body['vehicleType'] = vehicleType;
 
     final res = await http.post(
-      Uri.parse('$apiUrl/auth/register'),
+      Uri.parse('$apiUrl$apiPrefix/auth/register'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );

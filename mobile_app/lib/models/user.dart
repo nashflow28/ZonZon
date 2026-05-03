@@ -1,3 +1,8 @@
+import 'package:json_annotation/json_annotation.dart';
+
+part 'user.g.dart';
+
+@JsonSerializable()
 class User {
   final String id;
   final String firstName;
@@ -15,37 +20,21 @@ class User {
     this.profilePhotoUrl,
   });
 
-  factory User.fromJson(Map<String, dynamic> json) {
-    return User(
-      id: json['id']?.toString() ?? '',
-      firstName: json['firstName'] ?? '',
-      lastName: json['lastName'] ?? '',
-      phone: json['phone'] ?? '',
-      role: json['role'] ?? '',
-      profilePhotoUrl: json['profilePhotoUrl'],
-    );
-  }
+  factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'firstName': firstName,
-        'lastName': lastName,
-        'phone': phone,
-        'role': role,
-        'profilePhotoUrl': profilePhotoUrl,
-      };
+  Map<String, dynamic> toJson() => _$UserToJson(this);
 }
 
+@JsonSerializable(explicitToJson: true)
 class AuthResult {
+  @JsonKey(name: 'access_token')
   final String accessToken;
   final User user;
 
   AuthResult({required this.accessToken, required this.user});
 
-  factory AuthResult.fromJson(Map<String, dynamic> json) {
-    return AuthResult(
-      accessToken: json['access_token'] ?? '',
-      user: User.fromJson(json['user'] ?? {}),
-    );
-  }
+  factory AuthResult.fromJson(Map<String, dynamic> json) =>
+      _$AuthResultFromJson(json);
+
+  Map<String, dynamic> toJson() => _$AuthResultToJson(this);
 }

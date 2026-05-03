@@ -20,7 +20,7 @@ class ApiClient {
 
   Uri _uri(String path) {
     final normalized = path.startsWith('/') ? path : '/$path';
-    return Uri.parse('$apiUrl$normalized');
+    return Uri.parse('$apiUrl$apiPrefix$normalized');
   }
 
   Future<http.Response> get(String path) async {

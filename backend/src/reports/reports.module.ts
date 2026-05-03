@@ -6,11 +6,13 @@ import { ReportsController } from './reports.controller';
 import { DeliveryOrder } from '../entities/delivery-order.entity';
 import { Commission } from '../entities/commission.entity';
 import { User } from '../entities/user.entity';
+import { AuditLogModule } from '../audit-log/audit-log.module';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([DeliveryOrder, Commission, User]),
+    AuditLogModule,
   ],
   controllers: [ReportsController],
   providers: [ReportsService],

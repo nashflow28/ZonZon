@@ -45,6 +45,18 @@ class NewChatMessageEvent {
   NewChatMessageEvent({required this.orderId, required this.raw});
 }
 
+/// Nouvelle course disponible diffusée par le backend (côté LIVREUR).
+///
+/// Le payload brut contient les champs habituels d'une commande (id,
+/// pickupAddress, deliveryAddress, priceFcfa, distanceKm, etc.). On expose
+/// l'objet complet pour que l'écran radar puisse l'afficher tel quel.
+class NewOrderEvent {
+  final String orderId;
+  final Map<String, dynamic> raw;
+
+  NewOrderEvent({required this.orderId, required this.raw});
+}
+
 /// Gère le cycle de vie du socket pour l'écran de commande client.
 ///
 /// Le contrôleur s'abonne aux quatre évènements pertinents et expose un
@@ -67,11 +79,16 @@ class OrderSocketController {
   final _orderAcceptedCtrl = StreamController<OrderAcceptedEvent>.broadcast();
   final _statusUpdatesCtrl = StreamController<OrderStatusUpdate>.broadcast();
   final _newChatMessageCtrl = StreamController<NewChatMessageEvent>.broadcast();
+  final _newOrderAvailableCtrl = StreamController<NewOrderEvent>.broadcast();
+  final _connectedCtrl = StreamController<void>.broadcast();
 
   /// Stream des positions live du livreur (filtré par [activeOrderId]).
   Stream<DriverPosition> get driverPosition$ => _driverPositionCtrl.stream;
 
-  /// Stream des évènements `orderAccepted` (filtré par [activeOrderId]).
+  /// Stream des évènements `orderAccepted`. Filtré par [activeOrderId]
+  /// quand celui-ci est défini (cas client). Côté livreur, [activeOrderId]
+  /// reste `null` donc TOUTES les acceptations remontent — ce qui permet
+  /// au radar de retirer une course dès qu'un autre livreur l'a prise.
   Stream<OrderAcceptedEvent> get orderAccepted$ => _orderAcceptedCtrl.stream;
 
   /// Stream des nouveaux statuts (filtré par [activeOrderId]).
@@ -79,6 +96,16 @@ class OrderSocketController {
 
   /// Stream des nouveaux messages de chat reçus (pour badge non-lu).
   Stream<NewChatMessageEvent> get newChatMessage$ => _newChatMessageCtrl.stream;
+
+  /// Stream des nouvelles courses diffusées par le backend (côté LIVREUR
+  /// uniquement). Pas de filtrage sur [activeOrderId] — toutes les nouvelles
+  /// courses doivent apparaître dans le radar.
+  Stream<NewOrderEvent> get newOrderAvailable$ => _newOrderAvailableCtrl.stream;
+
+  /// Stream qui émet une fois à chaque (re)connexion du socket. Utilisé
+  /// côté livreur pour amorcer le tracking GPS au moment où le socket est
+  /// effectivement prêt à recevoir des `driver:location`.
+  Stream<void> get connected$ => _connectedCtrl.stream;
 
   /// Connecte le socket et abonne les listeners. À appeler une seule fois.
   Future<void> init() async {
@@ -91,6 +118,20 @@ class OrderSocketController {
     });
     _socket = socket;
     socket.connect();
+
+    socket.onConnect((_) {
+      _connectedCtrl.add(null);
+    });
+
+    socket.on('newOrderAvailable', (data) {
+      if (data is! Map) return;
+      final orderId = data['id']?.toString() ?? data['orderId']?.toString();
+      if (orderId == null) return;
+      _newOrderAvailableCtrl.add(NewOrderEvent(
+        orderId: orderId,
+        raw: Map<String, dynamic>.from(data),
+      ));
+    });
 
     socket.on('orderAccepted', (data) {
       if (data is! Map) return;
@@ -139,6 +180,18 @@ class OrderSocketController {
     });
   }
 
+  /// Émet la position GPS du livreur sur le socket (`driver:location`).
+  ///
+  /// [heartbeat] est mis à `true` quand l'émission est forcée par le timer
+  /// de fallback (la position n'a pas changé depuis 90 s) — le backend peut
+  /// éventuellement l'utiliser pour distinguer une vraie mise à jour d'un
+  /// simple "je suis toujours là".
+  void emitDriverLocation(double lat, double lng, {bool heartbeat = false}) {
+    final payload = <String, dynamic>{'lat': lat, 'lng': lng};
+    if (heartbeat) payload['heartbeat'] = true;
+    _socket?.emit('driver:location', payload);
+  }
+
   Future<void> dispose() async {
     _socket?.dispose();
     _socket = null;
@@ -146,5 +199,7 @@ class OrderSocketController {
     await _orderAcceptedCtrl.close();
     await _statusUpdatesCtrl.close();
     await _newChatMessageCtrl.close();
+    await _newOrderAvailableCtrl.close();
+    await _connectedCtrl.close();
   }
 }

@@ -1,10 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../utils/platform_adapter.dart';
-import '../home_screen.dart';
 import '../widgets/phone_field.dart';
-import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -35,12 +35,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await AuthService().login(_fullPhone, _passwordController.text);
+      final result = await AuthService().login(_fullPhone, _passwordController.text);
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
+      context.go(AppRoutes.homeForRole(result.user.role));
     } catch (e) {
       if (!mounted) return;
       showAdaptiveSnack(context, 'Échec de la connexion : $e', isError: true);
@@ -152,9 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextButton(
                             onPressed: _isLoading
                                 ? null
-                                : () {
-                                    pushAdaptive<void>(context, const RegisterScreen());
-                                  },
+                                : () => context.push(AppRoutes.register),
                             child: RichText(
                               text: const TextSpan(
                                 style: TextStyle(color: Colors.white60, fontSize: 14),

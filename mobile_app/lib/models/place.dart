@@ -13,6 +13,10 @@ class Place {
     this.type,
   });
 
+  /// Hand-written because `fromNominatim` requires bespoke address parsing
+  /// and the `location` field uses a custom LatLng type with flat lat/lng keys.
+  /// json_serializable cannot represent the flat lat/lng → LatLng mapping
+  /// without a custom converter that would add more complexity than value.
   factory Place.fromNominatim(Map<String, dynamic> json) {
     final lat = double.tryParse(json['lat']?.toString() ?? '') ?? 0;
     final lon = double.tryParse(json['lon']?.toString() ?? '') ?? 0;

@@ -20,7 +20,7 @@ export class MessagesService {
 
   list(orderId: string): Observable<ChatMessage[]> {
     return this.http.get<ChatMessage[]>(
-      `${environment.apiUrl}/orders/${orderId}/messages`,
+      `${environment.apiUrl}${environment.apiPrefix}/orders/${orderId}/messages`,
     );
   }
 }

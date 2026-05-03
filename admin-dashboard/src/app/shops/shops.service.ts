@@ -34,7 +34,7 @@ export interface Shop {
 @Injectable({ providedIn: 'root' })
 export class ShopsService {
   private http = inject(HttpClient);
-  private base = `${environment.apiUrl}/shops`;
+  private base = `${environment.apiUrl}${environment.apiPrefix}/shops`;
 
   list(status?: ShopStatus): Observable<Shop[]> {
     const params = status ? `?status=${status}` : '';

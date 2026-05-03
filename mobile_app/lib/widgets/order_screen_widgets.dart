@@ -4,11 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/place.dart';
+import '../services/eta_service.dart';
 
 /// Header glass + logo + bouton logout pour l'écran de commande.
 class OrderHeader extends StatelessWidget {
   final VoidCallback onLogout;
-  const OrderHeader({super.key, required this.onLogout});
+  final VoidCallback? onOpenHistory;
+  const OrderHeader({
+    super.key,
+    required this.onLogout,
+    this.onOpenHistory,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +36,23 @@ class OrderHeader extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const SizedBox(width: 44),
+                if (onOpenHistory != null)
+                  Material(
+                    color: Colors.white.withValues(alpha: 0.06),
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: onOpenHistory,
+                      child: const SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: Icon(Icons.history,
+                            color: Colors.white70, size: 20),
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(width: 44),
                 const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -669,6 +691,8 @@ class OrderAcceptedSection extends StatelessWidget {
   final int unreadChatCount;
   final VoidCallback onOpenChat;
   final VoidCallback onOpenWhatsapp;
+  final VoidCallback? onCancelOrder;
+  final EtaResult? eta;
 
   const OrderAcceptedSection({
     super.key,
@@ -680,11 +704,17 @@ class OrderAcceptedSection extends StatelessWidget {
     required this.onOpenChat,
     required this.onOpenWhatsapp,
     this.unreadChatCount = 0,
+    this.onCancelOrder,
+    this.eta,
   });
 
   bool get _showWhatsapp =>
       assignedLivreur != null &&
       (activeOrderStatus == 'ACCEPTED' || activeOrderStatus == 'IN_PROGRESS');
+
+  bool get _showCancel =>
+      onCancelOrder != null &&
+      (activeOrderStatus == 'PENDING' || activeOrderStatus == 'ACCEPTED');
 
   @override
   Widget build(BuildContext context) {
@@ -727,6 +757,7 @@ class OrderAcceptedSection extends StatelessWidget {
           driverPosition: driverPosition,
           driverPositionAt: driverPositionAt,
           distanceKm: distanceKm,
+          eta: eta,
         ),
         const SizedBox(height: 16),
         AnimatedSwitcher(
@@ -852,22 +883,57 @@ class OrderAcceptedSection extends StatelessWidget {
             ),
           ),
         ],
+        if (_showCancel) ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 52,
+            child: OutlinedButton.icon(
+              onPressed: onCancelOrder,
+              icon: const Icon(Icons.cancel_outlined,
+                  color: Color(0xFFEF4444), size: 20),
+              label: const Text(
+                'Annuler la commande',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFEF4444),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                backgroundColor:
+                    const Color(0xFFEF4444).withValues(alpha: 0.08),
+                side: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
 }
 
 /// Bandeau de suivi live (point vert pulsant + ETA).
+///
+/// L'`eta` (si fourni) est affiché en priorité dans la ligne secondaire,
+/// car il vient du backend (calcul Haversine sur la dernière position
+/// persistée du livreur, vitesse moyenne 25 km/h). Le calcul local
+/// `distanceKm` (Haversine côté mobile) est utilisé en fallback uniquement
+/// si l'ETA backend n'est pas disponible.
 class LiveTrackingBanner extends StatelessWidget {
   final LatLng? driverPosition;
   final DateTime? driverPositionAt;
   final double? distanceKm;
+  final EtaResult? eta;
 
   const LiveTrackingBanner({
     super.key,
     required this.driverPosition,
     required this.driverPositionAt,
     required this.distanceKm,
+    this.eta,
   });
 
   static String _formatLastSeen(DateTime when) {
@@ -882,16 +948,28 @@ class LiveTrackingBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasPosition = driverPosition != null;
     final lastSeen = driverPositionAt;
+    final etaAvailable = eta != null && eta!.isAvailable;
+    final etaIsFallback = eta?.isFallback == true;
+
     String subtitle;
-    if (!hasPosition) {
+    if (etaAvailable) {
+      // Priorité au calcul backend (plus précis que le delta local).
+      final km = eta!.distanceKm ?? distanceKm;
+      if (km != null) {
+        subtitle = '${km.toStringAsFixed(1)} km · ~${eta!.etaMinutes} min';
+      } else {
+        subtitle = '~${eta!.etaMinutes} min';
+      }
+    } else if (!hasPosition) {
       subtitle = 'En attente de la position du livreur…';
     } else if (distanceKm != null) {
-      // ETA grossier : 30 km/h en moto, donc minutes ≈ km × 2
+      // Fallback local : 30 km/h en moto, donc minutes ≈ km × 2
       final minutes = (distanceKm! * 2).round().clamp(1, 99);
       subtitle = '${distanceKm!.toStringAsFixed(1)} km · ~$minutes min';
     } else {
       subtitle = 'Livreur localisé';
     }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -932,17 +1010,31 @@ class LiveTrackingBanner extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  hasPosition ? 'Livreur en chemin' : 'Localisation…',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      hasPosition ? 'Livreur en chemin' : 'Localisation…',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (etaAvailable) ...[
+                      const SizedBox(width: 8),
+                      _EtaBadge(
+                        minutes: eta!.etaMinutes!,
+                        isFallback: etaIsFallback,
+                      ),
+                    ],
+                  ],
                 ),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  style: TextStyle(
+                    color: etaIsFallback ? Colors.white54 : Colors.white70,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -952,6 +1044,45 @@ class LiveTrackingBanner extends StatelessWidget {
               _formatLastSeen(lastSeen),
               style: const TextStyle(color: Colors.white60, fontSize: 11),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Petit badge "horloge + minutes" affiché dans le bandeau de tracking quand
+/// le backend a renvoyé un ETA exploitable. Greyé (avec icône d'alerte) quand
+/// l'ETA est en mode fallback (pas de position fraîche du livreur).
+class _EtaBadge extends StatelessWidget {
+  final int minutes;
+  final bool isFallback;
+
+  const _EtaBadge({required this.minutes, required this.isFallback});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isFallback ? const Color(0xFF94A3B8) : const Color(0xFF0EA5E9);
+    final icon = isFallback ? Icons.warning_amber_rounded : Icons.access_time;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 12),
+          const SizedBox(width: 4),
+          Text(
+            '~ $minutes min',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

@@ -37,6 +37,16 @@ export class RatingsController {
     return this.ratingsService.getUserStats(userId);
   }
 
+  /**
+   * Stats étendues publiques d'un user (typiquement un livreur) :
+   * note moyenne, nombre de courses terminées, durée moyenne, taux d'annulation.
+   * Tout user authentifié peut consulter (pas de restriction de rôle).
+   */
+  @Get('users/:userId/stats')
+  extendedStats(@Param('userId', ParseUUIDPipe) userId: string) {
+    return this.ratingsService.getExtendedStats(userId);
+  }
+
   @Get('users/:userId/ratings')
   list(
     @Param('userId', ParseUUIDPipe) userId: string,

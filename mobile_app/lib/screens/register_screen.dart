@@ -1,8 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../utils/platform_adapter.dart';
-import '../home_screen.dart';
 import '../widgets/phone_field.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -53,10 +54,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         vehicleType: _role == 'LIVREUR' ? _vehicleType : null,
       );
       if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
+      // Redirect to the role-appropriate home, clearing the back-stack.
+      final user = await AuthService().getCurrentUser();
+      if (!mounted) return;
+      context.go(AppRoutes.homeForRole(user?.role));
     } catch (e) {
       if (!mounted) return;
       showAdaptiveSnack(context, 'Inscription échouée : $e', isError: true);

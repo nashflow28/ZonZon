@@ -10,15 +10,25 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import {
+  Between,
+  FindOptionsWhere,
+  IsNull,
+  LessThanOrEqual,
+  MoreThanOrEqual,
+  Repository,
+} from 'typeorm';
 import axios from 'axios';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
 import { UsersService } from '../users/users.service';
 import { OrdersGateway } from './orders.gateway';
+import { PositionsService } from './positions.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { ListOrdersDto } from './dto/list-orders.dto';
 import { UserRole } from '../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
+import { haversineKm } from '../common/geo';
 
 type RouteCacheEntry = { km: number; at: number };
 type RouteWithGeometry = { km: number; geometry: number[][] };
@@ -50,6 +60,7 @@ export class OrdersService {
     private usersService: UsersService,
     private ordersGateway: OrdersGateway,
     private notifications: NotificationsService,
+    private positionsService: PositionsService,
   ) {}
 
   private cacheKey(lat1: number, lng1: number, lat2: number, lng2: number) {
@@ -278,12 +289,173 @@ export class OrdersService {
 
     const saved = await this.ordersRepository.save(order);
     this.ordersGateway.broadcastNewOrder(saved);
+
+    // Fallback FCM : un livreur qui a fermé l'app (donc pas connecté au WS)
+    // ne reçoit pas l'évent `newOrderAvailable`. On lui envoie une push.
+    // Fire-and-forget pour ne pas bloquer la réponse HTTP.
+    void this.notifyOfflineLivreurs(saved);
+
     return saved;
   }
 
-  findAll() {
-    return this.ordersRepository.find({
+  /**
+   * Envoie une push FCM aux livreurs offline (= pas connectés au WS).
+   *
+   * Stratégie en 2 temps :
+   *  1. On préfère les livreurs qui ont une POSITION récente (≤ 5 min) :
+   *     ils sont actifs et on peut filtrer par distance ≤ NOTIFY_RADIUS_KM
+   *     (default 5 km) pour ne notifier que ceux qui sont à portée.
+   *  2. Si aucun livreur n'a de position récente (par exemple juste après
+   *     un redéploiement Fly.io où le cache mémoire est vide et personne
+   *     n'a encore émis), on retombe sur le comportement précédent : on
+   *     notifie TOUS les livreurs avec un fcmToken, sans filtre géo.
+   *
+   * Cela évite un trou de service au démarrage tout en restant ciblé
+   * dès que le cache de positions se reconstitue.
+   */
+  private async notifyOfflineLivreurs(order: DeliveryOrder): Promise<void> {
+    try {
+      const radiusKm = Number(process.env.NOTIFY_RADIUS_KM) || 5;
+      const pickupLat = Number(order?.pickupLat);
+      const pickupLng = Number(order?.pickupLng);
+      const hasPickupCoords =
+        Number.isFinite(pickupLat) && Number.isFinite(pickupLng);
+
+      const recentPositions =
+        await this.positionsService.findRecentLivreurPositions(5);
+
+      // Cas 1 : on a des positions récentes ET les coordonnées pickup → filtre géo actif
+      if (recentPositions.length > 0 && hasPickupCoords) {
+        const candidates = recentPositions.filter((p) => {
+          // Skip si le livreur est connecté au WS (déjà notifié par newOrderAvailable)
+          if (this.ordersGateway.isUserConnected(p.livreurId)) return false;
+          // Filtre distance
+          const distance = haversineKm(p.lat, p.lng, pickupLat, pickupLng);
+          return distance <= radiusKm;
+        });
+
+        if (candidates.length === 0) {
+          this.logger.log(
+            `FCM fallback géo: 0 livreur offline dans le rayon ${radiusKm} km ` +
+              `(${recentPositions.length} position(s) récente(s) au total)`,
+          );
+          return;
+        }
+
+        const pickup = order.pickupAddress ?? 'adresse non renseignée';
+        const body =
+          pickup.length > 80
+            ? `Pickup: ${pickup.slice(0, 77)}...`
+            : `Pickup: ${pickup}`;
+
+        await Promise.all(
+          candidates.map((p) =>
+            this.notifications.sendToUser(p.livreurId, {
+              title: 'Nouvelle course disponible',
+              body,
+              data: { kind: 'new_order', orderId: order.id },
+            }),
+          ),
+        );
+        this.logger.log(
+          `FCM fallback géo: ${candidates.length} livreur(s) offline notifié(s) (rayon ${radiusKm} km)`,
+        );
+        return;
+      }
+
+      // Cas 2 : pas de positions récentes (ou pas de coords pickup) → fallback "global"
+      // (rétro-compat avec le comportement pré-persistance, évite le trou au démarrage)
+      const livreurs = await this.usersService.findLivreursWithFcmToken();
+      const offline = livreurs.filter(
+        (l) => !this.ordersGateway.isUserConnected(l.id),
+      );
+      if (offline.length === 0) {
+        this.logger.log(
+          `FCM fallback: aucun livreur offline à notifier (${livreurs.length} livreur(s) avec token, tous connectés)`,
+        );
+        return;
+      }
+
+      const pickup = order.pickupAddress ?? 'adresse non renseignée';
+      const body =
+        pickup.length > 80
+          ? `Pickup: ${pickup.slice(0, 77)}...`
+          : `Pickup: ${pickup}`;
+
+      await Promise.all(
+        offline.map((livreur) =>
+          this.notifications.sendToUser(livreur.id, {
+            title: 'Nouvelle course disponible',
+            body,
+            data: { kind: 'new_order', orderId: order.id },
+          }),
+        ),
+      );
+      this.logger.log(
+        `FCM fallback (sans filtre géo): ${offline.length} livreur(s) offline notifié(s) ` +
+          `(sur ${livreurs.length} avec token, ${recentPositions.length} position(s) récente(s))`,
+      );
+    } catch (err) {
+      this.logger.warn(`FCM fallback échoué: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Liste paginée des courses (ADMIN, LIVREUR).
+   * Filtres : status, createdAt entre `from` et `to` (inclus).
+   * Retourne `{ items, total, page, limit, hasMore }`.
+   */
+  async findAll(query: ListOrdersDto = {}) {
+    const page = query.page && query.page > 0 ? query.page : 1;
+    const limit =
+      query.limit && query.limit > 0 ? Math.min(query.limit, 100) : 20;
+
+    const where: FindOptionsWhere<DeliveryOrder> = {};
+    if (query.status) {
+      where.status = query.status;
+    }
+
+    const fromDate = query.from ? new Date(query.from) : null;
+    const toDate = query.to ? new Date(query.to) : null;
+    // Si `to` est une date sans heure (YYYY-MM-DD), on étend à fin de journée
+    // pour que le filtre soit inclusif comme attendu par les utilisateurs.
+    if (toDate && /^\d{4}-\d{2}-\d{2}$/.test(query.to ?? '')) {
+      toDate.setHours(23, 59, 59, 999);
+    }
+    if (fromDate && toDate) {
+      where.createdAt = Between(fromDate, toDate);
+    } else if (fromDate) {
+      where.createdAt = MoreThanOrEqual(fromDate);
+    } else if (toDate) {
+      where.createdAt = LessThanOrEqual(toDate);
+    }
+
+    const [items, total] = await this.ordersRepository.findAndCount({
+      where,
       relations: ['client', 'livreur'],
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: (page - 1) * limit,
+    });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      hasMore: page * limit < total,
+    };
+  }
+
+  /**
+   * Liste des courses disponibles pour un livreur :
+   * status = PENDING ET livreur IS NULL.
+   * Tri par createdAt DESC, avec relation client.
+   */
+  findAvailable() {
+    return this.ordersRepository.find({
+      where: { status: OrderStatus.PENDING, livreur: IsNull() },
+      relations: ['client'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -304,41 +476,67 @@ export class OrdersService {
         order: { createdAt: 'DESC' },
       });
     }
+    // ADMIN tombant sur /orders/mine : on renvoie la première page paginée.
     return this.findAll();
   }
 
   async acceptOrder(orderId: string, livreurId: string) {
-    const order = await this.ordersRepository.findOne({
+    // 1) Vérifier l'existence avant l'UPDATE pour distinguer 404 (introuvable)
+    //    de 409 (déjà prise par un autre livreur).
+    const existing = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['client'],
     });
-    if (!order) throw new NotFoundException('Commande introuvable');
-    if (order.status !== OrderStatus.PENDING) {
+    if (!existing) throw new NotFoundException('Commande introuvable');
+
+    // 2) UPDATE atomique : seul le premier livreur dont la transaction
+    //    arrive en DB matchera (status=PENDING ET livreurId IS NULL).
+    const result = await this.ordersRepository
+      .createQueryBuilder()
+      .update(DeliveryOrder)
+      .set({
+        status: OrderStatus.ACCEPTED,
+        livreur: { id: livreurId } as any,
+        acceptedAt: () => 'CURRENT_TIMESTAMP',
+      })
+      .where('id = :id', { id: orderId })
+      .andWhere('status = :pending', { pending: OrderStatus.PENDING })
+      .andWhere('livreurId IS NULL')
+      .execute();
+
+    if (!result.affected || result.affected === 0) {
       throw new ConflictException(
         'Cette course a déjà été prise par un autre livreur',
       );
     }
 
-    const livreur = await this.usersService.findOne(livreurId);
-    order.status = OrderStatus.ACCEPTED;
-    order.livreur = livreur;
+    // 3) Recharger l'order avec ses relations pour le broadcast et la push
+    const updated = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client', 'livreur'],
+    });
+    if (!updated) {
+      // Edge case ultra-improbable (suppression concurrente)
+      throw new NotFoundException('Commande introuvable après acceptation');
+    }
 
-    const updated = await this.ordersRepository.save(order);
+    // 4) Récupérer le livreur (firstName utilisé dans la notif)
+    const livreur = await this.usersService.findOne(livreurId);
+
     this.ordersGateway.broadcastOrderAccepted(
-      order.id,
+      updated.id,
       livreur.id,
-      order.client?.id,
+      updated.client?.id,
     );
 
     // Push notification au client si offline
     if (
-      order.client?.id &&
-      !this.ordersGateway.isUserConnected(order.client.id)
+      updated.client?.id &&
+      !this.ordersGateway.isUserConnected(updated.client.id)
     ) {
-      void this.notifications.sendToUser(order.client.id, {
+      void this.notifications.sendToUser(updated.client.id, {
         title: 'Coursier en route !',
         body: `${livreur.firstName ?? 'Votre livreur'} a accepté votre course`,
-        data: { kind: 'order_accepted', orderId: order.id },
+        data: { kind: 'order_accepted', orderId: updated.id },
       });
     }
     return updated;
@@ -383,6 +581,12 @@ export class OrdersService {
     }
 
     order.status = status;
+    if (status === OrderStatus.IN_PROGRESS) {
+      order.inProgressAt = new Date();
+    }
+    if (status === OrderStatus.COMPLETED) {
+      order.completedAt = new Date();
+    }
     if (status === OrderStatus.CANCELLED) {
       order.cancellationReason = dto?.cancellationReason?.trim() || null;
       const role = actor.role as UserRole | string | undefined;
@@ -430,6 +634,148 @@ export class OrdersService {
         });
       }
     }
+
+    // Push au LIVREUR si la course est annulée par le CLIENT ou un ADMIN
+    // (le livreur peut être en route et doit être prévenu).
+    // Ne s'applique pas si c'est le livreur lui-même qui a annulé.
+    if (status === OrderStatus.CANCELLED) {
+      const livreurId = order.livreur?.id;
+      const cancelledByLivreur = order.cancelledBy === 'LIVREUR';
+      if (
+        livreurId &&
+        !cancelledByLivreur &&
+        !this.ordersGateway.isUserConnected(livreurId)
+      ) {
+        const body =
+          order.cancelledBy === 'ADMIN'
+            ? "La course a été annulée par l'administration."
+            : 'Le client a annulé la course en cours.';
+        void this.notifications.sendToUser(livreurId, {
+          title: 'Course annulée',
+          body,
+          data: { kind: 'order_cancelled', orderId: order.id },
+        });
+      }
+    }
     return saved;
+  }
+
+  /**
+   * Calcule un ETA pour la course `orderId` du point de vue du livreur.
+   *
+   * Stratégie :
+   * - Course `ACCEPTED` → ETA livreur → pickup
+   * - Course `IN_PROGRESS` → ETA livreur → delivery
+   * - Autres statuts → `basedOn: 'unavailable'` (la course n'est pas en route)
+   *
+   * Source de la position du livreur :
+   *  1. Dernière position persistée (fraîche < 5 min) → `basedOn: 'driver_position'`
+   *  2. Si la course est `IN_PROGRESS` mais qu'on n'a pas de position fraîche,
+   *     on suppose que le livreur est encore au pickup (point de retrait
+   *     connu) → `basedOn: 'pickup'`. Cas ACCEPTED sans position fraîche →
+   *     `basedOn: 'unavailable'` (estimer un ETA = 0 vers le pickup serait
+   *     trompeur).
+   *
+   * Vitesse moyenne retenue : 25 km/h (motos prédominantes à Lomé, ville
+   * dense). Distance via Haversine (suffisant à la résolution minute, et
+   * évite un appel ORS à chaque refresh client).
+   *
+   * Auth : seul le client/livreur de la course ou un admin peut consulter.
+   */
+  async computeEta(
+    orderId: string,
+    actor: any,
+  ): Promise<{
+    distanceKm: number | null;
+    etaMinutes: number | null;
+    basedOn: 'driver_position' | 'pickup' | 'unavailable';
+  }> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client', 'livreur'],
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+
+    const actorId = actor.id ?? actor.sub;
+    const isClient = order.client?.id === actorId;
+    const isLivreur = order.livreur?.id === actorId;
+    const isAdmin = actor.role === UserRole.ADMIN;
+    if (!isClient && !isLivreur && !isAdmin) {
+      throw new ForbiddenException();
+    }
+
+    if (
+      order.status !== OrderStatus.ACCEPTED &&
+      order.status !== OrderStatus.IN_PROGRESS
+    ) {
+      return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
+    }
+
+    if (!order.livreur?.id) {
+      return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
+    }
+
+    const position = await this.positionsService.findLatestForLivreur(
+      order.livreur.id,
+    );
+
+    let driverLat: number | null = null;
+    let driverLng: number | null = null;
+    let basedOn: 'driver_position' | 'pickup' | 'unavailable' = 'unavailable';
+
+    const positionFresh =
+      position &&
+      position.updatedAt &&
+      Date.now() - new Date(position.updatedAt).getTime() < 5 * 60 * 1000;
+
+    if (positionFresh) {
+      driverLat = position!.lat;
+      driverLng = position!.lng;
+      basedOn = 'driver_position';
+    } else if (order.status === OrderStatus.ACCEPTED) {
+      // Pas de position fraîche en ACCEPTED : estimer ETA=0 vers pickup
+      // serait trompeur (on ne sait pas où il est). On retourne unavailable.
+      return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
+    } else {
+      // IN_PROGRESS sans position fraîche → on suppose que le livreur a
+      // récupéré le colis et qu'il est au pickup (au pire des cas).
+      if (order.pickupLat && order.pickupLng) {
+        driverLat = order.pickupLat;
+        driverLng = order.pickupLng;
+        basedOn = 'pickup';
+      } else {
+        return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
+      }
+    }
+
+    let targetLat: number;
+    let targetLng: number;
+    if (order.status === OrderStatus.ACCEPTED) {
+      if (!order.pickupLat || !order.pickupLng) {
+        return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
+      }
+      targetLat = order.pickupLat;
+      targetLng = order.pickupLng;
+    } else {
+      if (!order.deliveryLat || !order.deliveryLng) {
+        return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
+      }
+      targetLat = order.deliveryLat;
+      targetLng = order.deliveryLng;
+    }
+
+    const distanceKm = haversineKm(driverLat, driverLng, targetLat, targetLng);
+    // Vitesse moyenne en ville (Lomé, motos prédominantes) : ~25 km/h.
+    const speedKmh = 25;
+    const etaMinutes = Math.max(
+      1,
+      Math.round((distanceKm / speedKmh) * 60),
+    );
+
+    return {
+      distanceKm: parseFloat(distanceKm.toFixed(2)),
+      etaMinutes,
+      basedOn,
+    };
   }
 }

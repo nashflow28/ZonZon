@@ -5,6 +5,7 @@ import { ReportsService } from './reports.service';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
 import { Commission, CommissionStatus } from '../entities/commission.entity';
 import { User } from '../entities/user.entity';
+import { AuditLogService } from '../audit-log/audit-log.service';
 
 const mockRepo = () => ({
   find: jest.fn(),
@@ -14,16 +15,23 @@ const mockRepo = () => ({
   update: jest.fn(),
 });
 
+const mockAuditLog = () => ({
+  log: jest.fn().mockResolvedValue(undefined),
+  list: jest.fn(),
+});
+
 describe('ReportsService', () => {
   let service: ReportsService;
   let ordersRepo: ReturnType<typeof mockRepo>;
   let commissionsRepo: ReturnType<typeof mockRepo>;
   let usersRepo: ReturnType<typeof mockRepo>;
+  let auditLog: ReturnType<typeof mockAuditLog>;
 
   beforeEach(async () => {
     ordersRepo = mockRepo();
     commissionsRepo = mockRepo();
     usersRepo = mockRepo();
+    auditLog = mockAuditLog();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -31,6 +39,7 @@ describe('ReportsService', () => {
         { provide: getRepositoryToken(DeliveryOrder), useValue: ordersRepo },
         { provide: getRepositoryToken(Commission), useValue: commissionsRepo },
         { provide: getRepositoryToken(User), useValue: usersRepo },
+        { provide: AuditLogService, useValue: auditLog },
       ],
     }).compile();
 

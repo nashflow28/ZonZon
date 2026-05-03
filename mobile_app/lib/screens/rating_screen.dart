@@ -6,6 +6,11 @@ import '../utils/platform_adapter.dart';
 ///
 /// Présenté au client une fois la course passée à `COMPLETED`, ainsi qu'au
 /// livreur depuis sa propre interface, pour qu'ils s'évaluent mutuellement.
+///
+/// Depuis l'évolution "évaluation par catégories", l'utilisateur peut aussi
+/// noter (optionnellement) la ponctualité, la communication et la courtoisie
+/// du livreur. Ces sous-notes sont strictement additionnelles : si elles ne
+/// sont pas définies, on envoie `null` au backend.
 class RatingScreen extends StatefulWidget {
   final String orderId;
   final String otherPartyName;
@@ -29,6 +34,10 @@ class _RatingScreenState extends State<RatingScreen> {
   final TextEditingController _commentCtrl = TextEditingController();
 
   int _score = 0;
+  // Sous-notes par catégorie : 0 = non noté (envoyé null au backend).
+  int _punctualityScore = 0;
+  int _communicationScore = 0;
+  int _courtesyScore = 0;
   bool _submitting = false;
 
   @override
@@ -47,6 +56,9 @@ class _RatingScreenState extends State<RatingScreen> {
       orderId: widget.orderId,
       score: _score,
       comment: _commentCtrl.text,
+      punctualityScore: _punctualityScore > 0 ? _punctualityScore : null,
+      communicationScore: _communicationScore > 0 ? _communicationScore : null,
+      courtesyScore: _courtesyScore > 0 ? _courtesyScore : null,
     );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -69,6 +81,87 @@ class _RatingScreenState extends State<RatingScreen> {
   String get _roleLabel =>
       widget.otherPartyRole == 'LIVREUR' ? 'votre livreur' : 'votre client';
 
+  /// Construit une rangée de 5 étoiles cliquables pour une catégorie donnée.
+  Widget _buildStars({
+    required int currentScore,
+    required ValueChanged<int> onTap,
+    double size = 32,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.start,
+      children: List.generate(5, (i) {
+        final value = i + 1;
+        final filled = value <= currentScore;
+        return IconButton(
+          iconSize: size,
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          constraints: const BoxConstraints(),
+          onPressed: _submitting ? null : () => onTap(value),
+          icon: Icon(
+            filled ? Icons.star : Icons.star_border,
+            color: filled ? const Color(0xFFFACC15) : Colors.white54,
+          ),
+          tooltip: '$value étoile${value > 1 ? 's' : ''}',
+        );
+      }),
+    );
+  }
+
+  /// Construit une section "catégorie" avec icône, titre, sous-titre et
+  /// rangée d'étoiles. Cliquer sur la même valeur deux fois la réinitialise
+  /// (permet de revenir à un état "non noté" → null en submit).
+  Widget _buildCategorySection({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required int currentScore,
+    required ValueChanged<int> onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: const Color(0xFF0EA5E9), size: 20),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Padding(
+            padding: const EdgeInsets.only(left: 28),
+            child: Text(
+              subtitle,
+              style: const TextStyle(color: Colors.white60, fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 4),
+          _buildStars(
+            currentScore: currentScore,
+            onTap: (value) {
+              // Re-cliquer la même étoile → réinitialise (note effacée).
+              onTap(currentScore == value ? 0 : value);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayName =
@@ -85,7 +178,7 @@ class _RatingScreenState extends State<RatingScreen> {
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -100,6 +193,7 @@ class _RatingScreenState extends State<RatingScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+              // Note globale (étoiles centrées, plus grosses)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(5, (i) {
@@ -120,7 +214,41 @@ class _RatingScreenState extends State<RatingScreen> {
                   );
                 }),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
+              // Sections catégories (toutes optionnelles)
+              const Padding(
+                padding: EdgeInsets.only(left: 4, bottom: 8),
+                child: Text(
+                  'Évaluez ces aspects (optionnel)',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              _buildCategorySection(
+                icon: Icons.access_time,
+                title: 'Ponctualité',
+                subtitle: 'Le livreur était-il à l’heure ?',
+                currentScore: _punctualityScore,
+                onTap: (v) => setState(() => _punctualityScore = v),
+              ),
+              _buildCategorySection(
+                icon: Icons.chat_bubble_outline,
+                title: 'Communication',
+                subtitle: 'Le livreur communiquait-il bien ?',
+                currentScore: _communicationScore,
+                onTap: (v) => setState(() => _communicationScore = v),
+              ),
+              _buildCategorySection(
+                icon: Icons.handshake_outlined,
+                title: 'Courtoisie',
+                subtitle: 'Le livreur était-il aimable ?',
+                currentScore: _courtesyScore,
+                onTap: (v) => setState(() => _courtesyScore = v),
+              ),
+              const SizedBox(height: 8),
               TextField(
                 controller: _commentCtrl,
                 enabled: !_submitting,

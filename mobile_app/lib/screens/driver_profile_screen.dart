@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../config/env.dart';
 import '../models/user.dart';
+import '../router/app_router.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
-import '../screens/login_screen.dart';
+import '../screens/order_history_screen.dart';
 import '../utils/platform_adapter.dart';
 
 class DriverProfileScreen extends StatefulWidget {
@@ -102,7 +104,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
 
     final request = http.MultipartRequest(
       'POST',
-      Uri.parse('$apiUrl/users/me/photo'),
+      Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
     )
       ..headers['Authorization'] = 'Bearer $token'
       ..files.add(await http.MultipartFile.fromPath(
@@ -159,10 +161,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     if (confirmed != true) return;
     await _auth.logout();
     if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (_) => false,
-      );
+      context.go(AppRoutes.login);
     }
   }
 
@@ -179,7 +178,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           _buildPhotoSection(),
           const SizedBox(height: 24),
           _buildStatsRow(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          _buildHistoryTile(),
+          const SizedBox(height: 16),
           _buildSection('Informations personnelles', _buildProfileFields()),
           const SizedBox(height: 16),
           _buildSection('Mon véhicule', _buildVehicleFields()),
@@ -273,6 +274,50 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryTile() {
+    return Material(
+      color: const Color(0xFF1E293B),
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => pushAdaptive<void>(
+          context,
+          const OrderHistoryScreen(),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(Icons.history, color: Color(0xFF0EA5E9), size: 24),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Mes courses',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Voir l\'historique de mes livraisons',
+                      style: TextStyle(color: Colors.white60, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.white38),
+            ],
+          ),
         ),
       ),
     );

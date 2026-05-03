@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -12,20 +12,49 @@ import {
 import { Server, Socket } from 'socket.io';
 import { UserRole } from '../entities/user.entity';
 import { haversineKm } from '../common/geo';
+import {
+  hasAnyCorsConfig,
+  isOriginAllowed,
+  loadCorsConfig,
+} from '../common/cors';
+import { PositionsService } from './positions.service';
 
 type DriverPosition = { lat: number; lng: number; at: number };
 type ActiveOrderRef = { orderId: string; clientId?: string };
 
 const POSITION_TTL_MS = 5 * 60 * 1000;
 
-function resolveWsCorsOrigin(): string[] | boolean {
-  const origins = process.env.FRONTEND_URLS?.split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  if (origins && origins.length > 0) {
-    return origins;
+/**
+ * Construit l'option `cors.origin` pour Socket.IO.
+ *
+ * Socket.IO accepte trois formes :
+ *  - `boolean` (true = tout autorisé, false = tout refusé)
+ *  - `string | string[]` (liste d'origines exactes)
+ *  - `(origin, cb) => cb(err, ok)` (callback dynamique)
+ *
+ * On utilise le callback dès qu'au moins une `FRONTEND_URLS` ou
+ * `FRONTEND_URL_PATTERNS` est définie, pour pouvoir matcher les patterns
+ * regex (URLs preview Cloudflare Pages notamment).
+ *
+ * Exemple FRONTEND_URL_PATTERNS="^https://[a-z0-9-]+\\.zonzon-admin\\.pages\\.dev$"
+ */
+function resolveWsCorsOrigin():
+  | boolean
+  | ((
+      origin: string | undefined,
+      cb: (err: Error | null, allow?: boolean) => void,
+    ) => void) {
+  const config = loadCorsConfig();
+  if (hasAnyCorsConfig(config)) {
+    return (origin, cb) => {
+      if (isOriginAllowed(origin, config)) {
+        cb(null, true);
+      } else {
+        cb(new Error(`Origin ${origin} non autorisé (WS)`), false);
+      }
+    };
   }
-  // Liste vide : on refuse en prod, on autorise tout en dev
+  // Aucune config : on refuse en prod, on autorise tout en dev
   return process.env.NODE_ENV === 'production' ? false : true;
 }
 
@@ -41,7 +70,10 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /** Pour chaque livreur, l'ordre actif (ACCEPTED/IN_PROGRESS) → sert au forwarding live de la position. */
   private activeOrders = new Map<string, ActiveOrderRef>();
 
-  constructor(private jwtService: JwtService) {}
+  constructor(
+    private jwtService: JwtService,
+    @Optional() private positionsService?: PositionsService,
+  ) {}
 
   @WebSocketServer()
   server: Server;
@@ -120,6 +152,17 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
         lng,
         at,
       });
+    }
+
+    // Persistance fire-and-forget (n'attend pas la DB pour ne pas bloquer le forwarding WS).
+    // Sert au fallback FCM (filtre géo sur les livreurs offline) et au tracking historique.
+    if (this.positionsService) {
+      void this.positionsService.upsertPosition(
+        user.sub,
+        lat,
+        lng,
+        active?.orderId ?? null,
+      );
     }
   }
 

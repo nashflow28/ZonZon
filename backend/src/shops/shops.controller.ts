@@ -180,20 +180,65 @@ export class ShopsController {
 
   @Roles(UserRole.ADMIN)
   @Patch('admin/:id/approve')
-  approve(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shopsService.adminApprove(id);
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shopsService.adminApprove(id, (user.id ?? user.sub) as string);
   }
 
   @Roles(UserRole.ADMIN)
   @Patch('admin/:id/reject')
-  reject(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RejectShopDto) {
-    return this.shopsService.adminReject(id, dto.reason);
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectShopDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shopsService.adminReject(
+      id,
+      (user.id ?? user.sub) as string,
+      dto.reason,
+    );
   }
 
   @Roles(UserRole.ADMIN)
   @Patch('admin/:id/suspend')
-  suspend(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shopsService.adminSuspend(id);
+  suspend(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shopsService.adminSuspend(id, (user.id ?? user.sub) as string);
+  }
+
+  // ── Favoris (DOIVENT être avant le pattern catch-all `:id`) ─────────
+
+  @Get('favorites')
+  listFavorites(@CurrentUser() user: AuthenticatedUser) {
+    return this.shopsService.listFavorites(
+      (user.id ?? user.sub) as string,
+    );
+  }
+
+  @Post(':id/favorite')
+  addFavorite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shopsService.addFavorite(
+      (user.id ?? user.sub) as string,
+      id,
+    );
+  }
+
+  @Delete(':id/favorite')
+  removeFavorite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shopsService.removeFavorite(
+      (user.id ?? user.sub) as string,
+      id,
+    );
   }
 
   // ── Public : détail boutique (DOIT être après les /me et /admin) ─────

@@ -15,6 +15,11 @@ class SavedAddress {
     this.icon,
   });
 
+  /// Hand-written because the API uses flat `lat`/`lng` keys rather than a
+  /// nested location object, which requires custom LatLng handling.
+  /// The toJson/fromJson are kept manual here because LatLng cannot be
+  /// auto-serialized by json_serializable without a custom converter class,
+  /// and the existing flat lat/lng structure is already well-tested.
   factory SavedAddress.fromJson(Map<String, dynamic> json) {
     return SavedAddress(
       id: json['id']?.toString() ?? '',

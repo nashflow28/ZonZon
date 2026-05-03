@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole } from '../entities/user.entity';
 import { Vehicle, VehicleType } from '../entities/vehicle.entity';
@@ -73,5 +73,40 @@ export class UsersService {
     });
     if (!user) throw new NotFoundException('Utilisateur introuvable');
     return user;
+  }
+
+  /**
+   * Soft-delete un utilisateur : positionne `deletedAt` sans supprimer
+   * physiquement la ligne (et donc sans cascader sur ratings, messages,
+   * commissions, etc.). Les `find/findOne` standard du repo l'excluent
+   * automatiquement (sauf si `withDeleted: true` est passé explicitement).
+   */
+  async softDelete(id: string) {
+    await this.usersRepository.softDelete(id);
+    return { ok: true };
+  }
+
+  /**
+   * Restaure un utilisateur soft-deleted (remet `deletedAt = NULL`).
+   */
+  async restore(id: string) {
+    await this.usersRepository.restore(id);
+    return { ok: true };
+  }
+
+  /**
+   * Liste les livreurs qui ont un fcmToken non null.
+   * Utilisée par le fallback FCM pour notifier les livreurs déconnectés du WS
+   * d'une nouvelle course disponible.
+   *
+   * NB : pas de filtre géographique ici (les positions des livreurs sont en
+   * mémoire dans le gateway, pas persistées). À ajouter quand la persistance
+   * des positions sera en place (cf. TODO.md).
+   */
+  findLivreursWithFcmToken(): Promise<User[]> {
+    return this.usersRepository.find({
+      where: { role: UserRole.LIVREUR, fcmToken: Not(IsNull()) },
+      select: ['id', 'firstName', 'fcmToken'],
+    });
   }
 }

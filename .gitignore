@@ -72,4 +72,4 @@ google-services.json
 GoogleService-Info.plist
 
 firebase-adminsdk.json
-.claude/settings.local.json
+.claude/
