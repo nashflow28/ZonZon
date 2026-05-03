@@ -6,7 +6,6 @@ import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import * as fs from 'fs';
 import * as path from 'path';
-import { SentryGlobalFilter } from '@sentry/nestjs/setup';
 import { AppModule } from './app.module';
 import {
   hasAnyCorsConfig,
@@ -37,9 +36,6 @@ async function bootstrap() {
   ensureUploadDirs();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
-
-  // Capture all unhandled exceptions via Sentry
-  app.useGlobalFilters(new SentryGlobalFilter());
 
   // Versioning d'API : toutes les routes HTTP sont préfixées par /v1.
   // Exclus : la racine '/' (health check pour les monitors externes type

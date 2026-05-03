@@ -10,10 +10,12 @@ import '../services/eta_service.dart';
 class OrderHeader extends StatelessWidget {
   final VoidCallback onLogout;
   final VoidCallback? onOpenHistory;
+  final VoidCallback? onOpenProfile;
   const OrderHeader({
     super.key,
     required this.onLogout,
     this.onOpenHistory,
+    this.onOpenProfile,
   });
 
   @override
@@ -74,12 +76,17 @@ class OrderHeader extends StatelessWidget {
                   shape: const CircleBorder(),
                   clipBehavior: Clip.antiAlias,
                   child: InkWell(
-                    onTap: onLogout,
-                    child: const SizedBox(
+                    onTap: onOpenProfile ?? onLogout,
+                    child: SizedBox(
                       width: 44,
                       height: 44,
-                      child: Icon(Icons.logout,
-                          color: Colors.white70, size: 18),
+                      child: Icon(
+                        onOpenProfile != null
+                            ? Icons.account_circle_outlined
+                            : Icons.logout,
+                        color: Colors.white70,
+                        size: onOpenProfile != null ? 22 : 18,
+                      ),
                     ),
                   ),
                 ),

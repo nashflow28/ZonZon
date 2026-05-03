@@ -399,6 +399,10 @@ class _OrderScreenState extends State<OrderScreen> {
     pushAdaptive<void>(context, const OrderHistoryScreen());
   }
 
+  void _openProfile() {
+    context.go(AppRoutes.clientProfile);
+  }
+
   Future<void> _confirmLogout() async {
     final ok = await showAdaptiveConfirmDialog(
       context,
@@ -679,6 +683,7 @@ class _OrderScreenState extends State<OrderScreen> {
           OrderHeader(
             onLogout: _confirmLogout,
             onOpenHistory: _openHistory,
+            onOpenProfile: _openProfile,
           ),
           OrderBottomSheet(
             child: isOrderAccepted

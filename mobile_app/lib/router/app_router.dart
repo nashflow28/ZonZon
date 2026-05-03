@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../driver_screen.dart';
 import '../order_screen.dart';
+import '../screens/client_profile_screen.dart';
 import '../screens/driver_profile_screen.dart';
 import '../screens/favorites_screen.dart';
 import '../screens/login_screen.dart';
@@ -32,6 +33,7 @@ class AppRoutes {
   static const String favorites = '/favorites';
   static const String history = '/history';
   static const String driverProfile = '/driver/profile';
+  static const String clientProfile = '/home/client/profile';
 
   // Helper: returns the home route for a given role string.
   static String homeForRole(String? role) {
@@ -88,6 +90,10 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'history',
           builder: (context, state) => const OrderHistoryScreen(),
+        ),
+        GoRoute(
+          path: 'profile',
+          builder: (context, state) => const ClientProfileScreen(),
         ),
       ],
     ),
