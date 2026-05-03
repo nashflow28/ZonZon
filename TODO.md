@@ -29,6 +29,16 @@
 
 ## 🚀 SPRINT EN COURS — Fonctionnalités client
 
+### Profil client (NOUVEAU)
+- [x] **Mobile** : écran `ClientProfileScreen` (`mobile_app/lib/screens/client_profile_screen.dart`)
+  - Avatar circulaire + upload photo (`POST /users/me/photo`)
+  - Édition prénom/nom (`PATCH /users/me`)
+  - Numéro de téléphone en lecture seule
+  - Accès à l'historique des commandes (`OrderHistoryScreen`)
+  - Déconnexion avec dialog de confirmation
+- [x] **Routage** : route `clientProfile = '/home/client/profile'` dans `app_router.dart`
+- [x] **Accès** : icône `account_circle_outlined` dans `OrderHeader` → `_openProfile()` dans `order_screen.dart`
+
 ### Annulation d'une commande par le client
 - [x] **Mobile** : bouton "Annuler la commande" dans `order_screen.dart` quand `_activeOrderStatus IN ('PENDING','ACCEPTED')`
   - Confirmation modale : "Êtes-vous sûr ? Le livreur a peut-être déjà démarré"
@@ -82,7 +92,10 @@
   - Admin : nouvelle propriété `apiPrefix: '/v1'` dans `environment.ts` et `environment.prod.ts`. Adaptés (préfixés) : `auth/auth.service.ts`, `orders.service.ts`, `users/users.service.ts`, `shops/shops.service.ts`, `reports/reports.service.ts`, `audit-logs/audit-logs.service.ts`, `shared/messages.service.ts`. NE PAS préfixer : `shared/live-status.service.ts` (Socket.IO), `shops/shops.component.ts:144` (URL de logo `/uploads/...`).
   - Vérifications : 96/96 jest passent, `flutter analyze` 8 issues préexistantes (aucune nouvelle), `flutter test` 10/10, `npm run build -- --configuration production` OK (seuls les 2 warnings préexistants NG8107 sur `main-layout.component.html`).
   - **Note de déploiement** : déployer le backend AVANT le mobile/admin. Si déployé dans l'autre ordre, les clients qui pointent sur `/v1` recevront 404 jusqu'à ce que le backend bascule. Pas de migration DB. Pas de regénération d'APK dans cette session (à faire ensuite : `flutter build apk --release`). Les 1-2 utilisateurs en phase de test devront réinstaller l'APK.
-- [x] **Sentry / error tracking** — `@sentry/nestjs` intégré backend (init conditionnel sur SENTRY_DSN env var) + `SentryGlobalFilter` pour capturer les exceptions non gérées
+- [x] **Sentry / error tracking** — intégration complète backend + mobile + admin
+  - Backend : `@sentry/nestjs` + `SentryGlobalFilter` via `APP_FILTER` (DI). Init conditionnel sur `SENTRY_DSN`. Fix critique : filtre n'est plus instancié manuellement (évite le crash `applicationRef undefined`).
+  - Flutter : `sentry_flutter` init conditionnel sur `--dart-define=SENTRY_DSN`. `attachScreenshot: true`.
+  - Angular : `@sentry/angular` + `ErrorHandler` + `TraceService` dans `app.config.ts`.
 - [ ] **HA backend** — Fly.io tourne avec 1 seule VM, downtime au moindre crash
   - Passer à 2 VMs + Redis Adapter pour Socket.IO
 

@@ -93,10 +93,12 @@ FIREBASE_CREDENTIALS_JSON=*** (contenu du fichier firebase-adminsdk.json)
 ### Builder l'APK de production
 ```powershell
 cd C:\laragon\www\ZonZon\mobile_app
-flutter build apk --release --dart-define=API_URL=https://zonzon-backend.fly.dev
-# APK généré : build\app\outputs\flutter-apk\app-release.apk
+flutter build apk --release `
+  --dart-define=API_URL=https://zonzon-backend.fly.dev `
+  "--dart-define=SENTRY_DSN=https://5b733a06f8e026418f487fe2335679b3@o4511315040337920.ingest.de.sentry.io/4511324268724304"
+# APK généré : build\app\outputs\flutter-apk\app-release.apk (≈58 MB)
 ```
-> **Note** : Depuis la correction du 2026-05-01, `env.dart` pointe par défaut sur `https://zonzon-backend.fly.dev`. Le `--dart-define` est donc optionnel mais recommandé.
+> **Note** : `env.dart` pointe par défaut sur `https://zonzon-backend.fly.dev`. `--dart-define=API_URL` est optionnel. `--dart-define=SENTRY_DSN` active le reporting d'erreurs Sentry (recommandé en prod).
 
 ### Builder l'APK pour tests locaux
 ```powershell
@@ -479,6 +481,39 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 - **Annulation livreur "transaction refusée"** : le dialog était statique → deux clics simultanés possibles. Fix : `StatefulBuilder` avec état `dialogStatus` + `dialogProcessing`, boutons masqués/désactivés selon l'état courant, fermeture auto du dialog à COMPLETED/CANCELLED.
 - Redéploiement backend + rebuild APK (52.3 MB)
 - Nouvelles dépendances Flutter : `http_parser: ^4.0.2`, `mime: ^1.0.6`
+
+### Session 18 (2026-05-03) — Fix Sentry crash + écran profil client
+
+#### Fix critique : SentryGlobalFilter TypeError
+- **Symptôme** : `TypeError: Cannot read properties of undefined (reading 'isHeadersSent')` sur chaque exception HTTP (`GET /robots.txt`, `POST /v1/auth/login`, etc.). Remontait dans Sentry et cassait silencieusement le filtre.
+- **Cause** : `app.useGlobalFilters(new SentryGlobalFilter())` dans `main.ts` — instanciation manuelle = NestJS DI non invoqué = `applicationRef` `undefined` dans le filtre.
+- **Fix** : supprimé de `main.ts`, ajouté `{ provide: APP_FILTER, useClass: SentryGlobalFilter }` dans `providers` de `app.module.ts` → DI injecte correctement `applicationRef`. Commentaire explicatif ajouté.
+- **Fichiers modifiés** : `backend/src/main.ts`, `backend/src/app.module.ts`.
+- **Commit** : `10ade33` — déployé sur Fly.io, 2 machines en `started` state ✅.
+
+#### Écran profil client (nouvelle fonctionnalité)
+- **Nouveau fichier** : `mobile_app/lib/screens/client_profile_screen.dart`
+  - Avatar circulaire avec bouton caméra (upload via `POST /users/me/photo`).
+  - Champs éditables prénom/nom (`PATCH /users/me`).
+  - Numéro de téléphone en lecture seule.
+  - Bouton "Mes commandes" → `OrderHistoryScreen`.
+  - Bouton déconnexion avec dialog de confirmation → `context.go(AppRoutes.login)`.
+  - Dark theme cohérent (`#0F172A` fond, `#1E293B` cartes, `#0EA5E9` accent).
+- **`mobile_app/lib/router/app_router.dart`** : route `clientProfile = '/home/client/profile'` ajoutée.
+- **`mobile_app/lib/order_screen.dart`** : méthode `_openProfile()` + passage à `OrderHeader`.
+- **`mobile_app/lib/widgets/order_screen_widgets.dart`** : `OrderHeader` accepte `onOpenProfile` optionnel (icône `account_circle_outlined`).
+
+#### GitHub + Déploiement
+- Push GitHub : commit `10ade33` poussé sur `nashflow28/ZonZon` ✅.
+- Deploy Fly.io : `flyctl deploy` terminé avec succès, 2 machines `zonzon-backend` healthy ✅.
+- APK rebuild en cours (avec `--dart-define=SENTRY_DSN=...`).
+
+#### Sentry DSNs configurés
+| Projet | DSN |
+|--------|-----|
+| Backend Node.js | `https://57f59766a14c7d6f0ed519bb39e65889@o4511315040337920.ingest.de.sentry.io/4511324246245456` (secret Fly.io `SENTRY_DSN`) |
+| Flutter mobile | `https://5b733a06f8e026418f487fe2335679b3@o4511315040337920.ingest.de.sentry.io/4511324268724304` (via `--dart-define=SENTRY_DSN`) |
+| Angular admin | `https://73be5b88715e85b16f8ac95860977fe6@o4511315040337920.ingest.de.sentry.io/4511324274884688` (dans `environment.prod.ts`) |
 
 ### Session 17 (2026-05-01) — Sentry + monitoring + go_router + json_serializable + CI/CD
 
