@@ -173,6 +173,57 @@ describe('OrdersGateway', () => {
       expect(rooms).toEqual(['user:driver-known', 'user:driver-unknown']);
     });
 
+    it('tous les livreurs hors rayon → fallback broadcast à tous les connectés', () => {
+      process.env.NOTIFY_RADIUS_KM = '5';
+
+      const drivers = [
+        { socketId: 's1', userId: 'driver-far-1' },
+        { socketId: 's2', userId: 'driver-far-2' },
+      ];
+      const { server, emitCalls } = buildMockServer(drivers);
+      gateway.server = server;
+
+      // Les deux livreurs sont loin du pickup (> 5km)
+      const driverPositions: Map<string, any> = (gateway as any)
+        .driverPositions;
+      driverPositions.set('driver-far-1', {
+        lat: pickupLat + 1.0, // ~111 km
+        lng: pickupLng,
+        at: Date.now(),
+      });
+      driverPositions.set('driver-far-2', {
+        lat: pickupLat + 2.0, // ~222 km
+        lng: pickupLng,
+        at: Date.now(),
+      });
+
+      gateway.broadcastNewOrder(order);
+
+      const newOrderEmits = emitCalls.filter(
+        (c) => c.event === 'newOrderAvailable',
+      );
+      // Fallback : les deux reçoivent quand même la course
+      expect(newOrderEmits).toHaveLength(2);
+      const rooms = newOrderEmits.map((e) => e.room).sort();
+      expect(rooms).toEqual(['user:driver-far-1', 'user:driver-far-2']);
+    });
+
+    it('coordonnées pickup nulles (0,0) → traité comme manquant, broadcast global', () => {
+      const drivers = [{ socketId: 's1', userId: 'd-1' }];
+      const { server, emitCalls } = buildMockServer(drivers);
+      gateway.server = server;
+
+      // pickupLat/Lng = 0 → position océan invalide → fallback global
+      const zeroOrder = { id: 'ord-zero', pickupLat: 0, pickupLng: 0 };
+      gateway.broadcastNewOrder(zeroOrder);
+
+      const newOrderEmits = emitCalls.filter(
+        (c) => c.event === 'newOrderAvailable',
+      );
+      expect(newOrderEmits).toHaveLength(1);
+      expect(newOrderEmits[0].room).toBe(`role:${UserRole.LIVREUR}`);
+    });
+
     it('aucun livreur connecté → aucun emit newOrderAvailable', () => {
       const { server, emitCalls } = buildMockServer([]);
       gateway.server = server;

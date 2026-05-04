@@ -193,14 +193,27 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.purgeStalePositions();
 
     const radiusKm = Number(process.env.NOTIFY_RADIUS_KM) || 5;
-    const pickupLat = Number(order?.pickupLat);
-    const pickupLng = Number(order?.pickupLng);
+
+    // Coordonnées pickup : null si manquantes (on refuse de traiter 0,0 comme
+    // une vraie position — ça placerait le pickup dans l'Océan Atlantique et
+    // exclurait tous les livreurs du rayon).
+    const rawLat = order?.pickupLat;
+    const rawLng = order?.pickupLng;
+    const pickupLat =
+      rawLat != null && rawLat !== 0 ? Number(rawLat) : null;
+    const pickupLng =
+      rawLng != null && rawLng !== 0 ? Number(rawLng) : null;
 
     const connectedDrivers = this.getConnectedDriverIds();
     const totalDrivers = connectedDrivers.size;
 
-    // Si pas de coordonnées pickup exploitables, fallback broadcast global
-    if (!Number.isFinite(pickupLat) || !Number.isFinite(pickupLng)) {
+    // Si pas de coordonnées pickup exploitables → broadcast global immédiat
+    if (
+      pickupLat === null ||
+      pickupLng === null ||
+      !Number.isFinite(pickupLat) ||
+      !Number.isFinite(pickupLng)
+    ) {
       this.server
         .to(`role:${UserRole.LIVREUR}`)
         .emit('newOrderAvailable', order);
@@ -214,7 +227,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     for (const driverId of connectedDrivers) {
       const pos = this.driverPositions.get(driverId);
       if (!pos) {
-        // Fallback : livreur connecté mais position inconnue → on notifie quand même
+        // Livreur connecté mais position inconnue → on notifie quand même
         this.server.to(`user:${driverId}`).emit('newOrderAvailable', order);
         notified++;
         continue;
@@ -224,6 +237,19 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.server.to(`user:${driverId}`).emit('newOrderAvailable', order);
         notified++;
       }
+    }
+
+    // Fallback : aucun livreur dans le rayon → broadcast à tous les connectés
+    // pour éviter qu'une course reste sans preneur (cas fréquent en phase de
+    // test ou quand tous les livreurs actifs sont légèrement hors rayon).
+    if (notified === 0 && totalDrivers > 0) {
+      for (const driverId of connectedDrivers) {
+        this.server.to(`user:${driverId}`).emit('newOrderAvailable', order);
+      }
+      this.logger.log(
+        `Nouvelle course diffusée à ${totalDrivers}/${totalDrivers} livreurs (fallback — aucun dans le rayon ${radiusKm} km)`,
+      );
+      return;
     }
 
     this.logger.log(
