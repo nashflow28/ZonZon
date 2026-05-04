@@ -12,14 +12,19 @@ primary_region = 'cdg'
   internal_port = 3050
   force_https = true
   auto_stop_machines = 'off'
-  auto_start_machines = true
+  # auto_start_machines désactivé pour rester sur 1 seule VM.
+  # Socket.IO sans Redis adapter ne supporte pas le multi-machine : les événements
+  # WS d'une VM ne propagent pas aux clients connectés sur une autre VM.
+  # À repasser à true + ajouter Redis adapter quand le volume justifie le scale-out.
+  auto_start_machines = false
   min_machines_running = 1
   processes = ['app']
 
 [http_service.concurrency]
   type = "connections"
-  hard_limit = 100
-  soft_limit = 80
+  # Limite haute pour absorber tous les tests sans déclencher d'auto-scale.
+  hard_limit = 1000
+  soft_limit = 800
 
 [[vm]]
   memory = '1gb'
