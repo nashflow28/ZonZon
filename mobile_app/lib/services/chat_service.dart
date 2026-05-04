@@ -80,8 +80,19 @@ class ChatService {
       if (data is! Map) return;
       if (data['orderId']?.toString() != orderId) return;
       final raw = data['message'];
-      if (raw is! Map<String, dynamic>) return;
-      final incoming = ChatMessage.fromJson(raw);
+      if (raw is! Map) return;
+      final incoming = ChatMessage.fromJson(Map<String, dynamic>.from(raw as Map));
+
+      // Déduplication : le socket est dans 2 rooms (user: et order::chat),
+      // le même événement arrive donc potentiellement deux fois. On ignore
+      // le doublon si un message avec le même id serveur est déjà présent
+      // et n'est pas un optimiste en attente.
+      if (incoming.id.isNotEmpty) {
+        final dupIdx = _messages.indexWhere(
+          (m) => m.id == incoming.id && m.status != MessageStatus.pending,
+        );
+        if (dupIdx >= 0) return;
+      }
 
       // Match par contenu+sender pour fusionner avec un message envoyé en optimiste
       final pendingIdx = _messages.indexWhere(
