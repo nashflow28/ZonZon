@@ -515,6 +515,61 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 | Flutter mobile | `https://5b733a06f8e026418f487fe2335679b3@o4511315040337920.ingest.de.sentry.io/4511324268724304` (via `--dart-define=SENTRY_DSN`) |
 | Angular admin | `https://73be5b88715e85b16f8ac95860977fe6@o4511315040337920.ingest.de.sentry.io/4511324274884688` (dans `environment.prod.ts`) |
 
+### Session 19 (2026-05-04) — Refonte UX multi-commandes client + DriverShell 3 onglets
+
+#### Contexte
+Demande UX en deux axes :
+1. **Multi-commandes client** : supprimer le blocage de l'UI sur une seule commande active, passer à un shell 4 onglets avec suivi par orderId et limite de 5 commandes parallèles.
+2. **DriverShell** : ajouter un 3ème onglet "Mes courses" entre Radar et Profil.
+
+#### Phase 1 — OrderSocketController multi-room
+- `String? activeOrderId` remplacé par `Set<String> _watchedOrderIds` dans `mobile_app/lib/controllers/order_socket_controller.dart`.
+- Méthodes ajoutées : `watchOrder(orderId)`, `unwatchOrder(orderId)`, `clearWatchedOrders()`, `_shouldEmit(orderId?)`.
+- Legacy setter `set activeOrderId(String?)` maintenu pour rétro-compat livreur (livreur ne définit jamais le set → tous les events passent).
+
+#### Phase 2 — ActiveOrdersStore (ChangeNotifier)
+- Nouveau fichier `mobile_app/lib/services/active_orders_store.dart`.
+- `bootstrap(socketCtrl)` : charge `GET /orders/mine` (filtré sur statuts actifs ≤ 5) + subscribe aux streams socket.
+- `onOrderCreated(raw)` / `onOrderCancelled(orderId)` : mutations + `notifyListeners()`.
+- Constante `maxActiveOrders = 5`.
+
+#### Phase 3 — OrderTrackingScreen
+- Nouveau fichier `mobile_app/lib/screens/order_tracking_screen.dart`.
+- Reçoit `orderId` en paramètre constructeur.
+- Lit l'état initial depuis `ClientServices.activeOrders.findById(orderId)`.
+- Tous les streams filtrés : `.where((e) => e.orderId == widget.orderId)`.
+- ETA polling 30s + refresh sur `driverPosition$` et `IN_PROGRESS`.
+
+#### Phase 4 — ClientShellScreen + 4 onglets
+- Nouveau `mobile_app/lib/screens/client/client_shell_screen.dart` : boot `ClientServices` au `initState`, badge rouge sur l'onglet Commandes quand `isAtLimit`.
+- Nouveau `mobile_app/lib/screens/client/home_tab.dart` : formulaire pur + `AutomaticKeepAliveClientMixin` + écoute `pendingShopSelection` ValueNotifier.
+- Nouveau `mobile_app/lib/screens/client/orders_tab.dart` : `AnimatedBuilder` sur `ActiveOrdersStore`, cartes avec badges de statut, tap → `OrderTrackingScreen`.
+- Nouveau `mobile_app/lib/screens/client/shops_tab.dart` : wrapper `ShopListScreen` + callback `onProductSelected` → `pendingShopSelection.value`.
+- Modification `mobile_app/lib/screens/shop_list_screen.dart` : paramètres `onProductSelected` + `hideBackButton`.
+- Nouveau registre statique `mobile_app/lib/services/client_services.dart` (socket + store + `ValueNotifier<PendingShopSelection?>`).
+
+#### Phase 5 — Suppression anciens fichiers + adaptation router
+- `lib/order_screen.dart` et `lib/home_screen.dart` supprimés.
+- `lib/router/app_router.dart` réécrit : constantes `clientHome/clientOrders/clientShops/clientProfile`, `StatefulShellRoute.indexedStack` 4 branches, route tracking `:orderId` avec `parentNavigatorKey: _rootNavKey`.
+- `lib/screens/client_profile_screen.dart` : `ClientServices.reset()` avant le logout.
+
+#### Phase 6 — DriverShell 3 onglets
+- `lib/driver_screen.dart` : `IndexedStack` à 3 enfants (`_buildRadar()` / `OrderHistoryScreen(embedInTab: true)` / `DriverProfileScreen()`), bottom-nav 3 items, méthode `_currentTabTitle()`.
+- `lib/screens/order_history_screen.dart` : paramètre `embedInTab` — quand `true`, retourne directement le body sans `Scaffold`/`AppBar`.
+
+#### Tests d'intégration mis à jour
+- `integration_test/create_order_flow_test.dart` : remplace `OrderScreen` par `HomeTab`.
+- `integration_test/home_screen_smoke_test.dart` : 3 tests directs `HomeTab / DriverScreen / MerchantHomeScreen` (l'aiguillage par rôle est maintenant dans `_globalRedirect`, non testable en smoke test sans mock auth).
+
+#### Vérifications finales
+- `flutter analyze` : 10 issues, TOUTES préexistantes (geolocator `desiredAccuracy`, Sentry `attachViewHierarchy`, unreachable switch default, library prefixes, unnecessary cast, string interpolation). Zéro issue introduite.
+- `flutter test test/` : 10/10 passent.
+
+#### Hors scope (validé mais non commencé)
+- Backend machine à états élargie pour la validation commerçant (PENDING → MERCHANT_CONFIRMED → broadcast livreurs).
+- Chat tri-participant (C↔M, C↔L, M↔L).
+- Inbox commerçant (notifications commandes entrantes).
+
 ### Session 17 (2026-05-01) — Sentry + monitoring + go_router + json_serializable + CI/CD
 
 #### Backend

@@ -57,23 +57,66 @@ class NewOrderEvent {
   NewOrderEvent({required this.orderId, required this.raw});
 }
 
-/// Gère le cycle de vie du socket pour l'écran de commande client.
+/// Gère le cycle de vie du socket pour les écrans client et livreur.
 ///
-/// Le contrôleur s'abonne aux quatre évènements pertinents et expose un
-/// `Stream` typé pour chacun. Un client n'a qu'à appeler [init] dans
-/// `initState`, lire les streams puis [dispose] dans `dispose`.
+/// Le contrôleur s'abonne aux évènements pertinents et expose un `Stream`
+/// typé pour chacun. Un consommateur appelle [init] dans `initState`, lit
+/// les streams puis [dispose] dans `dispose`.
 ///
-/// Les évènements ne sont émis que pour [activeOrderId], qui peut être
-/// défini après le `connect` (par exemple à la création d'une commande).
+/// **Filtrage par orderId** : trois modes selon l'usage.
+/// - Set vide (par défaut) → tous les events passent. C'est le mode **livreur**
+///   où on a besoin de voir toutes les acceptations pour retirer une course
+///   du radar dès qu'un autre livreur la prend.
+/// - Set non-vide → les events sont filtrés sur les orderIds présents dans
+///   [watchedOrderIds]. C'est le mode **client multi-commandes**.
+/// - [activeOrderId] (legacy single-id) reste fonctionnel via un setter qui
+///   remplace le contenu du set. Conservé pour rétro-compat le temps de la
+///   bascule des écrans.
 class OrderSocketController {
   OrderSocketController({AuthService? auth}) : _auth = auth ?? AuthService();
 
   final AuthService _auth;
   io.Socket? _socket;
 
-  /// Identifiant de la commande active. Les évènements reçus du serveur
-  /// sont filtrés sur cette valeur si elle est non-nulle.
-  String? activeOrderId;
+  /// Set des orderIds dont les events doivent passer. Vide = pas de filtre.
+  final Set<String> _watchedOrderIds = <String>{};
+
+  /// Vue immutable de l'ensemble des orderIds suivis (utile pour debug/tests).
+  Set<String> get watchedOrderIds => Set.unmodifiable(_watchedOrderIds);
+
+  /// Ajoute un orderId à filtrer. Idempotent.
+  void watchOrder(String orderId) {
+    _watchedOrderIds.add(orderId);
+  }
+
+  /// Retire un orderId du filtre. No-op s'il n'est pas présent.
+  void unwatchOrder(String orderId) {
+    _watchedOrderIds.remove(orderId);
+  }
+
+  /// Vide le set des orderIds suivis. À utiliser au logout par ex.
+  void clearWatchedOrders() {
+    _watchedOrderIds.clear();
+  }
+
+  /// API legacy single-id : remplace tout le set par cet orderId
+  /// (ou le vide si null).
+  ///
+  /// @deprecated Préférer [watchOrder] / [unwatchOrder] qui supportent
+  /// nativement plusieurs commandes simultanées.
+  String? get activeOrderId =>
+      _watchedOrderIds.length == 1 ? _watchedOrderIds.first : null;
+  set activeOrderId(String? value) {
+    _watchedOrderIds.clear();
+    if (value != null) _watchedOrderIds.add(value);
+  }
+
+  /// Retourne true si l'event pour [orderId] doit être propagé
+  /// aux streams (set vide = tout passe, sinon filtre sur le set).
+  bool _shouldEmit(String orderId) {
+    if (_watchedOrderIds.isEmpty) return true;
+    return _watchedOrderIds.contains(orderId);
+  }
 
   final _driverPositionCtrl = StreamController<DriverPosition>.broadcast();
   final _orderAcceptedCtrl = StreamController<OrderAcceptedEvent>.broadcast();
@@ -82,19 +125,21 @@ class OrderSocketController {
   final _newOrderAvailableCtrl = StreamController<NewOrderEvent>.broadcast();
   final _connectedCtrl = StreamController<void>.broadcast();
 
-  /// Stream des positions live du livreur (filtré par [activeOrderId]).
+  /// Stream des positions live du livreur (filtré par [watchedOrderIds]).
   Stream<DriverPosition> get driverPosition$ => _driverPositionCtrl.stream;
 
-  /// Stream des évènements `orderAccepted`. Filtré par [activeOrderId]
-  /// quand celui-ci est défini (cas client). Côté livreur, [activeOrderId]
-  /// reste `null` donc TOUTES les acceptations remontent — ce qui permet
-  /// au radar de retirer une course dès qu'un autre livreur l'a prise.
+  /// Stream des évènements `orderAccepted`. Filtré par [watchedOrderIds] quand
+  /// le set est non-vide (cas client). Côté livreur, le set reste vide donc
+  /// TOUTES les acceptations remontent — ce qui permet au radar de retirer
+  /// une course dès qu'un autre livreur la prend.
   Stream<OrderAcceptedEvent> get orderAccepted$ => _orderAcceptedCtrl.stream;
 
-  /// Stream des nouveaux statuts (filtré par [activeOrderId]).
+  /// Stream des nouveaux statuts (filtré par [watchedOrderIds]).
   Stream<OrderStatusUpdate> get statusUpdates$ => _statusUpdatesCtrl.stream;
 
-  /// Stream des nouveaux messages de chat reçus (pour badge non-lu).
+  /// Stream des nouveaux messages de chat reçus (filtré par [watchedOrderIds]).
+  /// Le consommateur doit lire `evt.orderId` pour aiguiller le badge non-lu
+  /// vers la bonne commande quand plusieurs sont actives en parallèle.
   Stream<NewChatMessageEvent> get newChatMessage$ => _newChatMessageCtrl.stream;
 
   /// Stream des nouvelles courses diffusées par le backend (côté LIVREUR
@@ -137,7 +182,7 @@ class OrderSocketController {
       if (data is! Map) return;
       final orderId = data['orderId']?.toString();
       if (orderId == null) return;
-      if (activeOrderId != null && orderId != activeOrderId) return;
+      if (!_shouldEmit(orderId)) return;
       _orderAcceptedCtrl.add(OrderAcceptedEvent(
         orderId: orderId,
         raw: Map<String, dynamic>.from(data),
@@ -149,7 +194,7 @@ class OrderSocketController {
       final orderId = data['orderId']?.toString();
       final status = data['status']?.toString();
       if (orderId == null || status == null) return;
-      if (activeOrderId != null && orderId != activeOrderId) return;
+      if (!_shouldEmit(orderId)) return;
       _statusUpdatesCtrl.add(OrderStatusUpdate(orderId: orderId, status: status));
     });
 
@@ -159,7 +204,7 @@ class OrderSocketController {
       final lat = (data['lat'] as num?)?.toDouble();
       final lng = (data['lng'] as num?)?.toDouble();
       if (orderId == null || lat == null || lng == null) return;
-      if (activeOrderId != null && orderId != activeOrderId) return;
+      if (!_shouldEmit(orderId)) return;
       _driverPositionCtrl.add(DriverPosition(
         orderId: orderId,
         location: LatLng(lat, lng),
@@ -172,7 +217,7 @@ class OrderSocketController {
       if (data is! Map) return;
       final orderId = data['orderId']?.toString();
       if (orderId == null) return;
-      if (activeOrderId != null && orderId != activeOrderId) return;
+      if (!_shouldEmit(orderId)) return;
       _newChatMessageCtrl.add(NewChatMessageEvent(
         orderId: orderId,
         raw: Map<String, dynamic>.from(data),

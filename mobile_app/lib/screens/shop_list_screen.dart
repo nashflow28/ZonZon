@@ -8,9 +8,27 @@ import 'shop_detail_screen.dart';
 import '../utils/platform_adapter.dart';
 
 /// Sélection de boutique côté client.
-/// Retourne `{shop, product}` au order_screen quand un produit est commandé.
+///
+/// Mode 1 — push (par défaut) : l'écran retourne `{shop, product}` via
+/// `Navigator.pop` au [HomeTab] qui l'a poussé en modal.
+///
+/// Mode 2 — tab (avec [onProductSelected]) : l'écran appelle le callback
+/// au lieu de `pop`. Utilisé quand le screen est root d'un onglet bottom-nav,
+/// où un `pop` quitterait le shell.
 class ShopListScreen extends StatefulWidget {
-  const ShopListScreen({super.key});
+  /// Callback appelé quand un produit est sélectionné. Si fourni, prend le
+  /// dessus sur le `Navigator.pop`. Reçoit la map `{shop, product}`.
+  final void Function(Map<String, dynamic> selection)? onProductSelected;
+
+  /// Si `true`, masque le bouton retour de l'AppBar (utile en mode tab où
+  /// `Navigator.pop` n'a pas de sens).
+  final bool hideBackButton;
+
+  const ShopListScreen({
+    super.key,
+    this.onProductSelected,
+    this.hideBackButton = false,
+  });
 
   @override
   State<ShopListScreen> createState() => _ShopListScreenState();
@@ -94,9 +112,15 @@ class _ShopListScreenState extends State<ShopListScreen> {
         },
       ),
     );
-    // Si l'utilisateur a choisi un produit, on remonte le résultat à order_screen
+    // Si l'utilisateur a choisi un produit, on remonte le résultat soit via
+    // le callback (mode tab), soit via Navigator.pop (mode push).
     if (result != null && mounted) {
-      Navigator.of(context).pop(result);
+      final cb = widget.onProductSelected;
+      if (cb != null) {
+        cb(result);
+      } else {
+        Navigator.of(context).pop(result);
+      }
     }
   }
 
@@ -146,6 +170,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
         backgroundColor: const Color(0xFF1E293B),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
+        automaticallyImplyLeading: !widget.hideBackButton,
         title: const Text('Commerces',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [

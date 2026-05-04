@@ -130,6 +130,23 @@
   - **Géofencing pickup préservé intégralement** : `_currentPickupLat/Lng`, `_geofenceOrderId`, `_geofenceTriggered`, `_pickupGeofenceMeters = 80`, `_checkPickupGeofence`, `_suggestArrival`, `_confirmArrival`, `_resetGeofenceState`, callback `_onGeofenceTransitioned`, `GlobalKey<ScaffoldMessengerState>`, edge case "déjà sur place à l'acceptation" — tout est resté en place. La logique du dialog `_showSuccessDialog` (StatefulBuilder, transitions avec `dialogProcessing`) est inchangée.
   - Heartbeat 90 s, `distanceFilter: 25`, chargement de `currentDriverId` via `AuthService().getCurrentUser()` : préservés.
   - `flutter analyze` : 9 warnings/infos préexistants, aucun introduit (l'ancien `library_prefixes` sur `IO` a même disparu de `driver_screen.dart` puisque l'import a été retiré). `flutter test` : 10/10 passent.
+- [x] **Refonte UX multi-commandes client** — StatefulShellRoute 4 onglets (Session 19)
+  - [x] `OrderSocketController` : `Set<String> _watchedOrderIds` + `watchOrder/unwatchOrder/clearWatchedOrders/_shouldEmit()`
+  - [x] `ActiveOrdersStore` (ChangeNotifier) : liste ≤ 5 commandes, bootstrap, `onOrderCreated`, `onOrderCancelled`
+  - [x] `ClientServices` : registre statique (socket + store + pendingShopSelection ValueNotifier)
+  - [x] `OrderTrackingScreen` : suivi par `orderId`, filtrage stream, ETA polling
+  - [x] `ClientShellScreen` (StatefulShellRoute 4 branches) : boot ClientServices, badge Commandes
+  - [x] `HomeTab` : formulaire pur + AutomaticKeepAliveClientMixin + bascule vers onglet Commandes après submit
+  - [x] `OrdersTab` : AnimatedBuilder sur ActiveOrdersStore, cartes avec badges de statut, limite 5
+  - [x] `ShopsTab` : wrapper ShopListScreen + ValueNotifier pendingShopSelection → HomeTab
+  - [x] `ShopListScreen` : paramètres `onProductSelected` + `hideBackButton`
+  - [x] `app_router.dart` : routes client shell (4 branches), tracking `:orderId`, redirects
+  - [x] `client_profile_screen.dart` : `ClientServices.reset()` au logout
+  - [x] `order_history_screen.dart` : paramètre `embedInTab` (masque Scaffold/AppBar)
+  - [x] `driver_screen.dart` : IndexedStack 3 onglets (Radar + Mes courses + Profil), `_currentTabTitle()`
+  - [x] Smoke tests intégration mis à jour (HomeTab / DriverScreen / MerchantHomeScreen)
+  - [x] `flutter analyze` : 10 issues toutes préexistantes (0 introduit). `flutter test` : 10/10
+
 - [~] **Tests Flutter** — il n'y a que `widget_test.dart` par défaut
   - Skill : `flutter-add-widget-test` + `flutter-add-integration-test`
   - [x] Premier test widget : `OrderAcceptedSection` (annulation) — `test/widgets/order_accepted_section_test.dart`

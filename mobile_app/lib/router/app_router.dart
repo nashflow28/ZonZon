@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../driver_screen.dart';
-import '../order_screen.dart';
+import '../screens/client/client_shell_screen.dart';
+import '../screens/client/home_tab.dart';
+import '../screens/client/orders_tab.dart';
+import '../screens/client/shops_tab.dart';
 import '../screens/client_profile_screen.dart';
 import '../screens/driver_profile_screen.dart';
 import '../screens/favorites_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/merchant_home_screen.dart';
 import '../screens/order_history_screen.dart';
+import '../screens/order_tracking_screen.dart';
 import '../screens/register_screen.dart';
 import '../screens/shop_list_screen.dart';
 import '../services/auth_service.dart';
@@ -28,12 +32,17 @@ class AppRoutes {
   static const String homeDriver = '/home/driver';
   static const String homeMerchant = '/home/merchant';
 
-  // Sub-screens (pushed on top of the role home, keeping the back-stack)
+  // Client shell branches
+  static const String clientHome = '/home/client/home';
+  static const String clientOrders = '/home/client/orders';
+  static const String clientShops = '/home/client/shops';
+  static const String clientProfile = '/home/client/profile';
+
+  // Sub-screens (pushed on top of the shells, keeping the back-stack)
   static const String shops = '/shops';
   static const String favorites = '/favorites';
   static const String history = '/history';
   static const String driverProfile = '/driver/profile';
-  static const String clientProfile = '/home/client/profile';
 
   // Helper: returns the home route for a given role string.
   static String homeForRole(String? role) {
@@ -44,15 +53,28 @@ class AppRoutes {
         return homeMerchant;
       case 'CLIENT':
       default:
-        return homeClient;
+        return clientHome;
     }
   }
 }
+
+// Keys nécessaires pour le shell (root) et chaque branche.
+final GlobalKey<NavigatorState> _rootNavKey =
+    GlobalKey<NavigatorState>(debugLabel: 'root');
+final GlobalKey<NavigatorState> _clientHomeNavKey =
+    GlobalKey<NavigatorState>(debugLabel: 'clientHome');
+final GlobalKey<NavigatorState> _clientOrdersNavKey =
+    GlobalKey<NavigatorState>(debugLabel: 'clientOrders');
+final GlobalKey<NavigatorState> _clientShopsNavKey =
+    GlobalKey<NavigatorState>(debugLabel: 'clientShops');
+final GlobalKey<NavigatorState> _clientProfileNavKey =
+    GlobalKey<NavigatorState>(debugLabel: 'clientProfile');
 
 // ---------------------------------------------------------------------------
 // Router instance (top-level, never re-created).
 // ---------------------------------------------------------------------------
 final GoRouter appRouter = GoRouter(
+  navigatorKey: _rootNavKey,
   initialLocation: AppRoutes.splash,
   redirect: _globalRedirect,
   routes: [
@@ -73,33 +95,71 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // -----------------------------------------------------------------------
-    // CLIENT home
+    // Redirect /home/client (sans branche) vers la branche home par défaut.
     // -----------------------------------------------------------------------
     GoRoute(
       path: AppRoutes.homeClient,
-      builder: (context, state) => const OrderScreen(),
-      routes: [
-        GoRoute(
-          path: 'shops',
-          builder: (context, state) => const ShopListScreen(),
+      redirect: (_, __) => AppRoutes.clientHome,
+    ),
+
+    // -----------------------------------------------------------------------
+    // CLIENT shell — bottom-nav 4 onglets (StatefulShellRoute).
+    // -----------------------------------------------------------------------
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, navigationShell) {
+        return ClientShellScreen(navigationShell: navigationShell);
+      },
+      branches: [
+        StatefulShellBranch(
+          navigatorKey: _clientHomeNavKey,
+          routes: [
+            GoRoute(
+              path: AppRoutes.clientHome,
+              builder: (context, state) => const HomeTab(),
+            ),
+          ],
         ),
-        GoRoute(
-          path: 'favorites',
-          builder: (context, state) => const FavoritesScreen(),
+        StatefulShellBranch(
+          navigatorKey: _clientOrdersNavKey,
+          routes: [
+            GoRoute(
+              path: AppRoutes.clientOrders,
+              builder: (context, state) => const OrdersTab(),
+              routes: [
+                GoRoute(
+                  path: ':orderId',
+                  parentNavigatorKey: _rootNavKey,
+                  builder: (context, state) => OrderTrackingScreen(
+                    orderId: state.pathParameters['orderId']!,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        GoRoute(
-          path: 'history',
-          builder: (context, state) => const OrderHistoryScreen(),
+        StatefulShellBranch(
+          navigatorKey: _clientShopsNavKey,
+          routes: [
+            GoRoute(
+              path: AppRoutes.clientShops,
+              builder: (context, state) => const ShopsTab(),
+            ),
+          ],
         ),
-        GoRoute(
-          path: 'profile',
-          builder: (context, state) => const ClientProfileScreen(),
+        StatefulShellBranch(
+          navigatorKey: _clientProfileNavKey,
+          routes: [
+            GoRoute(
+              path: AppRoutes.clientProfile,
+              builder: (context, state) => const ClientProfileScreen(),
+            ),
+          ],
         ),
       ],
     ),
 
     // -----------------------------------------------------------------------
-    // LIVREUR home
+    // LIVREUR home (refacto en bottom-nav viendra dans une session ult.)
     // -----------------------------------------------------------------------
     GoRoute(
       path: AppRoutes.homeDriver,
@@ -158,11 +218,6 @@ final GoRouter appRouter = GoRouter(
 
 // ---------------------------------------------------------------------------
 // Global redirect — runs before every navigation event.
-//
-// Strategy:
-//   • If the user has a valid token  → send them to the role-based home.
-//   • If the user has no token       → send them to /login.
-//   • If they are already on /login or /register → let them through.
 // ---------------------------------------------------------------------------
 Future<String?> _globalRedirect(
   BuildContext context,

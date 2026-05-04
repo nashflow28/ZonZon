@@ -9,6 +9,7 @@ import '../models/user.dart';
 import '../router/app_router.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/client_services.dart';
 import '../screens/order_history_screen.dart';
 import '../utils/platform_adapter.dart';
 
@@ -122,6 +123,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       isDestructive: true,
     );
     if (confirmed != true) return;
+    // Libère socket + store côté client avant le clear du token.
+    await ClientServices.reset();
     await _auth.logout();
     if (mounted) {
       context.go(AppRoutes.login);

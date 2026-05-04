@@ -10,8 +10,11 @@ import '../utils/platform_adapter.dart';
 /// Écran "Historique des courses" partagé client / livreur.
 ///
 /// Charge `GET /orders/mine` et applique les filtres côté client.
+/// [embedInTab] : quand `true`, supprime le Scaffold/AppBar propre (le shell
+/// parent fournit déjà une AppBar). À utiliser dans un IndexedStack.
 class OrderHistoryScreen extends StatefulWidget {
-  const OrderHistoryScreen({super.key});
+  final bool embedInTab;
+  const OrderHistoryScreen({super.key, this.embedInTab = false});
 
   @override
   State<OrderHistoryScreen> createState() => _OrderHistoryScreenState();
@@ -116,6 +119,24 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final body = _initialLoading
+        ? Center(child: adaptiveLoader())
+        : Column(
+            children: [
+              _buildFilterChips(),
+              Expanded(
+                child: RefreshIndicator(
+                  color: const Color(0xFF0EA5E9),
+                  backgroundColor: const Color(0xFF1E293B),
+                  onRefresh: _load,
+                  child: _buildBody(),
+                ),
+              ),
+            ],
+          );
+
+    if (widget.embedInTab) return body;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F172A),
       appBar: AppBar(
@@ -127,21 +148,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
-      body: _initialLoading
-          ? Center(child: adaptiveLoader())
-          : Column(
-              children: [
-                _buildFilterChips(),
-                Expanded(
-                  child: RefreshIndicator(
-                    color: const Color(0xFF0EA5E9),
-                    backgroundColor: const Color(0xFF1E293B),
-                    onRefresh: _load,
-                    child: _buildBody(),
-                  ),
-                ),
-              ],
-            ),
+      body: body,
     );
   }
 

@@ -2,12 +2,12 @@
 //
 // ⚠️ Limitations très importantes (cf. README.md du dossier) :
 //
-//  - `OrderScreen` appelle `Geolocator.getCurrentPosition` au build initial.
+//  - `HomeTab` appelle `Geolocator.getCurrentPosition` au build initial.
 //    En environnement de test, il n'y a aucun backend GPS — on mocke donc le
 //    plugin `flutter.baseflow.com/geolocator` pour qu'il retourne un statut
 //    "service indisponible" (le screen retombe alors sur un fallback UI sans
 //    crasher).
-//  - Toutes les requêtes HTTP réelles lancées par `OrderScreen` (estimation,
+//  - Toutes les requêtes HTTP réelles lancées par le tab (estimation,
 //    récupération de la commande active, etc.) NE SONT PAS mockées. Elles
 //    partiront vers `apiUrl` (par défaut `https://zonzon-backend.fly.dev`)
 //    et échoueront probablement dans l'environnement de test. Le test se
@@ -26,7 +26,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:mobile_app/order_screen.dart';
+import 'package:mobile_app/screens/client/home_tab.dart';
 
 /// Mock minimal du plugin `flutter_secure_storage` (idem autres tests).
 void _installSecureStorageMock() {
@@ -53,12 +53,8 @@ void _installSecureStorageMock() {
 }
 
 /// Mock minimal du plugin `geolocator` : on simule un service GPS désactivé,
-/// ce qui force `OrderScreen._initialPickupFromGps` à retomber sur le fallback
+/// ce qui force `HomeTab._initialPickupFromGps` à retomber sur le fallback
 /// (`isLocationLoading = false`, `_pickup = null`).
-///
-/// Le canal exact peut varier entre versions de `geolocator` (récents :
-/// `flutter.baseflow.com/geolocator_android`, anciens : `geolocator`).
-/// On installe un handler permissif sur les noms les plus probables.
 void _installGeolocatorMock() {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
@@ -109,9 +105,9 @@ void main() {
   });
   tearDown(_clearMocks);
 
-  group('OrderScreen — smoke test (CLIENT)', () {
+  group('HomeTab — smoke test (CLIENT)', () {
     testWidgets(
-        'pumpWidget(OrderScreen) construit l\'écran sans crasher (GPS '
+        'pumpWidget(HomeTab) construit l\'écran sans crasher (GPS '
         'simulé indisponible)', (tester) async {
       await tester.binding.setSurfaceSize(const Size(420, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -125,16 +121,15 @@ void main() {
       };
       addTearDown(() => FlutterError.onError = originalOnError);
 
-      await tester.pumpWidget(const MaterialApp(home: OrderScreen()));
+      await tester.pumpWidget(const MaterialApp(home: HomeTab()));
 
       // Pump quelques frames pour laisser le initState() tourner — sans
-      // pumpAndSettle (l'écran ouvre des subscriptions WebSocket qui ne
-      // settle jamais).
+      // pumpAndSettle (l'écran ouvre des subscriptions qui ne settle jamais).
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 200));
 
       // L'écran est bien monté.
-      expect(find.byType(OrderScreen), findsOneWidget);
+      expect(find.byType(HomeTab), findsOneWidget);
 
       // Les exceptions HTTP/socket asynchrones peuvent encore voler après
       // ce point ; le test ne garantit pas leur absence (cf. limitations).
@@ -144,7 +139,7 @@ void main() {
         exceptions,
         isEmpty,
         reason:
-            'OrderScreen ne doit pas crasher au build initial (GPS mocké).',
+            'HomeTab ne doit pas crasher au build initial (GPS mocké).',
       );
     });
   });

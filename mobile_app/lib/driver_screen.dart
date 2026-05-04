@@ -9,6 +9,7 @@ import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
 import 'screens/rating_screen.dart';
 import 'screens/driver_profile_screen.dart';
+import 'screens/order_history_screen.dart';
 import 'utils/platform_adapter.dart';
 
 class DriverScreen extends StatefulWidget {
@@ -583,6 +584,19 @@ class _DriverScreenState extends State<DriverScreen> {
     super.dispose();
   }
 
+  String _currentTabTitle() {
+    switch (_currentTab) {
+      case 0:
+        return 'Radar Livreur';
+      case 1:
+        return 'Mes courses';
+      case 2:
+        return 'Mon Profil';
+      default:
+        return 'Livreur';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ScaffoldMessenger(
@@ -593,23 +607,46 @@ class _DriverScreenState extends State<DriverScreen> {
         backgroundColor: const Color(0xFF0F172A),
         appBar: AppBar(
           title: Text(
-            _currentTab == 0 ? 'Radar Livreur' : 'Mon Profil',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            _currentTabTitle(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           backgroundColor: const Color(0xFF1E293B),
           iconTheme: const IconThemeData(color: Colors.white),
           automaticallyImplyLeading: false,
         ),
-        body: _currentTab == 0 ? _buildRadar() : const DriverProfileScreen(),
+        body: IndexedStack(
+          index: _currentTab,
+          children: [
+            _buildRadar(),
+            const OrderHistoryScreen(embedInTab: true),
+            const DriverProfileScreen(),
+          ],
+        ),
         bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
           currentIndex: _currentTab,
           onTap: (i) => setState(() => _currentTab = i),
           backgroundColor: const Color(0xFF1E293B),
           selectedItemColor: const Color(0xFF10B981),
           unselectedItemColor: Colors.white60,
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'Radar'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.radar),
+              label: 'Radar',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.receipt_long_outlined),
+              activeIcon: Icon(Icons.receipt_long),
+              label: 'Mes courses',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              activeIcon: Icon(Icons.person),
+              label: 'Profil',
+            ),
           ],
         ),
       ),
