@@ -1,4 +1,5 @@
 import {
+  IsInt,
   IsLatitude,
   IsLongitude,
   IsOptional,
@@ -6,6 +7,7 @@ import {
   IsUUID,
   Matches,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 export class CreateMerchantOrderDto {
@@ -52,4 +54,14 @@ export class CreateMerchantOrderDto {
   @IsString()
   @MaxLength(120)
   clientName?: string;
+
+  /**
+   * Ajustement manuel du prix par le commerçant à la création.
+   * Si fourni, remplace le calcul automatique (distance × tarif/km) tout
+   * en conservant le calcul de `distanceKm` (utile pour stats/ETA).
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  priceFcfa?: number;
 }

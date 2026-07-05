@@ -22,6 +22,8 @@ import { Rating } from './entities/rating.entity';
 import { AdminAuditLog } from './entities/admin-audit-log.entity';
 import { DriverPosition } from './entities/driver-position.entity';
 import { DeviceToken } from './entities/device-token.entity';
+import { PricingConfig } from './entities/pricing-config.entity';
+import { Zone } from './entities/zone.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -33,6 +35,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ShopsModule } from './shops/shops.module';
 import { RatingsModule } from './ratings/ratings.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
+import { PricingModule } from './pricing/pricing.module';
+import { ZonesModule } from './zones/zones.module';
 
 @Module({
   imports: [
@@ -91,6 +95,8 @@ import { AuditLogModule } from './audit-log/audit-log.module';
         AdminAuditLog,
         DriverPosition,
         DeviceToken,
+        PricingConfig,
+        Zone,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',
@@ -111,6 +117,8 @@ import { AuditLogModule } from './audit-log/audit-log.module';
     ShopsModule,
     RatingsModule,
     AuditLogModule,
+    PricingModule,
+    ZonesModule,
   ],
   controllers: [AppController],
   providers: [

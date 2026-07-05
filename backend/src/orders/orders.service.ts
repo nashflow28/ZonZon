@@ -30,6 +30,7 @@ import { ListOrdersDto } from './dto/list-orders.dto';
 import { DriverApprovalStatus, UserRole } from '../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { haversineKm } from '../common/geo';
+import { PricingService } from '../pricing/pricing.service';
 
 type RouteCacheEntry = { km: number; at: number };
 type RouteWithGeometry = { km: number; geometry: number[][] };
@@ -46,7 +47,12 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
-  private readonly PRICE_PER_KM = 150;
+  /**
+   * Fallback si la config DB (`PricingService`) est indisponible.
+   * La source de vérité reste `pricing_config.pricePerKm` (200 FCFA/km par
+   * défaut, modifiable par l'admin via `PATCH /admin/pricing`).
+   */
+  private readonly PRICE_PER_KM = 200;
   private readonly orsBase =
     'https://api.openrouteservice.org/v2/directions/driving-car';
   private readonly orsApiKey = process.env.ORS_API_KEY;
@@ -62,7 +68,20 @@ export class OrdersService {
     private ordersGateway: OrdersGateway,
     private notifications: NotificationsService,
     private positionsService: PositionsService,
+    private pricing: PricingService,
   ) {}
+
+  /** Tarif au km courant, avec fallback sur la constante si la config DB échoue. */
+  private async getPricePerKm(): Promise<number> {
+    try {
+      return await this.pricing.getPricePerKm();
+    } catch (err) {
+      this.logger.warn(
+        `PricingService indisponible, fallback PRICE_PER_KM=${this.PRICE_PER_KM}: ${(err as Error).message}`,
+      );
+      return this.PRICE_PER_KM;
+    }
+  }
 
   private cacheKey(lat1: number, lng1: number, lat2: number, lng2: number) {
     return [lat1, lng1, lat2, lng2].map((v) => v.toFixed(4)).join(',');
@@ -164,9 +183,17 @@ export class OrdersService {
     );
     let km = route.km;
     if (km < 0.5) km = 0.5;
+    const pricePerKm = await this.getPricePerKm();
+    const minPriceFcfa = await this.pricing
+      .getMinPriceFcfa()
+      .catch(() => null);
+    let priceFcfa = Math.round(km * pricePerKm);
+    if (minPriceFcfa != null) {
+      priceFcfa = Math.max(priceFcfa, minPriceFcfa);
+    }
     return {
       distanceKm: parseFloat(km.toFixed(2)),
-      priceFcfa: Math.round(km * this.PRICE_PER_KM),
+      priceFcfa,
       polyline: route.geometry,
     };
   }
@@ -277,11 +304,18 @@ export class OrdersService {
 
     if (distanceKm < 0.5) distanceKm = 0.5;
 
-    const price = distanceKm * this.PRICE_PER_KM;
+    const pricePerKm = await this.getPricePerKm();
+    const minPriceFcfa = await this.pricing
+      .getMinPriceFcfa()
+      .catch(() => null);
+    let priceFcfa = Math.round(distanceKm * pricePerKm);
+    if (minPriceFcfa != null) {
+      priceFcfa = Math.max(priceFcfa, minPriceFcfa);
+    }
 
     return {
       distanceKm: parseFloat(distanceKm.toFixed(2)),
-      priceFcfa: Math.round(price),
+      priceFcfa,
     };
   }
 
@@ -367,7 +401,13 @@ export class OrdersService {
       );
     }
 
-    const { distanceKm, priceFcfa } = await this.buildOrderPricing(dto);
+    // Le commerçant peut ajuster manuellement le prix à la création. On
+    // calcule quand même `distanceKm` (utile pour les stats/ETA), mais le
+    // prix final est celui fourni par le commerçant s'il est présent.
+    const computed = await this.buildOrderPricing(dto);
+    const distanceKm = computed.distanceKm;
+    const priceFcfa =
+      dto.priceFcfa !== undefined ? dto.priceFcfa : computed.priceFcfa;
 
     const order = this.ordersRepository.create({
       merchant,

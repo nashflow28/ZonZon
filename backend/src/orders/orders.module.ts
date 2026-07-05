@@ -9,12 +9,14 @@ import { DeliveryOrder } from '../entities/delivery-order.entity';
 import { DriverPosition } from '../entities/driver-position.entity';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PricingModule } from '../pricing/pricing.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([DeliveryOrder, DriverPosition]),
     UsersModule,
     NotificationsModule,
+    PricingModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '7d' },

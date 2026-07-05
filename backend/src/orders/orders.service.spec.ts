@@ -13,6 +13,7 @@ import { OrdersGateway } from './orders.gateway';
 import { PositionsService } from './positions.service';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PricingService } from '../pricing/pricing.service';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
 import { UserRole } from '../entities/user.entity';
 
@@ -93,6 +94,12 @@ describe('OrdersService', () => {
     findRecentLivreurPositions: jest.Mock;
     findLatestForLivreur: jest.Mock;
   };
+  let pricingService: {
+    getPricePerKm: jest.Mock;
+    getMinPriceFcfa: jest.Mock;
+    getConfig: jest.Mock;
+    updateConfig: jest.Mock;
+  };
   let originalOrsKey: string | undefined;
 
   beforeAll(() => {
@@ -138,6 +145,12 @@ describe('OrdersService', () => {
       findRecentLivreurPositions: jest.fn().mockResolvedValue([]),
       findLatestForLivreur: jest.fn().mockResolvedValue(null),
     };
+    pricingService = {
+      getPricePerKm: jest.fn().mockResolvedValue(200),
+      getMinPriceFcfa: jest.fn().mockResolvedValue(null),
+      getConfig: jest.fn(),
+      updateConfig: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -150,6 +163,7 @@ describe('OrdersService', () => {
         { provide: OrdersGateway, useValue: gateway },
         { provide: NotificationsService, useValue: notifications },
         { provide: PositionsService, useValue: positionsService },
+        { provide: PricingService, useValue: pricingService },
       ],
     }).compile();
 
@@ -171,7 +185,7 @@ describe('OrdersService', () => {
       description: 'colis',
     };
 
-    it('calcule un prix = distance × 150 arrondi, sauvegarde et broadcast', async () => {
+    it('calcule un prix = distance × pricePerKm (200) arrondi, sauvegarde et broadcast', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
       mockedAxios.get.mockResolvedValue({
         data: {
@@ -185,10 +199,10 @@ describe('OrdersService', () => {
 
       const result = await service.createOrder(clientUser.id, dto);
 
-      // distance 3km → price = 3 * 150 = 450
+      // distance 3km → price = 3 * 200 = 600
       expect(ordersRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          priceFcfa: 450,
+          priceFcfa: 600,
           distanceKm: 3,
           status: OrderStatus.PENDING,
         }),
@@ -243,7 +257,7 @@ describe('OrdersService', () => {
       expect(ordersRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           distanceKm: 0.5,
-          priceFcfa: 75, // 0.5 * 150
+          priceFcfa: 100, // 0.5 * 200
         }),
       );
     });
@@ -429,10 +443,12 @@ describe('OrdersService', () => {
       // Haversine × 1.3 for 1° lat at equator ≈ 144 km — check it's in a sane range
       expect(createdArg.distanceKm).toBeGreaterThan(140);
       expect(createdArg.distanceKm).toBeLessThan(150);
-      // price = distance * 150 rounded
-      expect(createdArg.priceFcfa).toBe(
-        Math.round(createdArg.distanceKm * 150),
-      );
+      // price = distance brute (non arrondie) * 200, rounded. On tolère un
+      // écart de ±1 FCFA vs. le calcul sur `distanceKm` déjà arrondi à 2
+      // décimales (le prix réel est calculé avant cet arrondi).
+      expect(
+        Math.abs(createdArg.priceFcfa - createdArg.distanceKm * 200),
+      ).toBeLessThanOrEqual(1);
     });
   });
 
@@ -939,6 +955,26 @@ describe('OrdersService', () => {
       await expect(
         service.createMerchantOrder(merchantUser.id, badDto as any),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('utilise le priceFcfa manuel du commerçant si fourni (override du calcul automatique)', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(null);
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+        priceFcfa: 999,
+      } as any);
+
+      // distance 3km calculée normalement (mock axios: 3000m), mais le prix
+      // final doit être celui fourni par le commerçant, pas 3 * 200 = 600.
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          distanceKm: 3,
+          priceFcfa: 999,
+        }),
+      );
     });
   });
 
