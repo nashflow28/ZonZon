@@ -333,8 +333,11 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (livreurId)
       this.server.to(`user:${livreurId}`).emit('orderStatusUpdated', payload);
 
-    // Cleanup du mapping quand la course se termine
-    if (livreurId && (status === 'COMPLETED' || status === 'CANCELLED')) {
+    // Cleanup du mapping quand la course se termine (statuts terminaux)
+    if (
+      livreurId &&
+      (status === 'COMPLETED' || status === 'CANCELLED' || status === 'FAILED')
+    ) {
       this.activeOrders.delete(livreurId);
     }
   }

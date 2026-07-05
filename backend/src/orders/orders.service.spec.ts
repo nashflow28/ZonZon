@@ -14,7 +14,11 @@ import { PositionsService } from './positions.service';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PricingService } from '../pricing/pricing.service';
-import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
+import {
+  DeliveryOrder,
+  OrderStatus,
+  PaymentStatus,
+} from '../entities/delivery-order.entity';
 import { UserRole } from '../entities/user.entity';
 
 jest.mock('axios');
@@ -711,6 +715,132 @@ describe('OrdersService', () => {
       expect(result.status).toBe(OrderStatus.IN_PROGRESS);
     });
 
+    // ── Nouveaux statuts granulaires (Priorité 3, Lot 2) ──────────────────
+
+    it('permet ACCEPTED → EN_ROUTE_PICKUP par le livreur', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.EN_ROUTE_PICKUP,
+        livreurUser,
+      );
+      expect(result.status).toBe(OrderStatus.EN_ROUTE_PICKUP);
+      expect(gateway.broadcastStatusUpdate).toHaveBeenCalled();
+    });
+
+    it('permet ACCEPTED → AT_PICKUP par le livreur', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.AT_PICKUP,
+        livreurUser,
+      );
+      expect(result.status).toBe(OrderStatus.AT_PICKUP);
+    });
+
+    it('permet EN_ROUTE_PICKUP → IN_PROGRESS par le livreur (chemin alternatif toujours valide)', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.EN_ROUTE_PICKUP),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.IN_PROGRESS,
+        livreurUser,
+      );
+      expect(result.status).toBe(OrderStatus.IN_PROGRESS);
+    });
+
+    it('permet IN_PROGRESS → NEAR_CLIENT par le livreur', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.IN_PROGRESS),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.NEAR_CLIENT,
+        livreurUser,
+      );
+      expect(result.status).toBe(OrderStatus.NEAR_CLIENT);
+    });
+
+    it('permet NEAR_CLIENT → COMPLETED par le livreur', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.NEAR_CLIENT),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.COMPLETED,
+        livreurUser,
+      );
+      expect(result.status).toBe(OrderStatus.COMPLETED);
+    });
+
+    it('permet ACCEPTED → FAILED par le livreur (statut terminal)', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.FAILED,
+        livreurUser,
+      );
+      expect(result.status).toBe(OrderStatus.FAILED);
+    });
+
+    it('permet IN_PROGRESS → FAILED par un admin', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.IN_PROGRESS),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      const result = await service.updateStatus(
+        'o',
+        OrderStatus.FAILED,
+        adminUser,
+      );
+      expect(result.status).toBe(OrderStatus.FAILED);
+    });
+
+    it('interdit une transition FAILED → * (statut terminal)', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.FAILED),
+      );
+      await expect(
+        service.updateStatus('o', OrderStatus.COMPLETED, adminUser),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it.each([
+      OrderStatus.EN_ROUTE_PICKUP,
+      OrderStatus.AT_PICKUP,
+      OrderStatus.NEAR_CLIENT,
+      OrderStatus.FAILED,
+    ])(
+      'refuse qu’un CLIENT déclenche le statut d’avancement %s',
+      async (status) => {
+        // On place l'order dans un état d'où la transition serait
+        // structurellement autorisée (peu importe lequel, le refus doit
+        // venir du contrôle d'acteur, pas de la transition elle-même).
+        const fromStatus =
+          status === OrderStatus.IN_PROGRESS ||
+          status === OrderStatus.NEAR_CLIENT
+            ? OrderStatus.IN_PROGRESS
+            : OrderStatus.ACCEPTED;
+        ordersRepository.findOne.mockResolvedValue(buildOrder(fromStatus));
+        await expect(
+          service.updateStatus('o', status, clientUser),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      },
+    );
+
     it('throw NotFoundException si la commande est introuvable', async () => {
       ordersRepository.findOne.mockResolvedValue(null);
       await expect(
@@ -1129,6 +1259,92 @@ describe('OrdersService', () => {
 
       const result = await service.computeEta('ord-eta', adminUser);
       expect(result.basedOn).toBe('driver_position');
+    });
+  });
+
+  describe('updatePaymentStatus', () => {
+    const buildPaymentOrder = () => ({
+      id: 'o',
+      status: OrderStatus.ACCEPTED,
+      paymentStatus: PaymentStatus.UNPAID,
+      client: { id: clientUser.id },
+      livreur: { id: livreurUser.id },
+      merchant: { id: merchantUser.id },
+    });
+
+    it('autorisé pour le CLIENT de la course', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      const result = await service.updatePaymentStatus(
+        'o',
+        PaymentStatus.PAID,
+        clientUser,
+      );
+
+      expect(result.paymentStatus).toBe(PaymentStatus.PAID);
+    });
+
+    it('autorisé pour le LIVREUR assigné', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      const result = await service.updatePaymentStatus(
+        'o',
+        PaymentStatus.RECEIVED_BY_LIVREUR,
+        livreurUser,
+      );
+
+      expect(result.paymentStatus).toBe(PaymentStatus.RECEIVED_BY_LIVREUR);
+    });
+
+    it('autorisé pour le COMMERCANT créateur (merchant)', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      const result = await service.updatePaymentStatus(
+        'o',
+        PaymentStatus.RECEIVED_BY_MERCHANT,
+        merchantUser,
+      );
+
+      expect(result.paymentStatus).toBe(PaymentStatus.RECEIVED_BY_MERCHANT);
+    });
+
+    it('autorisé pour un ADMIN', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      const result = await service.updatePaymentStatus(
+        'o',
+        PaymentStatus.PAY_ON_DELIVERY,
+        adminUser,
+      );
+
+      expect(result.paymentStatus).toBe(PaymentStatus.PAY_ON_DELIVERY);
+    });
+
+    it('refuse un tiers non lié à la course', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      const stranger = {
+        id: 'stranger-1',
+        role: UserRole.CLIENT,
+        firstName: 'X',
+        lastName: 'Y',
+        phone: '+22890000099',
+      };
+
+      await expect(
+        service.updatePaymentStatus('o', PaymentStatus.PAID, stranger),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(ordersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('throw NotFoundException si la commande est introuvable', async () => {
+      ordersRepository.findOne.mockResolvedValue(null);
+      await expect(
+        service.updatePaymentStatus('missing', PaymentStatus.PAID, adminUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

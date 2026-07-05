@@ -19,7 +19,11 @@ import {
   Repository,
 } from 'typeorm';
 import axios from 'axios';
-import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
+import {
+  DeliveryOrder,
+  OrderStatus,
+  PaymentStatus,
+} from '../entities/delivery-order.entity';
 import { UsersService } from '../users/users.service';
 import { OrdersGateway } from './orders.gateway';
 import { PositionsService } from './positions.service';
@@ -36,13 +40,61 @@ type RouteCacheEntry = { km: number; at: number };
 type RouteWithGeometry = { km: number; geometry: number[][] };
 type RouteCacheGeomEntry = { route: RouteWithGeometry; at: number };
 
+/**
+ * Machine à états des livraisons — Priorité 3 (Lot 2) : ajout de statuts
+ * granulaires (EN_ROUTE_PICKUP, AT_PICKUP, NEAR_CLIENT, FAILED) SANS retirer
+ * ni changer la sémantique des 5 statuts historiques. Les transitions
+ * ACCEPTED→IN_PROGRESS et IN_PROGRESS→COMPLETED (utilisées par le
+ * géofencing mobile) restent valides pour la rétro-compatibilité.
+ */
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]: [OrderStatus.ACCEPTED, OrderStatus.CANCELLED],
-  [OrderStatus.ACCEPTED]: [OrderStatus.IN_PROGRESS, OrderStatus.CANCELLED],
-  [OrderStatus.IN_PROGRESS]: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+  [OrderStatus.ACCEPTED]: [
+    OrderStatus.EN_ROUTE_PICKUP,
+    OrderStatus.AT_PICKUP,
+    OrderStatus.IN_PROGRESS,
+    OrderStatus.CANCELLED,
+    OrderStatus.FAILED,
+  ],
+  [OrderStatus.EN_ROUTE_PICKUP]: [
+    OrderStatus.AT_PICKUP,
+    OrderStatus.IN_PROGRESS,
+    OrderStatus.CANCELLED,
+    OrderStatus.FAILED,
+  ],
+  [OrderStatus.AT_PICKUP]: [
+    OrderStatus.IN_PROGRESS,
+    OrderStatus.CANCELLED,
+    OrderStatus.FAILED,
+  ],
+  [OrderStatus.IN_PROGRESS]: [
+    OrderStatus.NEAR_CLIENT,
+    OrderStatus.COMPLETED,
+    OrderStatus.CANCELLED,
+    OrderStatus.FAILED,
+  ],
+  [OrderStatus.NEAR_CLIENT]: [
+    OrderStatus.COMPLETED,
+    OrderStatus.CANCELLED,
+    OrderStatus.FAILED,
+  ],
   [OrderStatus.COMPLETED]: [],
   [OrderStatus.CANCELLED]: [],
+  [OrderStatus.FAILED]: [],
 };
+
+/**
+ * Statuts d'avancement de la course que seul le livreur (ou un admin) peut
+ * déclencher — le client ne garde que la capacité d'annuler (CANCELLED).
+ */
+const LIVREUR_ONLY_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.EN_ROUTE_PICKUP,
+  OrderStatus.AT_PICKUP,
+  OrderStatus.IN_PROGRESS,
+  OrderStatus.NEAR_CLIENT,
+  OrderStatus.COMPLETED,
+  OrderStatus.FAILED,
+]);
 
 @Injectable()
 export class OrdersService {
@@ -750,10 +802,7 @@ export class OrdersService {
       );
     }
 
-    if (
-      status === OrderStatus.IN_PROGRESS ||
-      status === OrderStatus.COMPLETED
-    ) {
+    if (LIVREUR_ONLY_STATUSES.has(status)) {
       if (!isLivreur && !isAdmin) {
         throw new ForbiddenException(
           'Seul le livreur peut faire avancer la course',
@@ -794,9 +843,21 @@ export class OrdersService {
     if (clientId && !this.ordersGateway.isUserConnected(clientId)) {
       const map: Partial<Record<OrderStatus, { title: string; body: string }>> =
         {
+          [OrderStatus.EN_ROUTE_PICKUP]: {
+            title: 'Coursier en route',
+            body: 'Votre coursier est en route vers le point de retrait',
+          },
+          [OrderStatus.AT_PICKUP]: {
+            title: 'Coursier arrivé',
+            body: 'Votre coursier est arrivé au point de retrait',
+          },
           [OrderStatus.IN_PROGRESS]: {
             title: 'Livraison en cours',
             body: 'Votre coursier a récupéré le colis',
+          },
+          [OrderStatus.NEAR_CLIENT]: {
+            title: 'Coursier proche',
+            body: 'Votre coursier est proche, préparez-vous',
           },
           [OrderStatus.COMPLETED]: {
             title: 'Course terminée',
@@ -805,6 +866,10 @@ export class OrdersService {
           [OrderStatus.CANCELLED]: {
             title: 'Course annulée',
             body: 'La course a été annulée',
+          },
+          [OrderStatus.FAILED]: {
+            title: 'Livraison échouée',
+            body: 'La livraison a échoué',
           },
         };
       const payload = map[status];
@@ -958,5 +1023,40 @@ export class OrdersService {
       etaMinutes,
       basedOn,
     };
+  }
+
+  /**
+   * Met à jour le statut de paiement d'une course (Priorité 3, Lot 2).
+   * Indépendant de la machine à états `status` (peut évoluer à tout moment,
+   * ex. le commerçant marque la livraison payée avant même son acceptation).
+   *
+   * Autorisé pour : le client de la course, le livreur assigné, le
+   * commerçant créateur (Type 1), ou un admin. Tout autre acteur → 403.
+   */
+  async updatePaymentStatus(
+    orderId: string,
+    paymentStatus: PaymentStatus,
+    actor: any,
+  ): Promise<DeliveryOrder> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client', 'livreur', 'merchant'],
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+
+    const actorId = actor.id ?? actor.sub;
+    const isClient = order.client?.id === actorId;
+    const isLivreur = order.livreur?.id === actorId;
+    const isMerchant = order.merchant?.id === actorId;
+    const isAdmin = actor.role === UserRole.ADMIN;
+
+    if (!isClient && !isLivreur && !isMerchant && !isAdmin) {
+      throw new ForbiddenException(
+        'Vous ne pouvez pas modifier le statut de paiement de cette course',
+      );
+    }
+
+    order.paymentStatus = paymentStatus;
+    return this.ordersRepository.save(order);
   }
 }

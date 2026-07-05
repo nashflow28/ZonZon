@@ -14,6 +14,7 @@ import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateMerchantOrderDto } from './dto/create-merchant-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
+import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 import { EstimateOrderDto } from './dto/estimate-order.dto';
 import { ListOrdersDto } from './dto/list-orders.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -91,5 +92,14 @@ export class OrdersController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.ordersService.updateStatus(id, dto.status, user, dto);
+  }
+
+  @Patch(':id/payment-status')
+  updatePayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePaymentStatusDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.updatePaymentStatus(id, dto.paymentStatus, user);
   }
 }

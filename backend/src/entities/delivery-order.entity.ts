@@ -12,9 +12,29 @@ import { User } from './user.entity';
 export enum OrderStatus {
   PENDING = 'PENDING',
   ACCEPTED = 'ACCEPTED',
+  /** Livreur en route vers le point de retrait (nouveau — granularité cahier des charges). */
+  EN_ROUTE_PICKUP = 'EN_ROUTE_PICKUP',
+  /** Livreur arrivé au point de retrait (nouveau). */
+  AT_PICKUP = 'AT_PICKUP',
+  // IN_PROGRESS conserve sa sémantique historique : « colis récupéré / en
+  // route vers le client ». Ne pas créer de statut « colis récupéré »
+  // séparé pour ne pas casser le géofencing mobile actuel
+  // (ACCEPTED → IN_PROGRESS → COMPLETED).
   IN_PROGRESS = 'IN_PROGRESS',
+  /** Livreur proche du client, en phase finale de livraison (nouveau). */
+  NEAR_CLIENT = 'NEAR_CLIENT',
   COMPLETED = 'COMPLETED',
   CANCELLED = 'CANCELLED',
+  /** Livraison échouée (terminal, nouveau). */
+  FAILED = 'FAILED',
+}
+
+export enum PaymentStatus {
+  UNPAID = 'UNPAID',
+  PAID = 'PAID',
+  PAY_ON_DELIVERY = 'PAY_ON_DELIVERY',
+  RECEIVED_BY_MERCHANT = 'RECEIVED_BY_MERCHANT',
+  RECEIVED_BY_LIVREUR = 'RECEIVED_BY_LIVREUR',
 }
 
 @Entity('delivery_orders')
@@ -79,6 +99,13 @@ export class DeliveryOrder {
 
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING })
   status: OrderStatus;
+
+  @Column({
+    type: 'enum',
+    enum: PaymentStatus,
+    default: PaymentStatus.UNPAID,
+  })
+  paymentStatus: PaymentStatus;
 
   @Column({ type: 'text', nullable: true })
   cancellationReason: string | null;

@@ -307,6 +307,59 @@ describe('OrdersGateway', () => {
     });
   });
 
+  describe('broadcastStatusUpdate', () => {
+    it('émet orderStatusUpdated au client et au livreur', () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+
+      gateway.broadcastStatusUpdate(
+        'ord-1',
+        'EN_ROUTE_PICKUP',
+        'client-1',
+        'driver-1',
+      );
+
+      const emits = emitCalls.filter((c) => c.event === 'orderStatusUpdated');
+      expect(emits).toHaveLength(2);
+      const rooms = emits.map((e) => e.room).sort();
+      expect(rooms).toEqual(['user:client-1', 'user:driver-1']);
+      expect(emits[0].payload).toEqual({
+        orderId: 'ord-1',
+        status: 'EN_ROUTE_PICKUP',
+      });
+    });
+
+    it.each(['COMPLETED', 'CANCELLED', 'FAILED'])(
+      'nettoie le mapping activeOrders du livreur pour le statut terminal %s',
+      (status) => {
+        const { server } = buildMockServer([]);
+        gateway.server = server;
+        const activeOrders: Map<string, any> = (gateway as any).activeOrders;
+        activeOrders.set('driver-1', { orderId: 'ord-1', clientId: 'client-1' });
+
+        gateway.broadcastStatusUpdate('ord-1', status, 'client-1', 'driver-1');
+
+        expect(activeOrders.has('driver-1')).toBe(false);
+      },
+    );
+
+    it('ne nettoie PAS le mapping pour un statut non terminal (EN_ROUTE_PICKUP)', () => {
+      const { server } = buildMockServer([]);
+      gateway.server = server;
+      const activeOrders: Map<string, any> = (gateway as any).activeOrders;
+      activeOrders.set('driver-1', { orderId: 'ord-1', clientId: 'client-1' });
+
+      gateway.broadcastStatusUpdate(
+        'ord-1',
+        'EN_ROUTE_PICKUP',
+        'client-1',
+        'driver-1',
+      );
+
+      expect(activeOrders.has('driver-1')).toBe(true);
+    });
+  });
+
   describe('handleChatJoin', () => {
     function buildClientMock(user: { sub: string; role?: string } | null) {
       const joinedRooms: string[] = [];
