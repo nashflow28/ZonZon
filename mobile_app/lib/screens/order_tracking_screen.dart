@@ -15,6 +15,7 @@ import '../services/estimate_service.dart';
 import '../services/eta_service.dart';
 import '../services/whatsapp_service.dart';
 import '../utils/geo_utils.dart';
+import '../utils/order_status_utils.dart';
 import '../utils/platform_adapter.dart';
 import '../widgets/order_map_widget.dart';
 import '../widgets/order_screen_widgets.dart';
@@ -575,7 +576,7 @@ class _TrackingHeader extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  _statusLabel(status),
+                  OrderStatusUtils.longLabel(status),
                   style: const TextStyle(
                     color: Color(0xFF0EA5E9),
                     fontSize: 11,
@@ -588,22 +589,5 @@ class _TrackingHeader extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  static String _statusLabel(String? status) {
-    switch (status) {
-      case 'PENDING':
-        return 'En attente d’un livreur';
-      case 'ACCEPTED':
-        return 'Livreur en route vers le pickup';
-      case 'IN_PROGRESS':
-        return 'En cours de livraison';
-      case 'COMPLETED':
-        return 'Terminée';
-      case 'CANCELLED':
-        return 'Annulée';
-      default:
-        return 'Suivi de la course';
-    }
   }
 }

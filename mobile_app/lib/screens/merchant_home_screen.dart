@@ -8,6 +8,7 @@ import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../services/shops_service.dart';
 import 'merchant/create_delivery_screen.dart';
+import 'merchant/merchant_drivers_screen.dart';
 import 'merchant/merchant_orders_screen.dart';
 import 'merchant_shop_form_screen.dart';
 import 'merchant_product_form_screen.dart';
@@ -74,6 +75,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     await pushAdaptive<void>(context, const MerchantOrdersScreen());
   }
 
+  Future<void> _openMerchantDrivers() async {
+    await pushAdaptive<void>(context, const MerchantDriversScreen());
+  }
+
   Future<void> _pickShopLogo() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -135,6 +140,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                     _DeliveriesQuickActions(
                       onCreate: _openCreateDelivery,
                       onViewOrders: _openMerchantOrders,
+                      onViewDrivers: _openMerchantDrivers,
                     ),
                     const SizedBox(height: 24),
                     _OnboardingState(onCreate: _openShopForm),
@@ -149,6 +155,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                       _DeliveriesQuickActions(
                         onCreate: _openCreateDelivery,
                         onViewOrders: _openMerchantOrders,
+                        onViewDrivers: _openMerchantDrivers,
                       ),
                       const SizedBox(height: 24),
                       _ShopHeaderCard(
@@ -278,9 +285,11 @@ class _OnboardingState extends StatelessWidget {
 class _DeliveriesQuickActions extends StatelessWidget {
   final VoidCallback onCreate;
   final VoidCallback onViewOrders;
+  final VoidCallback onViewDrivers;
   const _DeliveriesQuickActions({
     required this.onCreate,
     required this.onViewOrders,
+    required this.onViewDrivers,
   });
 
   @override
@@ -344,6 +353,24 @@ class _DeliveriesQuickActions extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onViewDrivers,
+              icon: const Icon(Icons.two_wheeler, size: 18, color: Color(0xFFFBBF24)),
+              label: const Text(
+                'Mes livreurs',
+                style: TextStyle(color: Color(0xFFFBBF24)),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFFBBF24)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
           ),
         ],
       ),

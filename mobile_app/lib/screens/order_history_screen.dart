@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/order_history_item.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../utils/order_status_utils.dart';
 import '../utils/platform_adapter.dart';
 
 /// Écran "Historique des courses" partagé client / livreur.
@@ -322,26 +323,19 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
 }
 
 /// Couleurs + libellés associés à chaque statut, pour la pill et l'affichage.
+///
+/// Délègue à [OrderStatusUtils] (mapping centralisé partagé avec l'écran de
+/// suivi et le dialog livreur) pour éviter toute divergence de libellés.
 class _StatusVisual {
   final String label;
   final Color color;
   const _StatusVisual(this.label, this.color);
 
   static _StatusVisual of(String status) {
-    switch (status) {
-      case 'PENDING':
-        return const _StatusVisual('En attente', Color(0xFFEAB308));
-      case 'ACCEPTED':
-        return const _StatusVisual('Acceptée', Color(0xFF3B82F6));
-      case 'IN_PROGRESS':
-        return const _StatusVisual('En cours', Color(0xFFA855F7));
-      case 'COMPLETED':
-        return const _StatusVisual('Terminée', Color(0xFF10B981));
-      case 'CANCELLED':
-        return const _StatusVisual('Annulée', Color(0xFFEF4444));
-      default:
-        return _StatusVisual(status, Colors.white54);
-    }
+    return _StatusVisual(
+      OrderStatusUtils.label(status),
+      OrderStatusUtils.color(status),
+    );
   }
 }
 
@@ -419,6 +413,11 @@ class _OrderHistoryCard extends StatelessWidget {
                 Row(
                   children: [
                     _StatusPill(visual: visual),
+                    if (viewerRole == 'LIVREUR' &&
+                        (item.paymentStatus ?? '').isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      _PaymentPill(status: item.paymentStatus!),
+                    ],
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -496,6 +495,36 @@ class _StatusPill extends StatelessWidget {
         visual.label,
         style: TextStyle(
           color: visual.color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+}
+
+/// Badge de statut de paiement — affiché côté livreur (carte + détails)
+/// pour distinguer d'un coup d'œil les courses déjà réglées de celles à
+/// encaisser à la livraison.
+class _PaymentPill extends StatelessWidget {
+  final String status;
+  const _PaymentPill({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = PaymentStatusUtils.color(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        PaymentStatusUtils.label(status),
+        style: TextStyle(
+          color: color,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.5,
@@ -650,12 +679,23 @@ class _OrderDetailsSheet extends StatelessWidget {
               const SizedBox(height: 12),
               _detailBlock(
                 'Tarification',
-                _kv([
-                  if (item.distanceKm != null)
-                    ('Distance', '${item.distanceKm!.toStringAsFixed(1)} km'),
-                  if (item.priceFcfa != null)
-                    ('Prix', _formatPrice(item.priceFcfa)),
-                ]),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _kv([
+                      if (item.distanceKm != null)
+                        ('Distance',
+                            '${item.distanceKm!.toStringAsFixed(1)} km'),
+                      if (item.priceFcfa != null)
+                        ('Prix', _formatPrice(item.priceFcfa)),
+                    ]),
+                    if (viewerRole == 'LIVREUR' &&
+                        (item.paymentStatus ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _PaymentPill(status: item.paymentStatus!),
+                    ],
+                  ],
+                ),
               ),
               if ((item.description ?? '').trim().isNotEmpty) ...[
                 const SizedBox(height: 12),

@@ -166,10 +166,55 @@ export class ArchivesComponent implements OnInit, OnDestroy {
     switch (status) {
       case 'COMPLETED': return 'bg-green-500/20 text-green-400 border-green-500/50';
       case 'CANCELLED': return 'bg-red-500/20 text-red-400 border-red-500/50';
+      case 'FAILED': return 'bg-red-500/20 text-red-400 border-red-500/50';
       case 'PENDING': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50';
       case 'ACCEPTED': return 'bg-blue-500/20 text-blue-300 border-blue-500/50';
       case 'IN_PROGRESS': return 'bg-purple-500/20 text-purple-300 border-purple-500/50';
+      case 'EN_ROUTE_PICKUP': return 'bg-sky-500/20 text-sky-300 border-sky-500/50';
+      case 'AT_PICKUP': return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50';
+      case 'NEAR_CLIENT': return 'bg-teal-500/20 text-teal-300 border-teal-500/50';
       default: return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
+    }
+  }
+
+  /// Libellé FR pour les statuts de commande, y compris les 4 nouveaux
+  /// statuts intermédiaires introduits côté backend (suivi temps réel du livreur).
+  statusLabel(status: string): string {
+    switch (status) {
+      case 'PENDING': return 'En attente';
+      case 'ACCEPTED': return 'Acceptée';
+      case 'IN_PROGRESS': return 'En cours';
+      case 'COMPLETED': return 'Terminée';
+      case 'CANCELLED': return 'Annulée';
+      case 'EN_ROUTE_PICKUP': return 'En route (retrait)';
+      case 'AT_PICKUP': return 'Au point de retrait';
+      case 'NEAR_CLIENT': return 'Proche du client';
+      case 'FAILED': return 'Échec';
+      default: return status;
+    }
+  }
+
+  /// Classe Tailwind du badge de statut de paiement.
+  paymentBadge(paymentStatus: string | undefined): string {
+    switch (paymentStatus) {
+      case 'PAID': return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50';
+      case 'RECEIVED_BY_MERCHANT': return 'bg-teal-500/20 text-teal-300 border-teal-500/50';
+      case 'RECEIVED_BY_LIVREUR': return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50';
+      case 'PAY_ON_DELIVERY': return 'bg-amber-500/20 text-amber-300 border-amber-500/50';
+      case 'UNPAID': return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
+      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
+    }
+  }
+
+  /// Libellé FR du statut de paiement.
+  paymentLabel(paymentStatus: string | undefined): string {
+    switch (paymentStatus) {
+      case 'UNPAID': return 'Non payé';
+      case 'PAID': return 'Payé';
+      case 'PAY_ON_DELIVERY': return 'À la livraison';
+      case 'RECEIVED_BY_MERCHANT': return 'Reçu (commerçant)';
+      case 'RECEIVED_BY_LIVREUR': return 'Reçu (livreur)';
+      default: return '—';
     }
   }
 }

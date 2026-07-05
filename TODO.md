@@ -42,12 +42,18 @@
 - [ ] **Admin (optionnel)** — création/gestion de livraison Type 1 depuis le dashboard (non prioritaire)
 
 ### 🟡 Priorité 3 — Attribution, affiliation, tarifs, statuts, paiement, zones
-- [ ] **Attribution manuelle** d'un livreur disponible (commerçant ou client choisit dans une liste de livreurs `APPROVED` + `isAvailable` + proches)
-- [ ] **Relation livreur affilié à un commerçant** (livreurs privés ; fallback livreur public si affiliés indisponibles)
-- [ ] **Tarif configurable 200 FCFA/km** (aujourd'hui `PRICE_PER_KM = 150` en dur) — paramètre modifiable par l'admin, ajustement manuel du prix
-- [ ] **Statuts de livraison étendus** (arrivé au retrait, colis récupéré, proche du client, échoué…) + notifications associées
-- [ ] **`paymentStatus`** sur `DeliveryOrder` (non payé / payé / à la livraison / reçu commerçant / reçu livreur)
-- [ ] **Zones / quartiers de Lomé** (entité `Zone` + gestion admin + tarification par zone)
+> Backend complet (3 lots, jest 214/214) sur `feat/v1-priority-3`. Fronts en cours.
+- [x] **Backend Tarif configurable 200 FCFA/km** — `PricingConfig` (singleton, défaut 200, `minPriceFcfa`), `GET/PATCH /admin/pricing`, prix manuel commerçant. *(Lot 1)*
+- [x] **Backend Zones / quartiers de Lomé** — entité `Zone`, `GET /zones` + CRUD admin, seed 16 quartiers (version simple, sans tarif par zone). *(Lot 1)*
+- [x] **Backend Statuts de livraison étendus** — `EN_ROUTE_PICKUP/AT_PICKUP/NEAR_CLIENT/FAILED` (rétro-compatible) + notifications FCM. *(Lot 2)*
+- [x] **Backend `paymentStatus`** — enum sur `DeliveryOrder` + `PATCH /orders/:id/payment-status`. *(Lot 2)*
+- [x] **Backend Attribution manuelle** — `preferredLivreur` (réservation + broadcast ciblé), `GET /orders/available-drivers`, `PATCH /orders/:id/assign`. *(Lot 3)*
+- [x] **Backend Relation livreur affilié** — entité `MerchantDriver` (M:N) + `GET/POST/DELETE /merchants/me/drivers`. *(Lot 3)*
+- [x] **Fronts P3** *(2026-07-05)* :
+  - [x] Admin : écrans `/pricing` (Tarifs) + `/zones` (Zones) + statuts étendus & colonne paiement dans Archives. Build prod OK.
+  - [x] Mobile livreur : `OrderStatusUtils` (libellés FR), boutons d'avancement (statuts fins, coexistent avec le géofencing) + badge paiement. analyze 10 / test 10/10.
+  - [x] Mobile commerçant : `driver_picker_sheet` (choix livreur via `available-drivers` → `preferredLivreurId`) + écran « Mes livreurs » (affiliés). analyze 10 / test 10/10.
+- [ ] **Fallback auto livreur public** si affiliés indisponibles (attribution auto avancée — classé « après V1 » dans le CDC, à planifier)
 
 ---
 

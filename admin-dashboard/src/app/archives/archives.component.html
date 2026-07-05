@@ -78,7 +78,7 @@
     </div>
 
     <!-- Skeleton -->
-    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="7"></app-skeleton-row>
+    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="8"></app-skeleton-row>
 
     <!-- Error -->
     <div *ngIf="!isLoading() && errored()"
@@ -101,11 +101,12 @@
               <th class="p-5 border-b border-slate-700/50">Trajet</th>
               <th class="p-5 border-b border-slate-700/50">Prix</th>
               <th class="p-5 border-b border-slate-700/50">Statut</th>
+              <th class="p-5 border-b border-slate-700/50">Paiement</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700/50 text-slate-300">
             <tr *ngIf="orders().length === 0">
-              <td colspan="7" class="p-0">
+              <td colspan="8" class="p-0">
                 <app-empty-state
                   title="Aucune course pour ces filtres"
                   description="Ajustez la plage de dates ou le statut pour retrouver une course.">
@@ -145,7 +146,12 @@
               <td class="p-5 font-bold text-white">{{ o.priceFcfa | number:'1.0-0' }} FCFA</td>
               <td class="p-5">
                 <span class="px-3 py-1 rounded-full text-xs font-bold border" [ngClass]="statusBadge(o.status)">
-                  {{ o.status }}
+                  {{ statusLabel(o.status) }}
+                </span>
+              </td>
+              <td class="p-5">
+                <span class="px-3 py-1 rounded-full text-xs font-bold border" [ngClass]="paymentBadge(o.paymentStatus)">
+                  {{ paymentLabel(o.paymentStatus) }}
                 </span>
               </td>
             </tr>

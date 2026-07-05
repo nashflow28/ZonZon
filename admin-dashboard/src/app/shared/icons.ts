@@ -34,7 +34,10 @@ import {
   Clock,
   Eye,
   ClipboardList,
-  UserCheck
+  UserCheck,
+  Plus,
+  Trash2,
+  Pencil
 } from 'lucide-angular';
 
 export const appIcons = {
@@ -70,7 +73,10 @@ export const appIcons = {
   Clock,
   Eye,
   ClipboardList,
-  UserCheck
+  UserCheck,
+  Plus,
+  Trash2,
+  Pencil
 };
 
 export const provideLucideIcons = (): Provider => ({

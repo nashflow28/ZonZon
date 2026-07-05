@@ -30,6 +30,10 @@ class MerchantOrdersService {
   /// backend le rattache automatiquement ; sinon la livraison est créée
   /// avec juste le téléphone/nom (client sans compte).
   ///
+  /// Si [preferredLivreurId] est fourni, la course est réservée à ce
+  /// livreur (broadcast ciblé côté backend) ; sinon, comportement normal
+  /// (broadcast à tous les livreurs disponibles).
+  ///
   /// Retourne l'objet livraison créé sous forme de [Map] brute (mêmes
   /// champs qu'une commande, + `merchant`, `clientPhone`, `clientName`).
   /// Lève une [MerchantOrderException] en cas d'erreur avec un message
@@ -45,6 +49,7 @@ class MerchantOrdersService {
     String? clientId,
     String? clientPhone,
     String? clientName,
+    String? preferredLivreurId,
   }) async {
     if ((clientId == null || clientId.isEmpty) &&
         (clientPhone == null || clientPhone.isEmpty)) {
@@ -67,6 +72,8 @@ class MerchantOrdersService {
           'clientPhone': clientPhone,
         if (clientName != null && clientName.isNotEmpty)
           'clientName': clientName,
+        if (preferredLivreurId != null && preferredLivreurId.isNotEmpty)
+          'preferredLivreurId': preferredLivreurId,
       });
 
       if (res.statusCode == 201 || res.statusCode == 200) {

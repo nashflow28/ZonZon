@@ -12,6 +12,10 @@ export interface Order {
   distanceKm: number;
   priceFcfa: number;
   status: string;
+  /// Statut de paiement (optionnel : pas forcément renvoyé par tous les
+  /// endpoints/anciens déploiements). Valeurs backend : UNPAID, PAID,
+  /// PAY_ON_DELIVERY, RECEIVED_BY_MERCHANT, RECEIVED_BY_LIVREUR.
+  paymentStatus?: string;
   createdAt: string;
   client: any;
   livreur?: any;

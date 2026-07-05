@@ -11,6 +11,7 @@ import '../screens/driver_profile_screen.dart';
 import '../screens/favorites_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/merchant/create_delivery_screen.dart';
+import '../screens/merchant/merchant_drivers_screen.dart';
 import '../screens/merchant/merchant_orders_screen.dart';
 import '../screens/merchant_home_screen.dart';
 import '../screens/order_history_screen.dart';
@@ -49,6 +50,8 @@ class AppRoutes {
   // Merchant sub-screens (Priorité 2 — livraisons pour un client)
   static const String merchantCreateDelivery = '/home/merchant/create-delivery';
   static const String merchantOrders = '/home/merchant/orders';
+  // Merchant sub-screen (Priorité 3 — livreurs affiliés)
+  static const String merchantDrivers = '/home/merchant/drivers';
 
   // Helper: returns the home route for a given role string.
   static String homeForRole(String? role) {
@@ -196,6 +199,10 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'orders',
           builder: (context, state) => const MerchantOrdersScreen(),
+        ),
+        GoRoute(
+          path: 'drivers',
+          builder: (context, state) => const MerchantDriversScreen(),
         ),
       ],
     ),

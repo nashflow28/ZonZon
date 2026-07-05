@@ -18,6 +18,7 @@ Map<String, dynamic> _$OrderHistoryItemToJson(OrderHistoryItem instance) =>
       'createdAt': instance.createdAt?.toIso8601String(),
       'cancellationReason': instance.cancellationReason,
       'cancelledBy': instance.cancelledBy,
+      'paymentStatus': instance.paymentStatus,
       'livreur': instance.livreur,
       'client': instance.client,
       'clientPhone': instance.clientPhone,

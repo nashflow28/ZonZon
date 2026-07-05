@@ -20,6 +20,11 @@ class OrderHistoryItem {
   final String? cancellationReason;
   final String? cancelledBy;
 
+  /// `UNPAID` | `PAID` | `PAY_ON_DELIVERY` | `RECEIVED_BY_MERCHANT` |
+  /// `RECEIVED_BY_LIVREUR`. Optionnel : les anciens payloads / commandes
+  /// n'ont pas forcément ce champ renseigné.
+  final String? paymentStatus;
+
   /// Présent quand l'utilisateur courant est CLIENT.
   final Map<String, dynamic>? livreur;
 
@@ -53,6 +58,7 @@ class OrderHistoryItem {
     required this.client,
     this.clientPhone,
     this.clientName,
+    this.paymentStatus,
     required this.raw,
   });
 
@@ -98,16 +104,22 @@ class OrderHistoryItem {
           : null,
       clientPhone: json['clientPhone']?.toString(),
       clientName: json['clientName']?.toString(),
+      paymentStatus: json['paymentStatus']?.toString(),
       raw: json,
     );
   }
 
   Map<String, dynamic> toJson() => _$OrderHistoryItemToJson(this);
 
+  /// `true` pour tout statut non terminal. Couvre les statuts fins du suivi
+  /// livreur (`EN_ROUTE_PICKUP`, `AT_PICKUP`, `NEAR_CLIENT`) en plus du
+  /// chemin historique, pour que le store client (`ActiveOrdersStore`)
+  /// continue de suivre la commande quel que soit le niveau de granularité
+  /// utilisé par le livreur.
   @JsonKey(includeToJson: false)
-  bool get isActive =>
-      status == 'PENDING' || status == 'ACCEPTED' || status == 'IN_PROGRESS';
+  bool get isActive => !isFinished;
 
   @JsonKey(includeToJson: false)
-  bool get isFinished => status == 'COMPLETED' || status == 'CANCELLED';
+  bool get isFinished =>
+      status == 'COMPLETED' || status == 'CANCELLED' || status == 'FAILED';
 }

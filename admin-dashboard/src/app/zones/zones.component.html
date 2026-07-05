@@ -1,0 +1,146 @@
+<div class="p-4 md:p-8">
+  <div class="max-w-3xl mx-auto">
+
+    <!-- Ajout d'une zone -->
+    <div class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 mb-6">
+      <label class="block text-xs text-slate-400 mb-2">Ajouter une zone</label>
+      <div class="flex flex-col sm:flex-row gap-3">
+        <input
+          type="text"
+          placeholder="Nom de la zone (ex: Adidogomé)"
+          class="flex-1 bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+          [ngModel]="newZoneName()"
+          (ngModelChange)="newZoneName.set($event)"
+          (keydown.enter)="createZone()" />
+        <button
+          type="button"
+          (click)="createZone()"
+          [disabled]="isCreating() || !newZoneName().trim()"
+          class="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition shrink-0">
+          <lucide-icon name="plus" class="w-4 h-4"></lucide-icon>
+          Ajouter une zone
+        </button>
+      </div>
+      <div *ngIf="createError()" class="mt-3 flex items-center gap-2 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+        <lucide-icon name="alert-triangle" class="w-4 h-4"></lucide-icon>
+        {{ createError() }}
+      </div>
+    </div>
+
+    <!-- Skeleton -->
+    <app-skeleton-row *ngIf="isLoading()" [rows]="4" [cols]="3"></app-skeleton-row>
+
+    <!-- Error -->
+    <div *ngIf="!isLoading() && errored()"
+         class="bg-slate-800/40 p-10 rounded-2xl border border-slate-700/50 text-center text-slate-400 flex flex-col items-center gap-3">
+      <lucide-icon name="alert-triangle" class="w-8 h-8 text-red-400"></lucide-icon>
+      Impossible de charger les zones.
+      <button (click)="fetch()"
+              class="mt-2 bg-slate-800 hover:bg-slate-700 text-white text-sm rounded-lg px-4 py-2 border border-slate-600 transition-all">
+        Réessayer
+      </button>
+    </div>
+
+    <!-- Empty state -->
+    <app-empty-state
+      *ngIf="!isLoading() && !errored() && zones().length === 0"
+      icon="map-pin"
+      title="Aucune zone active"
+      description="Ajoutez une zone ci-dessus pour commencer à couvrir un quartier.">
+    </app-empty-state>
+
+    <!-- Liste -->
+    <div *ngIf="!isLoading() && !errored() && zones().length > 0"
+         class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 divide-y divide-slate-700/50">
+      <div *ngFor="let z of zones()" class="p-4 flex items-center gap-3">
+        <lucide-icon name="map-pin" class="w-4 h-4 text-sky-400 shrink-0"></lucide-icon>
+
+        <!-- Mode édition inline -->
+        <ng-container *ngIf="editingId() === z.id; else viewMode">
+          <input
+            type="text"
+            class="flex-1 bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+            [ngModel]="editingName()"
+            (ngModelChange)="editingName.set($event)"
+            (keydown.enter)="saveEdit(z)"
+            (keydown.escape)="cancelEdit()" />
+          <button (click)="saveEdit(z)"
+                  class="w-9 h-9 rounded-lg border border-emerald-500/40 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 flex items-center justify-center transition shrink-0">
+            <lucide-icon name="check" class="w-4 h-4"></lucide-icon>
+          </button>
+          <button (click)="cancelEdit()"
+                  class="w-9 h-9 rounded-lg border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 flex items-center justify-center transition shrink-0">
+            <lucide-icon name="x" class="w-4 h-4"></lucide-icon>
+          </button>
+        </ng-container>
+
+        <ng-template #viewMode>
+          <div class="flex-1 min-w-0">
+            <div class="text-white font-semibold truncate">{{ z.name }}</div>
+            <span
+              class="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold border"
+              [ngClass]="z.active
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                : 'bg-slate-500/20 text-slate-400 border-slate-500/40'">
+              {{ z.active ? 'Active' : 'Inactive' }}
+            </span>
+          </div>
+
+          <button (click)="toggleActive(z)"
+                  [title]="z.active ? 'Désactiver' : 'Activer'"
+                  class="px-3 py-2 rounded-lg border text-xs font-bold transition shrink-0"
+                  [ngClass]="z.active
+                    ? 'border-orange-500/40 bg-orange-600/20 hover:bg-orange-600/30 text-orange-200'
+                    : 'border-emerald-500/40 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-200'">
+            {{ z.active ? 'Désactiver' : 'Activer' }}
+          </button>
+
+          <button (click)="startEdit(z)"
+                  title="Renommer"
+                  class="w-9 h-9 rounded-lg border border-slate-700/60 bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 hover:text-white flex items-center justify-center transition shrink-0">
+            <lucide-icon name="pencil" class="w-4 h-4"></lucide-icon>
+          </button>
+
+          <button (click)="askDelete(z)"
+                  title="Supprimer"
+                  class="w-9 h-9 rounded-lg border border-red-500/40 bg-red-600/10 hover:bg-red-600/20 text-red-300 flex items-center justify-center transition shrink-0">
+            <lucide-icon name="trash-2" class="w-4 h-4"></lucide-icon>
+          </button>
+        </ng-template>
+
+        <div *ngIf="editError() && editingId() === z.id" class="w-full mt-2 text-xs text-red-300">
+          {{ editError() }}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirmation suppression -->
+<ng-container *ngIf="pendingDeleteId() as id">
+  <div class="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm" (click)="cancelDelete()"></div>
+  <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/60 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-10 h-10 rounded-full bg-red-500/20 border border-red-500/40 flex items-center justify-center shrink-0">
+          <lucide-icon name="alert-triangle" class="w-5 h-5 text-red-300"></lucide-icon>
+        </div>
+        <h3 class="text-white font-bold">Supprimer cette zone ?</h3>
+      </div>
+      <p class="text-sm text-slate-400 mb-6">Cette action est irréversible.</p>
+      <div class="grid grid-cols-2 gap-3">
+        <button (click)="cancelDelete()"
+                class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2.5 rounded-lg text-sm font-bold border border-slate-600 transition">
+          Annuler
+        </button>
+        <ng-container *ngFor="let z of zones()">
+          <button *ngIf="z.id === id"
+                  (click)="confirmDelete(z)"
+                  class="bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded-lg text-sm font-bold transition">
+            Supprimer
+          </button>
+        </ng-container>
+      </div>
+    </div>
+  </div>
+</ng-container>

@@ -12,6 +12,7 @@ import 'screens/chat_screen.dart';
 import 'screens/rating_screen.dart';
 import 'screens/driver_profile_screen.dart';
 import 'screens/order_history_screen.dart';
+import 'utils/order_status_utils.dart';
 import 'utils/platform_adapter.dart';
 
 class DriverScreen extends StatefulWidget {
@@ -19,6 +20,120 @@ class DriverScreen extends StatefulWidget {
 
   @override
   State<DriverScreen> createState() => _DriverScreenState();
+}
+
+/// Décrit l'étape "suivante" proposée au livreur pour un statut donné, dans
+/// le cadre de la progression manuelle granulaire (en plus du géofencing
+/// automatique qui ne couvre que ACCEPTED → IN_PROGRESS).
+///
+/// Reflète les transitions autorisées par le backend :
+/// ACCEPTED → {EN_ROUTE_PICKUP, AT_PICKUP, IN_PROGRESS, CANCELLED, FAILED}
+/// EN_ROUTE_PICKUP → {AT_PICKUP, IN_PROGRESS, CANCELLED, FAILED}
+/// AT_PICKUP → {IN_PROGRESS, CANCELLED, FAILED}
+/// IN_PROGRESS → {NEAR_CLIENT, COMPLETED, CANCELLED, FAILED}
+/// NEAR_CLIENT → {COMPLETED, CANCELLED, FAILED}
+class _NextStepAction {
+  final String targetStatus;
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _NextStepAction({
+    required this.targetStatus,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+}
+
+/// Retourne l'action "avancer" proposée pour [status], ou `null` si le
+/// statut est terminal (aucune progression possible).
+_NextStepAction? _nextStepFor(String status) {
+  switch (status) {
+    case 'ACCEPTED':
+      return const _NextStepAction(
+        targetStatus: 'EN_ROUTE_PICKUP',
+        label: 'En route vers le retrait',
+        icon: Icons.directions_bike,
+        color: Color(0xFF0EA5E9),
+      );
+    case 'EN_ROUTE_PICKUP':
+      return const _NextStepAction(
+        targetStatus: 'AT_PICKUP',
+        label: 'Arrivé au retrait',
+        icon: Icons.storefront,
+        color: Color(0xFF6366F1),
+      );
+    case 'AT_PICKUP':
+      return const _NextStepAction(
+        targetStatus: 'IN_PROGRESS',
+        label: 'Colis récupéré / Démarrer la livraison',
+        icon: Icons.local_shipping,
+        color: Color(0xFF3B82F6),
+      );
+    case 'IN_PROGRESS':
+      return const _NextStepAction(
+        targetStatus: 'NEAR_CLIENT',
+        label: 'Proche du client',
+        icon: Icons.near_me,
+        color: Color(0xFFF97316),
+      );
+    case 'NEAR_CLIENT':
+      return const _NextStepAction(
+        targetStatus: 'COMPLETED',
+        label: 'Livré',
+        icon: Icons.check_circle,
+        color: Color(0xFF10B981),
+      );
+    default:
+      return null;
+  }
+}
+
+/// `true` si [status] permet encore de signaler un échec (FAILED) — c'est-
+/// à-dire toute étape active non terminale.
+bool _canFail(String status) {
+  const active = {
+    'ACCEPTED',
+    'EN_ROUTE_PICKUP',
+    'AT_PICKUP',
+    'IN_PROGRESS',
+    'NEAR_CLIENT',
+  };
+  return active.contains(status);
+}
+
+/// `true` si [status] permet encore l'annulation (CANCELLED) — mêmes étapes
+/// que [_canFail] : le backend autorise CANCELLED depuis tous les statuts
+/// actifs non terminaux.
+bool _canCancel(String status) => _canFail(status);
+
+/// Petit badge pill réutilisé pour afficher le statut de la course et le
+/// statut de paiement dans le dialog de course active.
+class _StatusChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _StatusChip({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
 }
 
 class _DriverScreenState extends State<DriverScreen> {
@@ -502,17 +617,21 @@ class _DriverScreenState extends State<DriverScreen> {
               }
               return;
             }
-            if (targetStatus == 'COMPLETED' || targetStatus == 'CANCELLED') {
+            if (targetStatus == 'COMPLETED' ||
+                targetStatus == 'CANCELLED' ||
+                targetStatus == 'FAILED') {
               _resetGeofenceState();
               if (dlgCtx.mounted) Navigator.pop(dlgCtx);
               if (targetStatus == 'COMPLETED') {
                 await _promptRatingForClient(orderData);
               }
             } else {
-              // IN_PROGRESS atteint via le dialog manuel : plus besoin
-              // de surveiller le pickup (mais on garde _geofenceTriggered
-              // à true pour ne pas re-trigger si jamais le statut revient).
-              if (targetStatus == 'IN_PROGRESS') {
+              // IN_PROGRESS (et tout statut atteint après) via le dialog
+              // manuel : plus besoin de surveiller le pickup (mais on garde
+              // _geofenceTriggered à true pour ne pas re-trigger si jamais
+              // le statut revient en arrière côté serveur).
+              if (targetStatus == 'IN_PROGRESS' ||
+                  targetStatus == 'NEAR_CLIENT') {
                 _currentPickupLat = null;
                 _currentPickupLng = null;
                 _geofenceTriggered = true;
@@ -536,13 +655,37 @@ class _DriverScreenState extends State<DriverScreen> {
             });
           };
 
+          final paymentStatus = orderData['paymentStatus']?.toString();
+
           return AlertDialog(
             backgroundColor: const Color(0xFF1E293B),
             title: const Text('Course Acceptée ! 🎉',
                 style: TextStyle(color: Colors.white)),
-            content: Text(
-              'Allez au ${orderData['pickupAddress']} pour récupérer le colis.',
-              style: const TextStyle(color: Colors.white70),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Allez au ${orderData['pickupAddress']} pour récupérer le colis.',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _StatusChip(
+                      label: OrderStatusUtils.label(dialogStatus),
+                      color: OrderStatusUtils.color(dialogStatus),
+                    ),
+                    if (paymentStatus != null)
+                      _StatusChip(
+                        label: PaymentStatusUtils.label(paymentStatus),
+                        color: PaymentStatusUtils.color(paymentStatus),
+                      ),
+                  ],
+                ),
+              ],
             ),
             actionsAlignment: MainAxisAlignment.center,
             actionsOverflowDirection: VerticalDirection.down,
@@ -576,8 +719,7 @@ class _DriverScreenState extends State<DriverScreen> {
                     ),
                   ),
                   // ── WhatsApp ───────────────────────────────────────────
-                  if (dialogStatus == 'ACCEPTED' ||
-                      dialogStatus == 'IN_PROGRESS') ...[
+                  if (_canFail(dialogStatus)) ...[
                     const SizedBox(height: 8),
                     SizedBox(
                       width: double.infinity,
@@ -605,43 +747,69 @@ class _DriverScreenState extends State<DriverScreen> {
                           color: Color(0xFF10B981)),
                     )
                   else ...[
-                    // ACCEPTED → "Je suis sur place" (→ IN_PROGRESS)
-                    if (dialogStatus == 'ACCEPTED') ...[
+                    // ── Progression granulaire : bouton "étape suivante"
+                    // selon le statut courant. Coexiste avec le géofencing
+                    // (`_suggestArrival`) qui propose automatiquement
+                    // ACCEPTED → IN_PROGRESS via un Snackbar : les deux
+                    // chemins mènent au même backend, qui valide la
+                    // transition dans tous les cas.
+                    if (_nextStepFor(dialogStatus) case final next?) ...[
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: () => doTransition('IN_PROGRESS'),
-                          icon: const Icon(Icons.directions_bike,
-                              color: Colors.white),
-                          label: const Text('Je suis sur place',
-                              style: TextStyle(color: Colors.white)),
+                          onPressed: () => doTransition(next.targetStatus),
+                          icon: Icon(next.icon, color: Colors.white),
+                          label: Text(next.label,
+                              style: const TextStyle(color: Colors.white)),
                           style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF0EA5E9)),
+                              backgroundColor: next.color),
                         ),
                       ),
                       const SizedBox(height: 8),
                     ],
 
-                    // IN_PROGRESS → "Course terminée" (→ COMPLETED)
+                    // Raccourci "Livré" depuis IN_PROGRESS : le chemin
+                    // historique ACCEPTED → IN_PROGRESS → COMPLETED reste
+                    // valide côté backend, donc on permet de clôturer la
+                    // course directement sans forcer l'étape intermédiaire
+                    // "Proche du client".
                     if (dialogStatus == 'IN_PROGRESS') ...[
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton.icon(
+                        child: OutlinedButton.icon(
                           onPressed: () => doTransition('COMPLETED'),
-                          icon: const Icon(Icons.check_circle,
-                              color: Colors.white),
-                          label: const Text('Course terminée',
-                              style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B981)),
+                          icon: const Icon(Icons.done_all,
+                              color: Color(0xFF10B981)),
+                          label: const Text('Livré directement',
+                              style: TextStyle(color: Color(0xFF10B981))),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(
+                                color: Color(0xFF10B981), width: 1.2),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
                     ],
 
+                    // Signaler un échec — accessible à toutes les étapes
+                    // actives (backend : FAILED atteignable depuis ACCEPTED,
+                    // EN_ROUTE_PICKUP, AT_PICKUP, IN_PROGRESS, NEAR_CLIENT).
+                    if (_canFail(dialogStatus)) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          onPressed: () => doTransition('FAILED'),
+                          icon: const Icon(Icons.error_outline,
+                              color: Colors.orangeAccent),
+                          label: const Text('Signaler un échec',
+                              style:
+                                  TextStyle(color: Colors.orangeAccent)),
+                        ),
+                      ),
+                    ],
+
                     // Annuler — disponible tant que pas terminal
-                    if (dialogStatus != 'COMPLETED' &&
-                        dialogStatus != 'CANCELLED')
+                    if (_canCancel(dialogStatus))
                       SizedBox(
                         width: double.infinity,
                         child: TextButton.icon(

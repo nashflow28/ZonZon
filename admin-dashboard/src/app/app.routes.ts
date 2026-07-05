@@ -39,6 +39,14 @@ export const routes: Routes = [
       {
         path: 'driver-validation',
         loadComponent: () => import('./drivers/driver-validation/driver-validation.component').then(m => m.DriverValidationComponent)
+      },
+      {
+        path: 'pricing',
+        loadComponent: () => import('./pricing/pricing.component').then(m => m.PricingComponent)
+      },
+      {
+        path: 'zones',
+        loadComponent: () => import('./zones/zones.component').then(m => m.ZonesComponent)
       }
     ]
   },

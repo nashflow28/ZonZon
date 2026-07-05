@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../models/place.dart';
 import '../../services/estimate_service.dart';
+import '../../services/merchant_drivers_service.dart';
 import '../../services/merchant_orders_service.dart';
 import '../../utils/platform_adapter.dart';
 import '../location_picker_screen.dart';
+import 'driver_picker_sheet.dart';
 
 /// Écran « Créer une livraison » pour un COMMERCANT.
 ///
@@ -40,6 +42,10 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
   bool _estimateLoading = false;
   bool _saving = false;
 
+  /// Livreur choisi manuellement (optionnel). `null` = laisser la
+  /// plateforme choisir (broadcast normal à tous les livreurs disponibles).
+  AvailableDriver? _selectedDriver;
+
   @override
   void dispose() {
     _estimateSvc.dispose();
@@ -63,7 +69,12 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
       ),
     );
     if (result != null && mounted) {
-      setState(() => _pickup = result);
+      setState(() {
+        _pickup = result;
+        // Le point de retrait a changé : la distance du livreur précédemment
+        // choisi n'est plus pertinente, on redemande une sélection.
+        _selectedDriver = null;
+      });
       _scheduleEstimate();
     }
   }
@@ -115,6 +126,27 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
   }
 
   // ---------------------------------------------------------------------------
+  // Choix du livreur (optionnel)
+  // ---------------------------------------------------------------------------
+
+  Future<void> _pickDriver() async {
+    final pickup = _pickup;
+    if (pickup == null) return;
+    final result = await showDriverPickerSheet(
+      context,
+      lat: pickup.location.latitude,
+      lng: pickup.location.longitude,
+      initialSelected: _selectedDriver,
+    );
+    // `result` est un [DriverPickerResult] si l'utilisateur a validé un
+    // choix (livreur précis ou « laisser la plateforme choisir »), ou
+    // `null` si la bottom sheet a été fermée sans rien choisir (on ne
+    // change alors rien à la sélection actuelle).
+    if (!mounted || result == null) return;
+    setState(() => _selectedDriver = result.driver);
+  }
+
+  // ---------------------------------------------------------------------------
   // Soumission
   // ---------------------------------------------------------------------------
 
@@ -155,6 +187,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         clientName: _clientName.text.trim().isEmpty
             ? null
             : _clientName.text.trim(),
+        preferredLivreurId: _selectedDriver?.id,
       );
       if (!mounted) return;
       hapticSuccess();
@@ -229,6 +262,10 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
             color: const Color(0xFF10B981),
             onTap: _pickDelivery,
           ),
+          const SizedBox(height: 24),
+          _SectionTitle('Livreur'),
+          const SizedBox(height: 8),
+          _driverTile(),
           const SizedBox(height: 24),
           _SectionTitle('Description'),
           const SizedBox(height: 8),
@@ -320,6 +357,94 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
                   'Estimation indisponible',
                   style: TextStyle(color: Colors.white54, fontSize: 13),
                 ),
+    );
+  }
+
+  Widget _driverTile() {
+    final canPick = _pickup != null;
+    final driver = _selectedDriver;
+    final subtitle = driver == null
+        ? (canPick
+            ? 'Laisser la plateforme choisir'
+            : 'Sélectionnez un point de retrait pour choisir un livreur')
+        : '${driver.fullName}${driver.vehicle != null ? ' · ${driver.vehicle!.label}' : ''}'
+            '${driver.distanceKm != null ? ' · ${driver.distanceKm!.toStringAsFixed(1)} km' : ''}';
+
+    return Material(
+      color: Colors.white.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: canPick ? _pickDriver : null,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.two_wheeler, color: Color(0xFFFBBF24)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Choisir un livreur',
+                          style: TextStyle(
+                            color: Color(0xFFFBBF24),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        if (driver != null && driver.isAffiliated) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color:
+                                  const Color(0xFF10B981).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'Affilié',
+                              style: TextStyle(
+                                color: Color(0xFF10B981),
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: canPick ? Colors.white : Colors.white54,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: canPick ? Colors.white54 : Colors.white24,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
