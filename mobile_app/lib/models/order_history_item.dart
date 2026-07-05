@@ -23,8 +23,15 @@ class OrderHistoryItem {
   /// Présent quand l'utilisateur courant est CLIENT.
   final Map<String, dynamic>? livreur;
 
-  /// Présent quand l'utilisateur courant est LIVREUR.
+  /// Présent quand l'utilisateur courant est LIVREUR, ou quand l'utilisateur
+  /// courant est COMMERCANT et que le client a un compte ZonZon.
   final Map<String, dynamic>? client;
+
+  /// Présent quand l'utilisateur courant est COMMERCANT (livraison créée par
+  /// lui pour un client). Ces deux champs sont renseignés que le client ait
+  /// un compte ou non (cf. `POST /orders/merchant`).
+  final String? clientPhone;
+  final String? clientName;
 
   /// Payload brut conservé pour l'affichage debug / bottom sheet.
   /// Non inclus dans toJson car c'est un champ dérivé.
@@ -44,6 +51,8 @@ class OrderHistoryItem {
     required this.cancelledBy,
     required this.livreur,
     required this.client,
+    this.clientPhone,
+    this.clientName,
     required this.raw,
   });
 
@@ -87,6 +96,8 @@ class OrderHistoryItem {
       client: json['client'] is Map
           ? Map<String, dynamic>.from(json['client'] as Map)
           : null,
+      clientPhone: json['clientPhone']?.toString(),
+      clientName: json['clientName']?.toString(),
       raw: json,
     );
   }

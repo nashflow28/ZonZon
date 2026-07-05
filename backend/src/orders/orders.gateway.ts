@@ -1,5 +1,7 @@
 import { Logger, Optional } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { Repository } from 'typeorm';
 import {
   ConnectedSocket,
   MessageBody,
@@ -11,6 +13,7 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { UserRole } from '../entities/user.entity';
+import { DeliveryOrder } from '../entities/delivery-order.entity';
 import { haversineKm } from '../common/geo';
 import {
   hasAnyCorsConfig,
@@ -72,6 +75,8 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private jwtService: JwtService,
+    @InjectRepository(DeliveryOrder)
+    private ordersRepository: Repository<DeliveryOrder>,
     @Optional() private positionsService?: PositionsService,
   ) {}
 
@@ -189,7 +194,15 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return ids;
   }
 
-  broadcastNewOrder(order: any) {
+  /**
+   * Diffuse une nouvelle course aux livreurs connectés.
+   *
+   * `eligibleDriverIds`, quand fourni, restreint la diffusion aux livreurs
+   * validés par un admin ET disponibles (cf. UsersService.findEligibleLivreurIds).
+   * Sans cette liste (legacy / appels existants), le comportement historique
+   * est conservé (tous les livreurs connectés sont des cibles potentielles).
+   */
+  broadcastNewOrder(order: any, eligibleDriverIds?: Set<string>) {
     this.purgeStalePositions();
 
     const radiusKm = Number(process.env.NOTIFY_RADIUS_KM) || 5;
@@ -205,7 +218,12 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       rawLng != null && rawLng !== 0 ? Number(rawLng) : null;
 
     const connectedDrivers = this.getConnectedDriverIds();
-    const totalDrivers = connectedDrivers.size;
+    const targetDrivers = eligibleDriverIds
+      ? new Set(
+          [...connectedDrivers].filter((id) => eligibleDriverIds.has(id)),
+        )
+      : connectedDrivers;
+    const totalDrivers = targetDrivers.size;
 
     // Si pas de coordonnées pickup exploitables → broadcast global immédiat
     if (
@@ -214,6 +232,19 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       !Number.isFinite(pickupLat) ||
       !Number.isFinite(pickupLng)
     ) {
+      if (eligibleDriverIds) {
+        // On connaît la liste des éligibles : on ne notifie qu'eux, même en
+        // l'absence de coordonnées pickup exploitables.
+        for (const id of targetDrivers) {
+          this.server.to(`user:${id}`).emit('newOrderAvailable', order);
+        }
+        this.logger.log(
+          `Nouvelle course diffusée à ${totalDrivers}/${totalDrivers} livreurs éligibles (coordonnées pickup manquantes)`,
+        );
+        return;
+      }
+      // Comportement legacy : pas de liste d'éligibles fournie → broadcast
+      // global sur la room role:LIVREUR.
       this.server
         .to(`role:${UserRole.LIVREUR}`)
         .emit('newOrderAvailable', order);
@@ -224,7 +255,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     let notified = 0;
-    for (const driverId of connectedDrivers) {
+    for (const driverId of targetDrivers) {
       const pos = this.driverPositions.get(driverId);
       if (!pos) {
         // Livreur connecté mais position inconnue → on notifie quand même
@@ -240,10 +271,11 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
 
     // Fallback : aucun livreur dans le rayon → broadcast à tous les connectés
-    // pour éviter qu'une course reste sans preneur (cas fréquent en phase de
-    // test ou quand tous les livreurs actifs sont légèrement hors rayon).
+    // (éligibles) pour éviter qu'une course reste sans preneur (cas fréquent
+    // en phase de test ou quand tous les livreurs actifs sont légèrement hors
+    // rayon).
     if (notified === 0 && totalDrivers > 0) {
-      for (const driverId of connectedDrivers) {
+      for (const driverId of targetDrivers) {
         this.server.to(`user:${driverId}`).emit('newOrderAvailable', order);
       }
       this.logger.log(
@@ -312,12 +344,49 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // ──────────────────────────────────────────────────────────────────────────
 
   @SubscribeMessage('chat:join')
-  handleChatJoin(
+  async handleChatJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { orderId: string },
   ) {
     if (!data?.orderId) return;
+    const user = client.data?.user;
+    if (!user?.sub) return;
+
+    const authorized = await this.isUserPartyToOrder(
+      data.orderId,
+      user.sub,
+      user.role,
+    );
+    if (!authorized) {
+      this.logger.warn(
+        `chat:join refusé — user ${user.sub} n'est pas partie à la commande ${data.orderId}`,
+      );
+      return;
+    }
+
     client.join(`order:${data.orderId}:chat`);
+  }
+
+  /**
+   * Vérifie que `userId` est autorisé à accéder au chat de la commande
+   * `orderId` : il doit être le client OU le livreur de cette commande,
+   * ou un ADMIN. Utilisé pour empêcher n'importe quel utilisateur
+   * authentifié de rejoindre une room de chat qui ne le concerne pas.
+   */
+  private async isUserPartyToOrder(
+    orderId: string,
+    userId: string,
+    role?: string,
+  ): Promise<boolean> {
+    if (role === UserRole.ADMIN) return true;
+
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client', 'livreur'],
+    });
+    if (!order) return false;
+
+    return order.client?.id === userId || order.livreur?.id === userId;
   }
 
   @SubscribeMessage('chat:leave')

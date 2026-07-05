@@ -12,6 +12,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateMerchantOrderDto } from './dto/create-merchant-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { EstimateOrderDto } from './dto/estimate-order.dto';
 import { ListOrdersDto } from './dto/list-orders.dto';
@@ -43,6 +44,15 @@ export class OrdersController {
     );
   }
 
+  @Roles(UserRole.COMMERCANT)
+  @Post('merchant')
+  createMerchant(
+    @Body() dto: CreateMerchantOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.createMerchantOrder(user.id ?? user.sub, dto);
+  }
+
   @Roles(UserRole.ADMIN, UserRole.LIVREUR)
   @Get()
   findAll(@Query() query: ListOrdersDto) {
@@ -51,8 +61,8 @@ export class OrdersController {
 
   @Roles(UserRole.LIVREUR)
   @Get('available')
-  findAvailable() {
-    return this.ordersService.findAvailable();
+  findAvailable(@CurrentUser() user: AuthenticatedUser) {
+    return this.ordersService.findAvailable(user);
   }
 
   @Get('mine')

@@ -9,6 +9,7 @@ import '../models/user.dart';
 import '../router/app_router.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
+import '../services/driver_service.dart';
 import '../screens/order_history_screen.dart';
 import '../utils/platform_adapter.dart';
 
@@ -22,12 +23,14 @@ class DriverProfileScreen extends StatefulWidget {
 class _DriverProfileScreenState extends State<DriverProfileScreen> {
   final _api = ApiClient();
   final _auth = AuthService();
+  final _driverService = DriverService();
   final _picker = ImagePicker();
 
   User? _user;
   Map<String, dynamic>? _vehicle;
   Map<String, dynamic>? _stats;
   bool _loading = true;
+  bool _togglingAvailability = false;
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -149,6 +152,29 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     }
   }
 
+  Future<void> _toggleAvailability(bool value) async {
+    if (_user == null || _togglingAvailability) return;
+    if (!_user!.isDriverApproved) return;
+    setState(() => _togglingAvailability = true);
+    try {
+      final effective = await _driverService.setAvailability(value);
+      if (!mounted) return;
+      setState(() {
+        _user = _user!.copyWith(isAvailable: effective);
+      });
+      showAdaptiveSnack(
+        context,
+        effective ? 'Vous êtes maintenant disponible' : 'Vous êtes maintenant indisponible',
+      );
+    } catch (e) {
+      if (mounted) {
+        showAdaptiveSnack(context, e.toString().replaceFirst('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _togglingAvailability = false);
+    }
+  }
+
   Future<void> _logout() async {
     final confirmed = await showAdaptiveConfirmDialog(
       context,
@@ -177,6 +203,8 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         children: [
           _buildPhotoSection(),
           const SizedBox(height: 24),
+          _buildAvailabilitySection(),
+          const SizedBox(height: 16),
           _buildStatsRow(),
           const SizedBox(height: 16),
           _buildHistoryTile(),
@@ -237,6 +265,87 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  /// Section disponibilité : bandeau de statut si le compte n'est pas
+  /// validé par un admin, sinon switch Disponible/Indisponible.
+  Widget _buildAvailabilitySection() {
+    final user = _user;
+    if (user == null) return const SizedBox.shrink();
+
+    if (!user.isDriverApproved) {
+      final isRejected = user.isDriverRejected;
+      final color = isRejected ? const Color(0xFFEF4444) : const Color(0xFFF59E0B);
+      final title = isRejected
+          ? 'Compte refusé'
+          : 'En attente de validation par un administrateur';
+      final subtitle = isRejected
+          ? (user.driverRejectionReason?.trim().isNotEmpty == true
+              ? user.driverRejectionReason!
+              : 'Contactez le support pour plus de détails.')
+          : 'Vous pourrez passer disponible une fois votre compte validé.';
+
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(isRejected ? Icons.error_outline : Icons.hourglass_top, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            user.isAvailable ? Icons.wifi_tethering : Icons.wifi_tethering_off,
+            color: user.isAvailable ? const Color(0xFF10B981) : Colors.white38,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              user.isAvailable ? 'Disponible' : 'Indisponible',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+            ),
+          ),
+          if (_togglingAvailability)
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: adaptiveLoader(color: const Color(0xFF10B981)),
+            )
+          else
+            Switch(
+              value: user.isAvailable,
+              activeThumbColor: const Color(0xFF10B981),
+              onChanged: _toggleAvailability,
+            ),
         ],
       ),
     );

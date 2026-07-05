@@ -54,6 +54,8 @@ const livreurUser = {
   firstName: 'Bob',
   lastName: 'Livreur',
   phone: '+22890000002',
+  driverApprovalStatus: 'APPROVED',
+  isAvailable: true,
 };
 const adminUser = {
   id: 'admin-1',
@@ -62,13 +64,22 @@ const adminUser = {
   lastName: 'Root',
   phone: '+22890000003',
 };
+const merchantUser = {
+  id: 'merchant-1',
+  role: UserRole.COMMERCANT,
+  firstName: 'Marc',
+  lastName: 'Commercant',
+  phone: '+22890000005',
+};
 
 describe('OrdersService', () => {
   let service: OrdersService;
   let ordersRepository: ReturnType<typeof mockRepo>;
   let usersService: {
     findOne: jest.Mock;
+    findByPhone: jest.Mock;
     findLivreursWithFcmToken: jest.Mock;
+    findEligibleLivreurIds: jest.Mock;
   };
   let gateway: {
     broadcastNewOrder: jest.Mock;
@@ -108,7 +119,9 @@ describe('OrdersService', () => {
     ordersRepository = mockRepo();
     usersService = {
       findOne: jest.fn(),
+      findByPhone: jest.fn(),
       findLivreursWithFcmToken: jest.fn().mockResolvedValue([]),
+      findEligibleLivreurIds: jest.fn().mockResolvedValue([]),
     } as any;
     gateway = {
       broadcastNewOrder: jest.fn(),
@@ -181,7 +194,35 @@ describe('OrdersService', () => {
         }),
       );
       expect(ordersRepository.save).toHaveBeenCalled();
-      expect(gateway.broadcastNewOrder).toHaveBeenCalledWith(result);
+      expect(gateway.broadcastNewOrder).toHaveBeenCalledWith(
+        result,
+        new Set(),
+      );
+    });
+
+    it('appelle broadcastNewOrder avec le Set des livreurs éligibles (approuvés + disponibles)', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      usersService.findEligibleLivreurIds.mockResolvedValue([
+        'livreur-a',
+        'livreur-b',
+      ]);
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-eligible',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, dto);
+
+      expect(usersService.findEligibleLivreurIds).toHaveBeenCalled();
+      expect(gateway.broadcastNewOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'ord-eligible' }),
+        new Set(['livreur-a', 'livreur-b']),
+      );
     });
 
     it('applique la distance minimale 0.5 km', async () => {
@@ -426,6 +467,7 @@ describe('OrdersService', () => {
     });
 
     it('throw ConflictException si UPDATE n’affecte aucune ligne (déjà prise)', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
       ordersRepository.findOne.mockResolvedValueOnce({
         id: 'o',
         status: OrderStatus.ACCEPTED,
@@ -439,11 +481,36 @@ describe('OrdersService', () => {
     });
 
     it('throw NotFoundException si introuvable', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
       ordersRepository.findOne.mockResolvedValue(null);
       await expect(
         service.acceptOrder('o', livreurUser.id),
       ).rejects.toBeInstanceOf(NotFoundException);
       // L'UPDATE ne doit pas être tenté si l'order n'existe pas
+      expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
+    });
+
+    it('throw ForbiddenException si le livreur n’est pas validé (driverApprovalStatus !== APPROVED)', async () => {
+      usersService.findOne.mockResolvedValue({
+        ...livreurUser,
+        driverApprovalStatus: 'PENDING',
+      });
+      await expect(
+        service.acceptOrder('o', livreurUser.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(ordersRepository.findOne).not.toHaveBeenCalled();
+      expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
+    });
+
+    it('throw ForbiddenException si le livreur est indisponible (isAvailable=false)', async () => {
+      usersService.findOne.mockResolvedValue({
+        ...livreurUser,
+        isAvailable: false,
+      });
+      await expect(
+        service.acceptOrder('o', livreurUser.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(ordersRepository.findOne).not.toHaveBeenCalled();
       expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
     });
 
@@ -454,6 +521,8 @@ describe('OrdersService', () => {
         firstName: 'Carl',
         lastName: 'Livreur2',
         phone: '+22890000004',
+        driverApprovalStatus: 'APPROVED',
+        isAvailable: true,
       };
 
       // Existence checks pour les 2 appels + reload pour le gagnant
@@ -504,6 +573,44 @@ describe('OrdersService', () => {
         'ord-concurrent',
         livreurUser.id,
         clientUser.id,
+      );
+    });
+  });
+
+  describe('findAvailable', () => {
+    it('throw ForbiddenException si le livreur n’est pas validé', async () => {
+      usersService.findOne.mockResolvedValue({
+        ...livreurUser,
+        driverApprovalStatus: 'PENDING',
+      });
+      await expect(
+        service.findAvailable(livreurUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(ordersRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('renvoie [] si le livreur est validé mais indisponible', async () => {
+      usersService.findOne.mockResolvedValue({
+        ...livreurUser,
+        isAvailable: false,
+      });
+      const result = await service.findAvailable(livreurUser);
+      expect(result).toEqual([]);
+      expect(ordersRepository.find).not.toHaveBeenCalled();
+    });
+
+    it('renvoie la liste des courses PENDING si le livreur est validé et disponible', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      const orders = [{ id: 'o1' }, { id: 'o2' }];
+      ordersRepository.find.mockResolvedValue(orders);
+
+      const result = await service.findAvailable(livreurUser);
+
+      expect(result).toBe(orders);
+      expect(ordersRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ status: OrderStatus.PENDING }),
+        }),
       );
     });
   });
@@ -692,6 +799,162 @@ describe('OrdersService', () => {
       const arg = ordersRepository.findAndCount.mock.calls[0][0];
       // TypeORM Between produit un FindOperator
       expect(arg.where.createdAt).toBeDefined();
+    });
+  });
+
+  describe('createMerchantOrder', () => {
+    const dto = {
+      pickupAddress: 'Boutique A',
+      pickupLat: 6.1319,
+      pickupLng: 1.2228,
+      deliveryAddress: 'Domicile client',
+      deliveryLat: 6.1725,
+      deliveryLng: 1.2314,
+      description: 'colis',
+    };
+
+    beforeEach(() => {
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'merch-ord-1',
+        ...o,
+      }));
+    });
+
+    it('rejette si le créateur n’est pas un COMMERCANT', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      await expect(
+        service.createMerchantOrder(clientUser.id, {
+          ...dto,
+          clientId: 'client-2',
+        } as any),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('rejette si ni clientId ni clientPhone ne sont fournis', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      await expect(
+        service.createMerchantOrder(merchantUser.id, dto as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rattache un client existant via clientId', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === clientUser.id) return clientUser;
+        return null;
+      });
+
+      const result = await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientId: clientUser.id,
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          merchant: merchantUser,
+          client: clientUser,
+          clientPhone: clientUser.phone,
+        }),
+      );
+      expect(result).toBeDefined();
+    });
+
+    it('rejette si clientId pointe vers un utilisateur non-CLIENT', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === livreurUser.id) return livreurUser;
+        return null;
+      });
+
+      await expect(
+        service.createMerchantOrder(merchantUser.id, {
+          ...dto,
+          clientId: livreurUser.id,
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rattache le compte client trouvé via clientPhone', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(clientUser);
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: clientUser.phone,
+      } as any);
+
+      expect(usersService.findByPhone).toHaveBeenCalledWith(clientUser.phone);
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          client: clientUser,
+          clientPhone: clientUser.phone,
+        }),
+      );
+    });
+
+    it('clientPhone inconnu → client null, clientPhone/clientName stockés en clair', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(null);
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+        clientName: 'Client Sans Compte',
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          client: null,
+          clientPhone: '+22899999999',
+          clientName: 'Client Sans Compte',
+        }),
+      );
+    });
+
+    it('broadcast appelé avec les livreurs éligibles', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(null);
+      usersService.findEligibleLivreurIds.mockResolvedValue(['livreur-a']);
+
+      const result = await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+      } as any);
+
+      expect(gateway.broadcastNewOrder).toHaveBeenCalledWith(
+        result,
+        new Set(['livreur-a']),
+      );
+    });
+
+    it('rejette si les coordonnées GPS sont manquantes', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(null);
+      const badDto = { ...dto, pickupLat: undefined, clientPhone: '+22899999999' };
+      await expect(
+        service.createMerchantOrder(merchantUser.id, badDto as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+  });
+
+  describe('findForUser', () => {
+    it('COMMERCANT → filtre les commandes par merchant.id', async () => {
+      const orders = [{ id: 'm1' }, { id: 'm2' }];
+      ordersRepository.find.mockResolvedValue(orders);
+
+      const result = await service.findForUser(merchantUser);
+
+      expect(result).toBe(orders);
+      expect(ordersRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { merchant: { id: merchantUser.id } },
+        }),
+      );
     });
   });
 

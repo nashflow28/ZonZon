@@ -36,6 +36,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     { path: 'shops', label: 'Boutiques', icon: 'store' },
     { path: 'reports', label: 'Comptabilité', icon: 'banknote' },
     { path: 'users', label: 'Utilisateurs', icon: 'users-icon' },
+    { path: 'driver-validation', label: 'Validation livreurs', icon: 'user-check' },
     { path: 'archives', label: 'Archives', icon: 'archive' },
     { path: 'audit-logs', label: 'Journal d\'audit', icon: 'clipboard-list' }
   ];

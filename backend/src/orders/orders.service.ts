@@ -24,9 +24,10 @@ import { UsersService } from '../users/users.service';
 import { OrdersGateway } from './orders.gateway';
 import { PositionsService } from './positions.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { CreateMerchantOrderDto } from './dto/create-merchant-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { ListOrdersDto } from './dto/list-orders.dto';
-import { UserRole } from '../entities/user.entity';
+import { DriverApprovalStatus, UserRole } from '../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { haversineKm } from '../common/geo';
 
@@ -251,12 +252,17 @@ export class OrdersService {
     };
   }
 
-  async createOrder(clientId: string, dto: CreateOrderDto) {
-    const client = await this.usersService.findOne(clientId);
-    if (client.role !== UserRole.CLIENT) {
-      throw new ForbiddenException('Seul un client peut créer une commande');
-    }
-
+  /**
+   * Calcule distance (km, arrondie à 2 décimales, min 0.5) + prix (FCFA)
+   * pour un pickup/delivery donné. Factorisé entre `createOrder` (Type 2 —
+   * client) et `createMerchantOrder` (Type 1 — commerçant).
+   */
+  private async buildOrderPricing(dto: {
+    pickupLat?: number;
+    pickupLng?: number;
+    deliveryLat?: number;
+    deliveryLng?: number;
+  }): Promise<{ distanceKm: number; priceFcfa: number }> {
     let distanceKm = 0;
     if (dto.pickupLat && dto.pickupLng && dto.deliveryLat && dto.deliveryLng) {
       distanceKm = await this.calculateRealDistance(
@@ -273,6 +279,20 @@ export class OrdersService {
 
     const price = distanceKm * this.PRICE_PER_KM;
 
+    return {
+      distanceKm: parseFloat(distanceKm.toFixed(2)),
+      priceFcfa: Math.round(price),
+    };
+  }
+
+  async createOrder(clientId: string, dto: CreateOrderDto) {
+    const client = await this.usersService.findOne(clientId);
+    if (client.role !== UserRole.CLIENT) {
+      throw new ForbiddenException('Seul un client peut créer une commande');
+    }
+
+    const { distanceKm, priceFcfa } = await this.buildOrderPricing(dto);
+
     const order = this.ordersRepository.create({
       client,
       pickupAddress: dto.pickupAddress,
@@ -282,18 +302,105 @@ export class OrdersService {
       deliveryLat: dto.deliveryLat,
       deliveryLng: dto.deliveryLng,
       description: dto.description,
-      distanceKm: parseFloat(distanceKm.toFixed(2)),
-      priceFcfa: Math.round(price),
+      distanceKm,
+      priceFcfa,
       status: OrderStatus.PENDING,
     });
 
     const saved = await this.ordersRepository.save(order);
-    this.ordersGateway.broadcastNewOrder(saved);
+
+    const eligibleIds = new Set(
+      await this.usersService.findEligibleLivreurIds(),
+    );
+    this.ordersGateway.broadcastNewOrder(saved, eligibleIds);
 
     // Fallback FCM : un livreur qui a fermé l'app (donc pas connecté au WS)
     // ne reçoit pas l'évent `newOrderAvailable`. On lui envoie une push.
     // Fire-and-forget pour ne pas bloquer la réponse HTTP.
     void this.notifyOfflineLivreurs(saved);
+
+    return saved;
+  }
+
+  /**
+   * Priorité 2 (Type 1) : un COMMERCANT crée une livraison pour un client.
+   * Le client peut être identifié par son compte (`clientId`) ou par son
+   * numéro de téléphone (`clientPhone`, avec ou sans compte associé).
+   * Le commerçant ne peut jamais devenir livreur (aucune modification des
+   * règles d'acceptation : @Roles(LIVREUR) reste seul habilité).
+   */
+  async createMerchantOrder(merchantId: string, dto: CreateMerchantOrderDto) {
+    const merchant = await this.usersService.findOne(merchantId);
+    if (merchant.role !== UserRole.COMMERCANT) {
+      throw new ForbiddenException(
+        'Seul un commerçant peut créer une livraison pour un client',
+      );
+    }
+
+    let client: any = null;
+    let clientPhone: string | null = null;
+    let clientName: string | null = null;
+
+    if (dto.clientId) {
+      const found = await this.usersService.findOne(dto.clientId);
+      if (found.role !== UserRole.CLIENT) {
+        throw new BadRequestException('Le destinataire doit être un client');
+      }
+      client = found;
+      clientPhone = found.phone ?? null;
+      clientName = `${found.firstName ?? ''} ${found.lastName ?? ''}`.trim() || null;
+    } else if (dto.clientPhone) {
+      const found = await this.usersService.findByPhone(dto.clientPhone);
+      if (found && found.role === UserRole.CLIENT) {
+        client = found;
+        clientPhone = found.phone ?? null;
+        clientName =
+          `${found.firstName ?? ''} ${found.lastName ?? ''}`.trim() || null;
+      } else {
+        client = null;
+        clientPhone = dto.clientPhone;
+        clientName = dto.clientName ?? null;
+      }
+    } else {
+      throw new BadRequestException(
+        'Client requis (compte ou numéro de téléphone)',
+      );
+    }
+
+    const { distanceKm, priceFcfa } = await this.buildOrderPricing(dto);
+
+    const order = this.ordersRepository.create({
+      merchant,
+      client,
+      clientPhone,
+      clientName,
+      pickupAddress: dto.pickupAddress,
+      pickupLat: dto.pickupLat,
+      pickupLng: dto.pickupLng,
+      deliveryAddress: dto.deliveryAddress,
+      deliveryLat: dto.deliveryLat,
+      deliveryLng: dto.deliveryLng,
+      description: dto.description,
+      distanceKm,
+      priceFcfa,
+      status: OrderStatus.PENDING,
+    });
+
+    const saved = await this.ordersRepository.save(order);
+
+    const eligibleIds = new Set(
+      await this.usersService.findEligibleLivreurIds(),
+    );
+    this.ordersGateway.broadcastNewOrder(saved, eligibleIds);
+    void this.notifyOfflineLivreurs(saved);
+
+    if (client?.id) {
+      void this.notifications.sendToUser(client.id, {
+        title: 'Nouvelle livraison',
+        body: 'Une livraison a été créée pour vous',
+        data: { kind: 'new_order', orderId: saved.id },
+      });
+    }
 
     return saved;
   }
@@ -451,8 +558,22 @@ export class OrdersService {
    * Liste des courses disponibles pour un livreur :
    * status = PENDING ET livreur IS NULL.
    * Tri par createdAt DESC, avec relation client.
+   *
+   * Le JWT ne contenant que { sub, phone, role }, on recharge systématiquement
+   * le livreur depuis la DB pour connaître son statut de validation/dispo.
+   * - Non validé (PENDING/REJECTED) → ForbiddenException (ne doit rien voir).
+   * - Validé mais indisponible → [] (pas d'erreur, juste aucune course visible).
    */
-  findAvailable() {
+  async findAvailable(livreur: any) {
+    const u = await this.usersService.findOne(livreur.id ?? livreur.sub);
+    if (u.driverApprovalStatus !== DriverApprovalStatus.APPROVED) {
+      throw new ForbiddenException(
+        'Votre compte livreur est en attente de validation par un administrateur',
+      );
+    }
+    if (!u.isAvailable) {
+      return [];
+    }
     return this.ordersRepository.find({
       where: { status: OrderStatus.PENDING, livreur: IsNull() },
       relations: ['client'],
@@ -476,11 +597,33 @@ export class OrdersService {
         order: { createdAt: 'DESC' },
       });
     }
+    if (user.role === UserRole.COMMERCANT) {
+      return this.ordersRepository.find({
+        where: { merchant: { id: userId } },
+        relations: ['client', 'livreur'],
+        order: { createdAt: 'DESC' },
+      });
+    }
     // ADMIN tombant sur /orders/mine : on renvoie la première page paginée.
     return this.findAll();
   }
 
   async acceptOrder(orderId: string, livreurId: string) {
+    // 0) Le JWT ne contient que { sub, phone, role } → on recharge toujours
+    //    le livreur depuis la DB pour vérifier statut de validation + dispo
+    //    AVANT toute autre opération.
+    const livreur = await this.usersService.findOne(livreurId);
+    if (livreur.driverApprovalStatus !== DriverApprovalStatus.APPROVED) {
+      throw new ForbiddenException(
+        'Votre compte livreur est en attente de validation',
+      );
+    }
+    if (!livreur.isAvailable) {
+      throw new ForbiddenException(
+        'Vous êtes indisponible — passez disponible pour accepter une course',
+      );
+    }
+
     // 1) Vérifier l'existence avant l'UPDATE pour distinguer 404 (introuvable)
     //    de 409 (déjà prise par un autre livreur).
     const existing = await this.ordersRepository.findOne({
@@ -519,9 +662,7 @@ export class OrdersService {
       throw new NotFoundException('Commande introuvable après acceptation');
     }
 
-    // 4) Récupérer le livreur (firstName utilisé dans la notif)
-    const livreur = await this.usersService.findOne(livreurId);
-
+    // 4) Le livreur (firstName utilisé dans la notif) a déjà été chargé en (0).
     this.ordersGateway.broadcastOrderAccepted(
       updated.id,
       livreur.id,

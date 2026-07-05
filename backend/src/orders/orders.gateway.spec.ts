@@ -51,11 +51,16 @@ function buildMockServer(
 
 describe('OrdersGateway', () => {
   let jwtService: { verify: jest.Mock; sign: jest.Mock };
+  let ordersRepository: { findOne: jest.Mock };
   let gateway: OrdersGateway;
 
   beforeEach(() => {
     jwtService = { verify: jest.fn(), sign: jest.fn() };
-    gateway = new OrdersGateway(jwtService as unknown as JwtService);
+    ordersRepository = { findOne: jest.fn() };
+    gateway = new OrdersGateway(
+      jwtService as unknown as JwtService,
+      ordersRepository as any,
+    );
   });
 
   afterEach(() => {
@@ -233,6 +238,174 @@ describe('OrdersGateway', () => {
         (c) => c.event === 'newOrderAvailable',
       );
       expect(newOrderEmits).toHaveLength(0);
+    });
+
+    it('avec eligibleDriverIds fourni : seuls les livreurs connectés ET éligibles reçoivent la course', () => {
+      // 3 livreurs connectés, tous proches du pickup (dans le rayon), mais
+      // seuls 2 sont éligibles (validés + disponibles).
+      const drivers = [
+        { socketId: 's1', userId: 'driver-eligible-1' },
+        { socketId: 's2', userId: 'driver-eligible-2' },
+        { socketId: 's3', userId: 'driver-not-eligible' },
+      ];
+      const { server, emitCalls } = buildMockServer(drivers);
+      gateway.server = server;
+
+      const driverPositions: Map<string, any> = (gateway as any)
+        .driverPositions;
+      driverPositions.set('driver-eligible-1', {
+        lat: pickupLat + 0.001,
+        lng: pickupLng + 0.001,
+        at: Date.now(),
+      });
+      driverPositions.set('driver-eligible-2', {
+        lat: pickupLat + 0.002,
+        lng: pickupLng + 0.002,
+        at: Date.now(),
+      });
+      driverPositions.set('driver-not-eligible', {
+        lat: pickupLat + 0.001,
+        lng: pickupLng + 0.001,
+        at: Date.now(),
+      });
+
+      const eligibleDriverIds = new Set([
+        'driver-eligible-1',
+        'driver-eligible-2',
+      ]);
+
+      gateway.broadcastNewOrder(order, eligibleDriverIds);
+
+      const newOrderEmits = emitCalls.filter(
+        (c) => c.event === 'newOrderAvailable',
+      );
+      const rooms = newOrderEmits.map((e) => e.room).sort();
+      expect(rooms).toEqual(['user:driver-eligible-1', 'user:driver-eligible-2']);
+    });
+
+    it('avec eligibleDriverIds fourni ET coordonnées pickup manquantes : notifie uniquement les éligibles (pas de broadcast global)', () => {
+      const drivers = [
+        { socketId: 's1', userId: 'driver-eligible' },
+        { socketId: 's2', userId: 'driver-not-eligible' },
+      ];
+      const { server, emitCalls } = buildMockServer(drivers);
+      gateway.server = server;
+
+      const badOrder = {
+        id: 'ord-bad-eligible',
+        pickupLat: 'invalid' as any,
+        pickupLng: undefined,
+      };
+
+      gateway.broadcastNewOrder(badOrder, new Set(['driver-eligible']));
+
+      const newOrderEmits = emitCalls.filter(
+        (c) => c.event === 'newOrderAvailable',
+      );
+      expect(newOrderEmits).toHaveLength(1);
+      expect(newOrderEmits[0].room).toBe('user:driver-eligible');
+    });
+  });
+
+  describe('handleChatJoin', () => {
+    function buildClientMock(user: { sub: string; role?: string } | null) {
+      const joinedRooms: string[] = [];
+      const client: any = {
+        data: user ? { user } : {},
+        join: jest.fn((room: string) => joinedRooms.push(room)),
+      };
+      return { client, joinedRooms };
+    }
+
+    it('rejoint la room si le user est le client de la commande', async () => {
+      const { client, joinedRooms } = buildClientMock({
+        sub: 'client-1',
+        role: UserRole.CLIENT,
+      });
+      ordersRepository.findOne.mockResolvedValue({
+        client: { id: 'client-1' },
+        livreur: { id: 'driver-1' },
+      });
+
+      await gateway.handleChatJoin(client, { orderId: 'order-1' });
+
+      expect(joinedRooms).toEqual(['order:order-1:chat']);
+    });
+
+    it('rejoint la room si le user est le livreur de la commande', async () => {
+      const { client, joinedRooms } = buildClientMock({
+        sub: 'driver-1',
+        role: UserRole.LIVREUR,
+      });
+      ordersRepository.findOne.mockResolvedValue({
+        client: { id: 'client-1' },
+        livreur: { id: 'driver-1' },
+      });
+
+      await gateway.handleChatJoin(client, { orderId: 'order-1' });
+
+      expect(joinedRooms).toEqual(['order:order-1:chat']);
+    });
+
+    it('rejoint la room si le user est ADMIN (sans requête DB)', async () => {
+      const { client, joinedRooms } = buildClientMock({
+        sub: 'admin-1',
+        role: UserRole.ADMIN,
+      });
+
+      await gateway.handleChatJoin(client, { orderId: 'order-1' });
+
+      expect(joinedRooms).toEqual(['order:order-1:chat']);
+      expect(ordersRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it("refuse si le user n'est ni client ni livreur de la commande", async () => {
+      const { client, joinedRooms } = buildClientMock({
+        sub: 'intrus-1',
+        role: UserRole.CLIENT,
+      });
+      ordersRepository.findOne.mockResolvedValue({
+        client: { id: 'client-1' },
+        livreur: { id: 'driver-1' },
+      });
+
+      await gateway.handleChatJoin(client, { orderId: 'order-1' });
+
+      expect(joinedRooms).toEqual([]);
+      expect(client.join).not.toHaveBeenCalled();
+    });
+
+    it('refuse si la commande est introuvable', async () => {
+      const { client, joinedRooms } = buildClientMock({
+        sub: 'client-1',
+        role: UserRole.CLIENT,
+      });
+      ordersRepository.findOne.mockResolvedValue(null);
+
+      await gateway.handleChatJoin(client, { orderId: 'order-inexistante' });
+
+      expect(joinedRooms).toEqual([]);
+    });
+
+    it('refuse silencieusement si aucun user authentifié', async () => {
+      const { client, joinedRooms } = buildClientMock(null);
+
+      await gateway.handleChatJoin(client, { orderId: 'order-1' });
+
+      expect(joinedRooms).toEqual([]);
+      expect(ordersRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it('ne fait rien si orderId manquant', async () => {
+      const { client, joinedRooms } = buildClientMock({
+        sub: 'client-1',
+        role: UserRole.CLIENT,
+      });
+
+      await gateway.handleChatJoin(client, { orderId: '' as any });
+
+      expect(joinedRooms).toEqual([]);
+      expect(ordersRepository.findOne).not.toHaveBeenCalled();
     });
   });
 });

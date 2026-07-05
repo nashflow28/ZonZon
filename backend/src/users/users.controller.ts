@@ -22,6 +22,8 @@ import type { AuthenticatedUser } from '../auth/types';
 import { imageFileFilter, profilePhotoStorage } from './upload.config';
 import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { AvailabilityDto } from './dto/availability.dto';
+import { DriverApprovalDto } from './dto/driver-approval.dto';
 
 @Controller('users')
 @UseGuards(RolesGuard)
@@ -88,6 +90,15 @@ export class UsersController {
     return { ok: true };
   }
 
+  @Roles(UserRole.LIVREUR)
+  @Patch('me/availability')
+  setMyAvailability(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: AvailabilityDto,
+  ) {
+    return this.usersService.setAvailability(user.id ?? user.sub, dto.available);
+  }
+
   @Post('me/photo')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -113,6 +124,12 @@ export class UsersController {
   }
 
   @Roles(UserRole.ADMIN)
+  @Get('drivers/pending')
+  pendingDrivers() {
+    return this.usersService.findPendingDrivers();
+  }
+
+  @Roles(UserRole.ADMIN)
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
@@ -128,5 +145,20 @@ export class UsersController {
   @Post(':id/restore')
   restore(@Param('id', ParseUUIDPipe) id: string) {
     return this.usersService.restore(id);
+  }
+
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/driver-approval')
+  approveDriver(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DriverApprovalDto,
+    @CurrentUser() admin: AuthenticatedUser,
+  ) {
+    return this.usersService.setDriverApproval(
+      id,
+      dto.status,
+      admin.id ?? admin.sub,
+      dto.reason,
+    );
   }
 }

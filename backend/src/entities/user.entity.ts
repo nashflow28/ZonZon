@@ -18,6 +18,12 @@ export enum UserRole {
   COMMERCANT = 'COMMERCANT',
 }
 
+export enum DriverApprovalStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -49,6 +55,26 @@ export class User {
    */
   @Column({ type: 'varchar', length: 255, nullable: true })
   fcmToken?: string | null;
+
+  /**
+   * Statut de validation admin obligatoire pour un livreur avant de pouvoir
+   * voir/accepter des courses. `null` pour les non-livreurs (CLIENT, ADMIN,
+   * COMMERCANT), qui ne sont pas concernés par ce workflow.
+   */
+  @Column({
+    type: 'enum',
+    enum: DriverApprovalStatus,
+    nullable: true,
+  })
+  driverApprovalStatus: DriverApprovalStatus | null;
+
+  /** Raison du rejet renseignée par l'admin (affichée au livreur). */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  driverRejectionReason: string | null;
+
+  /** Disponibilité déclarée par le livreur (bascule manuelle côté mobile). */
+  @Column({ type: 'boolean', default: false })
+  isAvailable: boolean;
 
   @OneToOne(() => Vehicle, (vehicle) => vehicle.driver)
   vehicle: Vehicle;

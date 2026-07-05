@@ -10,7 +10,65 @@
 
 ---
 
+## 🎯 BACKLOG V1 — Cahier des charges (2026-07-05)
+
+> Architecture V1 confirmée : **Flutter** (client/livreur/commerçant) + **Angular** (admin). Pas de réécriture PWA maintenant.
+> Analyse d'écart complète : voir `PROGRESS.md` (section « Analyse d'écart CDC V1 »).
+> **Contrainte absolue : ne rien casser** — tracking GPS, Socket.IO, FCM, messagerie client↔livreur, admin dashboard.
+> Ordre d'exécution : **backend d'abord**, puis fronts (Flutter, Angular).
+
+### 🔴 Priorité 1 — Validation & disponibilité des livreurs
+- [x] **Backend — Validation admin obligatoire des livreurs** *(2026-07-05)*
+  - `User.driverApprovalStatus` (PENDING/APPROVED/REJECTED, nullable) + `driverRejectionReason` ; `PENDING` à l'inscription LIVREUR. Migration `1778100000000` (grandfather des livreurs existants → APPROVED+disponibles).
+  - `PATCH /users/:id/driver-approval` (ADMIN, `{status, reason?}`) + audit log (`DRIVER_APPROVE`/`DRIVER_REJECT`)
+  - `GET /users/drivers/pending` (ADMIN) — file d'attente
+- [x] **Backend — Disponibilité livreur (disponible / indisponible)** *(2026-07-05)*
+  - `User.isAvailable` (boolean, default `false`)
+  - `PATCH /users/me/availability` (LIVREUR, `{available}`) — autorisé uniquement si `APPROVED`
+- [x] **Backend — Interdire à un livreur non validé ou indisponible de voir/accepter une course** *(2026-07-05)*
+  - `acceptOrder` : `ForbiddenException` si non `APPROVED` ou non `isAvailable` (recharge DB, contrôle dur)
+  - `GET /orders/available` : `Forbidden` si non validé ; `[]` si indisponible
+  - Broadcast WS `newOrderAvailable` (param `eligibleDriverIds` synchrone) + `findEligibleLivreurIds` + `notifyOfflineLivreurs`/positions filtrés `APPROVED`+`isAvailable`
+  - Tests Jest : **138/138** (120→138, +18). Build OK. Aucune régression tracking/Socket.IO/FCM/messagerie.
+- [x] **Mobile** — toggle disponibilité (onglet Radar + Profil) + gestion des 3 états (non validé/refusé → bandeau, indisponible → état vide, disponible → radar normal). Modèle `User` étendu, `DriverService.setAvailability`. `flutter analyze` 10 (préexistantes), `flutter test` 10/10. *(2026-07-05)*
+- [x] **Admin** — écran `/driver-validation` (file `GET /users/drivers/pending`, approuver/refuser via `PATCH /users/:id/driver-approval`), lien sidebar « Validation livreurs ». Build prod OK. *(2026-07-05)*
+
+### 🟠 Priorité 2 — Livraison commerçant → client (Type 1)
+- [x] **Backend** — `POST /orders/merchant` (`@Roles(COMMERCANT)`) *(2026-07-05)*
+  - `DeliveryOrder` : + `merchant` (ManyToOne nullable), `clientPhone`, `clientName` ; `client` rendu nullable. Migration `1778200000000` (FK `merchantId` SET NULL, `clientId` → nullable).
+  - Rattachement client **existant (compte)** via `clientId` **ou par téléphone** (`clientPhone`/`clientName`, avec ou sans compte). `findForUser` cas COMMERCANT (ses livraisons créées). Pricing factorisé (`buildOrderPricing`).
+  - Le commerçant ne peut jamais être livreur (garanti par `@Roles(LIVREUR)` sur `accept`). Build OK, jest **147/147**.
+- [x] **Mobile (commerçant)** — écran `create_delivery_screen` (client par téléphone/nom, retrait/livraison via LocationPicker, estimation, `POST /orders/merchant`) + écran `merchant_orders_screen` (« Mes livraisons » via `GET /orders/mine`). Accès depuis l'accueil commerçant (carte d'actions rapides), routes go_router. `flutter analyze` 10, `flutter test` 10/10. *(2026-07-05)*
+- [ ] **Admin (optionnel)** — création/gestion de livraison Type 1 depuis le dashboard (non prioritaire)
+
+### 🟡 Priorité 3 — Attribution, affiliation, tarifs, statuts, paiement, zones
+- [ ] **Attribution manuelle** d'un livreur disponible (commerçant ou client choisit dans une liste de livreurs `APPROVED` + `isAvailable` + proches)
+- [ ] **Relation livreur affilié à un commerçant** (livreurs privés ; fallback livreur public si affiliés indisponibles)
+- [ ] **Tarif configurable 200 FCFA/km** (aujourd'hui `PRICE_PER_KM = 150` en dur) — paramètre modifiable par l'admin, ajustement manuel du prix
+- [ ] **Statuts de livraison étendus** (arrivé au retrait, colis récupéré, proche du client, échoué…) + notifications associées
+- [ ] **`paymentStatus`** sur `DeliveryOrder` (non payé / payé / à la livraison / reçu commerçant / reçu livreur)
+- [ ] **Zones / quartiers de Lomé** (entité `Zone` + gestion admin + tarification par zone)
+
+---
+
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)
+
+### Audit codex (2026-07-04) — 8/9 findings corrigés
+> Audit par triangulation des 3 stacks. Verdict initial FAIL. Correctifs via 3 agents parallèles + manuels. Détail complet : `PROGRESS.md` Session 22.
+- [x] **Finding #1 (CRITICAL)** — Escalade de privilèges à l'inscription (`POST /v1/auth/register` acceptait `role: ADMIN`)
+  - `backend/src/auth/dto/register.dto.ts` : `@IsIn(REGISTRABLE_ROLES)` (CLIENT/LIVREUR/COMMERCANT uniquement, ADMIN exclu)
+  - `backend/src/auth/auth.service.ts` : garde défensive `ForbiddenException` si `dto.role === UserRole.ADMIN`
+  - Test ajouté : `backend/src/auth/auth.service.spec.ts`
+- [x] **Finding #2 (HIGH)** — `OrderTrackingScreen._refreshDetails()` (CLIENT) appelait `GET /orders` (`@Roles(ADMIN, LIVREUR)` → 403 + réponse désormais paginée non-array)
+  - `mobile_app/lib/screens/order_tracking_screen.dart:213` : `_api.get('/orders')` → `_api.get('/orders/mine')`. Vérifié : aucun autre écran CLIENT concerné.
+- [x] **Finding #3 (HIGH)** — vulnérabilités npm : `npm audit fix` (sans `--force`). Backend **40 → 18** (ws/socket.io, qs, typeorm, protobufjs). Admin **25 → 13** (ws, qs, sigstore, tar). Restes = breaking changes (multer, uuid/firebase-admin côté backend ; Angular/vite/build tooling côté admin) → à planifier séparément.
+- [x] **Finding #4 (MEDIUM)** — test scaffold obsolète `app.controller.spec.ts` testait `getHello()` (supprimé) → réécrit pour tester `getHealth()`. Débloque le CI backend.
+- [x] **Finding #5 (MEDIUM)** — `chat:join` sans contrôle d'appartenance
+  - `backend/src/orders/orders.gateway.ts` : `@InjectRepository(DeliveryOrder)` + `isUserPartyToOrder(orderId, userId, role)` (client/livreur/admin uniquement). Tests : `orders.gateway.spec.ts`
+- [x] **Finding #7 (INFO)** — route morte `POST /reports/commissions/:id/pay` supprimée (doublon de `mark-paid`, aucun appelant)
+- [x] **Finding #8 (INFO)** — doc `MARCHAND` → `COMMERCANT` alignée sur le code (`PROGRESS.md`)
+- [ ] **Finding #6 (LOW, `TO_VALIDATE`)** — période de commission par `createdAt` vs `completedAt` (`reports.service.ts`). Décision métier à trancher — NON corrigé.
+- [x] **Vérifs finales** : backend `npm run build` OK + `npx jest` 120/120 ✅ · mobile `flutter test` 10/10 ✅ · admin build prod OK
 
 ### Bug #1 — Course déjà prise sur le radar livreur
 - [x] **Backend** : créer `GET /orders/available` qui filtre `status=PENDING AND livreur IS NULL`

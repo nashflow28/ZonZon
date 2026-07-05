@@ -89,6 +89,13 @@ class AuthService {
     await _storage.write(key: _userKey, value: jsonEncode(result.user.toJson()));
   }
 
+  /// Met à jour uniquement l'utilisateur stocké (le token reste inchangé).
+  /// Utile après un rafraîchissement partiel (ex. bascule de disponibilité,
+  /// `GET /users/me`) sans repasser par un login complet.
+  Future<void> saveUser(User user) async {
+    await _storage.write(key: _userKey, value: jsonEncode(user.toJson()));
+  }
+
   String _extractError(http.Response res) {
     try {
       final data = jsonDecode(res.body);

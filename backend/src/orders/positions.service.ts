@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThanOrEqual, Repository } from 'typeorm';
 import { DriverPosition } from '../entities/driver-position.entity';
+import { DriverApprovalStatus } from '../entities/user.entity';
 
 /**
  * Service de persistance des positions livreur.
@@ -59,7 +60,13 @@ export class PositionsService {
   ): Promise<DriverPosition[]> {
     const since = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
     return this.repo.find({
-      where: { updatedAt: MoreThanOrEqual(since) },
+      where: {
+        updatedAt: MoreThanOrEqual(since),
+        livreur: {
+          driverApprovalStatus: DriverApprovalStatus.APPROVED,
+          isAvailable: true,
+        },
+      },
       relations: ['livreur'],
       order: { updatedAt: 'DESC' },
     });

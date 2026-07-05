@@ -25,11 +25,27 @@
 
 ---
 
+## Analyse d'écart — Cahier des charges V1 (2026-07-05)
+
+> Décision : architecture V1 **conservée** — Flutter (client/livreur/commerçant) + Angular (admin). Pas de réécriture PWA maintenant (le CDC demande une PWA ; écart assumé pour la V1). Backlog priorisé dans [`TODO.md`](TODO.md) (section « BACKLOG V1 »).
+
+**Déjà couvert** : auth 4 rôles · livraison à la demande client→livreur (Type 2) · suivi GPS temps réel (Socket.IO + positions persistées + ETA + géofencing) · messagerie par livraison (client↔livreur) · 5 statuts de commande · notifications FCM · historique client/livreur · tarification à la distance · dashboards client/livreur/admin · véhicule moto/voiture/tricycle. Bonus au-delà du V1 : notation étoiles, favoris boutiques, catégories/produits, commissions/reports, audit log, soft-delete, CI/CD, Sentry.
+
+**Manques V1 identifiés** (→ backlog priorisé) :
+- **P1** : validation admin obligatoire des livreurs ; disponibilité livreur (disponible/indisponible) ; blocage des livreurs non validés/indisponibles (voir + accepter).
+- **P2** : livraison commerçant→client (Type 1) — le commerçant ne peut aujourd'hui PAS créer de livraison (`POST /orders` réservé `@Roles(CLIENT)`, pas de champ commerçant/créateur sur `DeliveryOrder`) ; rattachement client par compte ou téléphone.
+- **P3** : attribution manuelle d'un livreur ; relation livreur affilié à un commerçant ; tarif configurable **200 FCFA/km** (aujourd'hui `PRICE_PER_KM = 150` en dur) + ajustement manuel ; statuts de livraison étendus (arrivé retrait, colis récupéré, proche client, échoué) ; `paymentStatus` ; zones/quartiers de Lomé.
+- Profil livreur incomplet vs CDC : manquent photo pièce d'identité et zone habituelle (à intégrer avec P1/P3).
+
+**Contrainte de toutes les évolutions V1** : ne pas casser tracking GPS, Socket.IO, FCM, messagerie client↔livreur, admin dashboard.
+
+---
+
 ## Infrastructure déployée
 
 | Service | URL / Détail | Status |
 |---------|-------------|--------|
-| **Backend** | `https://zonzon-backend.fly.dev` | ✅ Live |
+| **Backend** | `https://zonzon-backend.fly.dev` | ⏸️ Suspendu (scale 0 depuis 2026-06-02 — réactiver avec `flyctl scale count 1 --app zonzon-backend`) |
 | **Admin** | `https://zonzon-admin.pages.dev` | ✅ Live |
 | **Base de données** | TiDB Serverless, cluster `zonzon-db`, AWS Frankfurt | ✅ Active |
 | **Firebase** | Projet `zonzon-4eb31`, compte `koreinnovation28@gmail.com` | ✅ Configuré |
@@ -143,7 +159,7 @@ flyctl logs --app zonzon-backend --no-tail
 |------|-------------|-------------|
 | Client | `CLIENT` | Passe des commandes de livraison |
 | Livreur | `LIVREUR` | Accepte et effectue les livraisons |
-| Commerçant | `MARCHAND` | Gère une boutique |
+| Commerçant | `COMMERCANT` | Gère une boutique |
 | Admin | `ADMIN` | Accès complet via admin-dashboard |
 
 ---
@@ -225,6 +241,27 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 ---
 
 ## Historique des sessions
+
+### Session 24 (2026-07-05) — Fronts P1 (mobile + admin) + Backend P2 (livraison commerçant→client)
+- **Mobile P1 — disponibilité livreur** : modèle `User` étendu (`driverApprovalStatus`, `isAvailable`, `driverRejectionReason`), `DriverService.setAvailability` (`PATCH /users/me/availability`). Toggle disponibilité dans l'onglet **Radar** + écran **Profil**. 3 états gérés : non validé/refusé → bandeau (motif affiché), indisponible → état vide « Passez disponible… », disponible → radar normal. Le radar n'appelle `GET /orders/available` que si le livreur est APPROVED (évite le 403). `flutter analyze` 10 (préexistantes), `flutter test` 10/10.
+- **Admin P1 — validation des livreurs** : nouveau module `admin-dashboard/src/app/drivers/` (service `drivers.service.ts` + composant `driver-validation/`). Écran `/driver-validation` : file d'attente `GET /users/drivers/pending`, cartes livreur (nom, téléphone, véhicule), boutons Approuver / Refuser (motif optionnel) via `PATCH /users/:id/driver-approval`. Lien sidebar « Validation livreurs » (icône `user-check` — enregistrée dans `shared/icons.ts`). Build prod OK.
+- **Backend P2 — livraison commerçant→client (Type 1)** :
+  - `DeliveryOrder` : + `merchant` (ManyToOne nullable), `clientPhone`, `clientName` ; `client` rendu **nullable**. Migration `1778200000000-AddMerchantOrders.ts` (FK `merchantId` ON DELETE SET NULL ; `clientId` passé nullable via drop/modify/re-add de la FK `FK_0034e09679836d41ff8f65be7ae`).
+  - `POST /orders/merchant` (`@Roles(COMMERCANT)`) → `createMerchantOrder` : résout le client par `clientId` (doit être CLIENT) OU par `clientPhone` (rattache le compte si trouvé, sinon stocke `clientPhone`/`clientName` sans compte) ; calcul prix factorisé (`buildOrderPricing`, partagé avec `createOrder`) ; broadcast + FCM comme une commande client ; notif au client si compte rattaché.
+  - `findForUser` : cas COMMERCANT → ses livraisons créées (`where merchant.id`). Règle « commerçant jamais livreur » préservée (`@Roles(LIVREUR)` sur `accept`).
+  - `npm run build` OK, `npx jest` **147/147** (11 suites). Non-régression complète : tracking, Socket.IO, FCM, messagerie, création commande client (Type 2), admin.
+- **Front commerçant P2 (Flutter)** : `merchant_orders_service.dart` (`createMerchantOrder` / `getMyMerchantOrders`), écran `create_delivery_screen` (client par téléphone/nom, retrait/livraison via `LocationPickerScreen`, estimation débouncée, `POST /orders/merchant`) et écran `merchant_orders_screen` (« Mes livraisons » via `GET /orders/mine`, statuts colorés, pull-to-refresh). Accès via une carte d'actions rapides en haut de `merchant_home_screen` (sans casser la gestion boutique/produits) + routes go_router `/home/merchant/create-delivery` et `/home/merchant/orders`. Modèle `order_history_item` étendu (`clientPhone`/`clientName`). `flutter analyze` 10, `flutter test` 10/10.
+- **Bilan** : Priorité 1 **complète** (backend + fronts mobile & admin). Priorité 2 **complète** (backend + front commerçant mobile). Vérifs finales indépendantes : backend jest 147/147, admin build prod OK, mobile analyze 10 / test 10/10. Aucun commit (working tree). Reste P2 admin (optionnel, non prioritaire) et toute la Priorité 3.
+
+### Session 23 (2026-07-05) — Backlog V1 (CDC) + Backend Priorité 1 : validation & disponibilité livreurs
+- **Analyse d'écart CDC V1** consignée (section dédiée en haut de ce fichier) + **backlog V1 priorisé** dans `TODO.md` (P1/P2/P3). Décision : architecture Flutter + Angular conservée pour la V1 (pas de PWA maintenant).
+- **Backend P1 implémenté** (via agent Sonnet, vérifié indépendamment) :
+  - **Entité `User`** : `enum DriverApprovalStatus {PENDING, APPROVED, REJECTED}` + colonnes `driverApprovalStatus` (nullable), `driverRejectionReason` (nullable), `isAvailable` (boolean default false). Migration `1778100000000-AddDriverApprovalAndAvailability.ts` — **grandfather** : les livreurs déjà en base passent `APPROVED` + `isAvailable=1` (ne pas bloquer les testeurs actuels). Nouveaux livreurs → `PENDING` + indisponibles.
+  - **Endpoints** : `PATCH /users/:id/driver-approval` (ADMIN, `{status, reason?}`, + audit log `DRIVER_APPROVE`/`DRIVER_REJECT`), `GET /users/drivers/pending` (ADMIN), `PATCH /users/me/availability` (LIVREUR, autorisé uniquement si `APPROVED`).
+  - **Blocage dur** : `OrdersService.acceptOrder` recharge le livreur depuis la DB (le JWT ne porte que `{sub,phone,role}`) et lève `ForbiddenException` si non `APPROVED` ou non `isAvailable`. `findAvailable(livreur)` → `Forbidden` si non validé, `[]` si indisponible.
+  - **Ciblage des notifications** : `broadcastNewOrder(order, eligibleDriverIds?)` reste **synchrone** (la Set d'éligibles est calculée en amont dans `createOrder` via `findEligibleLivreurIds`), n'émet qu'aux livreurs connectés ∩ éligibles ; sans la liste → comportement legacy conservé (rétro-compat tests). `notifyOfflineLivreurs` + `PositionsService.findRecentLivreurPositions` + `findLivreursWithFcmToken` filtrent désormais `APPROVED`+`isAvailable`.
+  - **Non-régression** : tracking GPS, Socket.IO (`driver:location`/`driver:position`), FCM, messagerie client↔livreur, admin — intacts. `npm run build` OK, `npx jest` **138/138** (11 suites, +18 tests).
+- **Reste P1** (fronts, non commencés) : toggle disponibilité dans l'UI livreur Flutter (⚠️ indispensable pour rendre les nouveaux livreurs opérationnels, `PENDING`+indispo par défaut) et écran admin de validation (Angular).
 
 ### Session 1 (2026-04-29 → 2026-04-30)
 - Configuration Firebase (projet `zonzon-4eb31`, app Android, google-services.json, firebase-adminsdk.json)
@@ -515,6 +552,12 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 | Flutter mobile | `https://5b733a06f8e026418f487fe2335679b3@o4511315040337920.ingest.de.sentry.io/4511324268724304` (via `--dart-define=SENTRY_DSN`) |
 | Angular admin | `https://73be5b88715e85b16f8ac95860977fe6@o4511315040337920.ingest.de.sentry.io/4511324274884688` (dans `environment.prod.ts`) |
 
+### Session 20 (2026-06-02) — Pause infra Fly.io
+- Facture Fly.io mai 2026 = **$7.46** (CPU shared $2.55 + RAM additionnelle $4.91 + bandwidth $0). Coût normal d'une VM idle 24/7 avec `min_machines_running=1` + `auto_stop_machines='off'` (config nécessaire pour Socket.IO live).
+- **Backend suspendu** : `flyctl scale count 0 --app zonzon-backend` → machine `781425db176648` détruite. App, secrets, hostname et config préservés. Coût mensuel = $0 tant que `count=0`.
+- **Pour reprendre** : `flyctl scale count 1 --app zonzon-backend` (+ `flyctl deploy` si nouvelle version à pousser).
+- **Autres services audités** (aucun risque immédiat) : TiDB Cloud (free serverless, auto-pause si idle), Cloudflare Pages (free tier large), Firebase FCM (Spark gratuit), OpenRouteService (free 2K req/jour, pas de CB), Sentry (Developer free 5K events/mois, pas de CB), GitHub Actions (2000 min/mois, pas de CB par défaut). À vérifier régulièrement : `Settings → Billing` GitHub + Sentry pour confirmer absence de CB.
+
 ### Session 19 (2026-05-04) — Refonte UX multi-commandes client + DriverShell 3 onglets
 
 #### Contexte
@@ -569,6 +612,45 @@ Demande UX en deux axes :
 - Backend machine à états élargie pour la validation commerçant (PENDING → MERCHANT_CONFIRMED → broadcast livreurs).
 - Chat tri-participant (C↔M, C↔L, M↔L).
 - Inbox commerçant (notifications commandes entrantes).
+
+### Session 22 (2026-07-04) — Audit codex complet + corrections (Findings #1 à #8)
+
+> Audit par triangulation des 3 stacks (backend, mobile, admin). 9 findings classés. Correctifs appliqués via 3 agents parallèles (1 par stack) + corrections manuelles. Verdict initial : FAIL (escalade ADMIN + suivi client cassé). Après correctifs : findings bloquants résolus. Seul reste ouvert le #6 (période de commission `createdAt` vs `completedAt`) — décision métier `TO_VALIDATE`, non corrigé volontairement.
+
+#### Backend — Findings #1, #3, #4, #5, #7
+
+- **Finding #1 (CRITICAL) — Escalade de privilèges à l'inscription** : `POST /v1/auth/register` acceptait n'importe quel `role`, y compris `ADMIN`.
+  - `backend/src/auth/dto/register.dto.ts` : `@IsEnum(UserRole)` remplacé par `@IsIn(REGISTRABLE_ROLES)` où `REGISTRABLE_ROLES = [CLIENT, LIVREUR, COMMERCANT]` (ADMIN explicitement exclu). Nouveau type `RegistrableRole` exporté.
+  - `backend/src/auth/auth.service.ts` : garde défensive en tête de `register()` — `if (dto.role === UserRole.ADMIN) throw new ForbiddenException(...)`. Defense in depth : même si le DTO est un jour modifié par erreur, le service refuse quand même.
+  - Test ajouté dans `backend/src/auth/auth.service.spec.ts` : `register()` avec `role: ADMIN` → `ForbiddenException`, aucun accès DB (`findByPhone`/`createWithPassword` non appelés).
+  - Rétro-compatible : CLIENT/LIVREUR/COMMERCANT + `vehicleType` optionnel pour LIVREUR inchangés.
+- **Finding #5 (MEDIUM) — `chat:join` sans contrôle d'appartenance** : n'importe quel user authentifié pouvait rejoindre `order:<id>:chat` et lire les messages d'une commande qui ne le concernait pas.
+  - `backend/src/orders/orders.gateway.ts` : injection de `@InjectRepository(DeliveryOrder)` directement dans `OrdersGateway` (pas de cycle avec `OrdersService` — `DeliveryOrder` est déjà dans `TypeOrmModule.forFeature` de `OrdersModule`). Nouvelle méthode privée `isUserPartyToOrder(orderId, userId, role)` (ADMIN autorisé sans requête DB ; sinon vérifie `order.client.id`/`order.livreur.id`). `handleChatJoin` passe en `async`, ne join la room que si autorisé, sinon log un warning et ignore silencieusement.
+  - Tests ajoutés dans `backend/src/orders/orders.gateway.spec.ts` (mock du repository) : client autorisé, livreur autorisé, admin autorisé (sans requête DB), intrus refusé, commande introuvable refusée, pas de user authentifié refusé, `orderId` manquant no-op.
+- **Finding #7 (INFO) — route morte** : `POST /reports/commissions/:id/pay` (`payCommission`) dupliquait `mark-paid` sans être appelée nulle part (grep exhaustif backend/admin-dashboard/mobile_app : aucun appelant). Supprimée de `backend/src/reports/reports.controller.ts`, `mark-paid` conservée intacte.
+- **Finding #4 (MEDIUM) — test scaffold obsolète** : `backend/src/app.controller.spec.ts` testait `appController.getHello()` qui n'existe plus. Réécrit pour tester `getHealth()` (vérifie `{status: 'ok', uptime, timestamp, env}` via `expect.objectContaining`).
+- **Finding #3 (HIGH) — vulnérabilités npm** : `npm audit fix` (sans `--force`) lancé dans `backend/`. Résultat : 40 → 18 vulnérabilités (ws/socket.io/engine.io, qs, typeorm SQL injection orderBy, protobufjs corrigés). Restent volontairement non corrigées (nécessitent `--force`/breaking changes) : `multer` (upgrade impliquerait `@nestjs/core@7.5.5`, régression majeure), `uuid` (upgrade impliquerait `firebase-admin@14.1.0`, breaking). `backend/package-lock.json` mis à jour.
+- **Vérification finale** : `npm run build` OK. `npx jest` → **120/120 tests passent** (était 110 avant cette session : +10 nouveaux tests répartis entre `chat:join` et la garde ADMIN de `register`).
+- **Hors scope** : pas de mise à niveau forcée des deps restantes (`multer`, `uuid`/`firebase-admin`) — à planifier séparément avec tests de non-régression dédiés vu le risque de breaking change.
+
+#### Mobile — Finding #2
+
+- **Problème (HIGH)** : `OrderTrackingScreen._refreshDetails()` (écran CLIENT) appelait `GET /orders`, route protégée par `@Roles(UserRole.ADMIN, UserRole.LIVREUR)` dans `backend/src/orders/orders.controller.ts:46` → 403 pour un CLIENT. En plus, `OrdersService.findAll` renvoie désormais un objet paginé `{items, total, page, limit, hasMore}` et non un array brut, donc même en cas de succès le parsing `if (list is! List) return;` faisait sortir la méthode silencieusement.
+- **Correctif** : `mobile_app/lib/screens/order_tracking_screen.dart` — remplacé `_api.get('/orders')` par `_api.get('/orders/mine')` (ligne ~213) + mise à jour du commentaire de doc de `_refreshDetails()`. `GET /orders/mine` n'a pas de restriction de rôle et `OrdersService.findForUser` pour un CLIENT retourne un `find(...)` (array brut, relation `livreur` incluse) → le reste de la logique (`firstWhere`, extraction livreur/statut) reste valide sans autre changement.
+- **Vérification exhaustive** : recherche de tous les `_api.get('...orders...')` dans `mobile_app/lib/` — aucun autre écran CLIENT n'appelle `GET /orders` brut. `driver_screen.dart` utilise `/orders/available` (LIVREUR, légitime), `active_orders_store.dart` et `order_history_screen.dart` utilisent déjà `/orders/mine`, `chat_service.dart`/`eta_service.dart` utilisent des sous-routes `/orders/:id/...` sans rapport.
+- **Vérifications finales** : `flutter analyze` → 10 issues, toutes préexistantes (aucune nouvelle). `flutter test test/` → 10/10 ✅.
+
+#### Admin — Finding #3
+
+- **Vulnérabilités npm** : `npm audit fix` (sans `--force`) dans `admin-dashboard/`. Résultat : **25 → 13 vulnérabilités**. Corrigé : chaîne `ws` (via `engine.io-client`/`socket.io-client`, memory disclosure + DoS), `qs`, `sigstore`, `tar`. Restent volontairement (nécessitent bump majeur Angular/vite, breaking, + outillage build/dev non exposé en prod) : Angular core/compiler, `@angular/build`, `esbuild`, `piscina`, `undici`, `vite`/`launch-editor`, `@babel/core`. Seul `package-lock.json` modifié. Build prod OK (warnings NG8107 + budget bundle préexistants uniquement).
+
+#### Doc — Finding #8
+
+- Correction du tableau des rôles dans `PROGRESS.md` : le rôle marchand était documenté `MARCHAND` alors que le code utilise partout `COMMERCANT` (enum `UserRole`, mobile, router). Aligné sur `COMMERCANT`.
+
+#### Non corrigé (volontaire)
+
+- **Finding #6 (LOW, `TO_VALIDATE`)** : `ReportsService.weeklyReport` filtre les commissions par `createdAt` alors qu'une course peut être complétée une autre semaine (`completedAt` existe désormais). Décision métier à trancher avant correction.
 
 ### Session 17 (2026-05-01) — Sentry + monitoring + go_router + json_serializable + CI/CD
 

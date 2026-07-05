@@ -11,6 +11,19 @@ class User {
   final String role;
   final String? profilePhotoUrl;
 
+  /// Statut de validation du compte livreur par un admin.
+  /// `"PENDING"` | `"APPROVED"` | `"REJECTED"` | `null` (non-livreurs, ou
+  /// anciennes réponses backend qui ne renvoyaient pas encore ce champ).
+  final String? driverApprovalStatus;
+
+  /// Disponibilité déclarée par le livreur pour recevoir des courses.
+  /// Absent des anciennes réponses backend → défaut à `false`.
+  @JsonKey(defaultValue: false)
+  final bool isAvailable;
+
+  /// Motif de refus renseigné par l'admin si `driverApprovalStatus == REJECTED`.
+  final String? driverRejectionReason;
+
   User({
     required this.id,
     required this.firstName,
@@ -18,11 +31,44 @@ class User {
     required this.phone,
     required this.role,
     this.profilePhotoUrl,
+    this.driverApprovalStatus,
+    this.isAvailable = false,
+    this.driverRejectionReason,
   });
 
   factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);
 
   Map<String, dynamic> toJson() => _$UserToJson(this);
+
+  /// `true` si le compte livreur a été validé par un admin. Les non-livreurs
+  /// (rôle CLIENT/COMMERCANT) n'ont pas de workflow de validation : on ne
+  /// bloque donc que si `driverApprovalStatus` est explicitement renseigné
+  /// et différent de `APPROVED`.
+  bool get isDriverApproved =>
+      driverApprovalStatus == null || driverApprovalStatus == 'APPROVED';
+
+  bool get isDriverPending => driverApprovalStatus == 'PENDING';
+
+  bool get isDriverRejected => driverApprovalStatus == 'REJECTED';
+
+  User copyWith({
+    String? driverApprovalStatus,
+    bool? isAvailable,
+    String? driverRejectionReason,
+  }) {
+    return User(
+      id: id,
+      firstName: firstName,
+      lastName: lastName,
+      phone: phone,
+      role: role,
+      profilePhotoUrl: profilePhotoUrl,
+      driverApprovalStatus: driverApprovalStatus ?? this.driverApprovalStatus,
+      isAvailable: isAvailable ?? this.isAvailable,
+      driverRejectionReason:
+          driverRejectionReason ?? this.driverRejectionReason,
+    );
+  }
 }
 
 @JsonSerializable(explicitToJson: true)

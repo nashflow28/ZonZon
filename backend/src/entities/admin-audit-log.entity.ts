@@ -15,7 +15,9 @@ export type AuditAction =
   | 'SHOP_SUSPEND'
   | 'COMMISSION_MARK_PAID'
   | 'USER_DELETE'
-  | 'USER_RESTORE';
+  | 'USER_RESTORE'
+  | 'DRIVER_APPROVE'
+  | 'DRIVER_REJECT';
 
 @Entity('admin_audit_logs')
 @Index(['adminId', 'createdAt'])

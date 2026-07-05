@@ -7,6 +7,8 @@ import '../models/shop.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../services/shops_service.dart';
+import 'merchant/create_delivery_screen.dart';
+import 'merchant/merchant_orders_screen.dart';
 import 'merchant_shop_form_screen.dart';
 import 'merchant_product_form_screen.dart';
 import '../utils/platform_adapter.dart';
@@ -64,6 +66,14 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     if (saved == true) _refresh();
   }
 
+  Future<void> _openCreateDelivery() async {
+    await pushAdaptive<bool>(context, const CreateDeliveryScreen());
+  }
+
+  Future<void> _openMerchantOrders() async {
+    await pushAdaptive<void>(context, const MerchantOrdersScreen());
+  }
+
   Future<void> _pickShopLogo() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -119,13 +129,28 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       body: _loading
           ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
           : _shop == null
-              ? _OnboardingState(onCreate: _openShopForm)
+              ? ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _DeliveriesQuickActions(
+                      onCreate: _openCreateDelivery,
+                      onViewOrders: _openMerchantOrders,
+                    ),
+                    const SizedBox(height: 24),
+                    _OnboardingState(onCreate: _openShopForm),
+                  ],
+                )
               : RefreshIndicator(
                   color: const Color(0xFF10B981),
                   onRefresh: _refresh,
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
+                      _DeliveriesQuickActions(
+                        onCreate: _openCreateDelivery,
+                        onViewOrders: _openMerchantOrders,
+                      ),
+                      const SizedBox(height: 24),
                       _ShopHeaderCard(
                         shop: _shop!,
                         onEdit: _openShopForm,
@@ -245,6 +270,82 @@ class _OnboardingState extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _DeliveriesQuickActions extends StatelessWidget {
+  final VoidCallback onCreate;
+  final VoidCallback onViewOrders;
+  const _DeliveriesQuickActions({
+    required this.onCreate,
+    required this.onViewOrders,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.local_shipping_outlined, color: Color(0xFF0EA5E9)),
+              SizedBox(width: 10),
+              Text(
+                'Livraisons clients',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onCreate,
+                  icon: const Icon(Icons.add_road, size: 18),
+                  label: const Text('Créer une livraison'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: onViewOrders,
+                  icon: const Icon(Icons.receipt_long, size: 18, color: Color(0xFF0EA5E9)),
+                  label: const Text(
+                    'Mes livraisons',
+                    style: TextStyle(color: Color(0xFF0EA5E9)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF0EA5E9)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

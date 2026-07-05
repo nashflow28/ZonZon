@@ -35,6 +35,10 @@ export const routes: Routes = [
       {
         path: 'audit-logs',
         loadComponent: () => import('./audit-logs/audit-logs.component').then(m => m.AuditLogsComponent)
+      },
+      {
+        path: 'driver-validation',
+        loadComponent: () => import('./drivers/driver-validation/driver-validation.component').then(m => m.DriverValidationComponent)
       }
     ]
   },

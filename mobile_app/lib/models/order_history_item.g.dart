@@ -20,4 +20,6 @@ Map<String, dynamic> _$OrderHistoryItemToJson(OrderHistoryItem instance) =>
       'cancelledBy': instance.cancelledBy,
       'livreur': instance.livreur,
       'client': instance.client,
+      'clientPhone': instance.clientPhone,
+      'clientName': instance.clientName,
     };

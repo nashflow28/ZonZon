@@ -3,8 +3,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 import 'controllers/order_socket_controller.dart';
+import 'models/user.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
+import 'services/driver_service.dart';
 import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
 import 'screens/rating_screen.dart';
@@ -25,6 +27,24 @@ class _DriverScreenState extends State<DriverScreen> {
   String? currentDriverId;
   final ApiClient _api = ApiClient();
   final AuthService _authService = AuthService();
+  final DriverService _driverService = DriverService();
+
+  /// Statut de validation admin du compte livreur. `null` tant que non
+  /// encore chargé (on affiche alors un loader plutôt que de présumer un
+  /// état). Une fois chargé, vaut `"PENDING"` | `"APPROVED"` | `"REJECTED"`.
+  String? _driverApprovalStatus;
+  String? _driverRejectionReason;
+  bool _isAvailable = false;
+
+  /// `true` tant que l'état de validation/disponibilité n'a pas été chargé
+  /// (depuis le user local puis rafraîchi via `GET /users/me`).
+  bool _statusLoading = true;
+
+  /// `true` pendant l'appel réseau de bascule de disponibilité (désactive
+  /// le switch pour éviter les doubles taps).
+  bool _togglingAvailability = false;
+
+  bool get _isApproved => _driverApprovalStatus == 'APPROVED';
 
   /// Socket unifié partagé avec `order_screen.dart`. Côté livreur on ne
   /// définit jamais `activeOrderId` (on n'a pas de course "à suivre" comme
@@ -89,9 +109,50 @@ class _DriverScreenState extends State<DriverScreen> {
     final user = await _authService.getCurrentUser();
     if (user != null) {
       currentDriverId = user.id;
+      if (mounted) {
+        setState(() {
+          _driverApprovalStatus = user.driverApprovalStatus;
+          _driverRejectionReason = user.driverRejectionReason;
+          _isAvailable = user.isAvailable;
+        });
+      }
     }
+
+    // Rafraîchit depuis le serveur pour avoir la valeur à jour (un admin a
+    // pu valider/refuser le compte, ou changer la disponibilité ailleurs).
+    await _refreshDriverStatus();
+
     await _initSocket();
-    await _loadAvailableOrders();
+
+    // On n'interroge le radar que si le compte est validé : sinon le
+    // backend répond 403 (ce qui déclencherait un état d'erreur opaque).
+    if (_isApproved) {
+      await _loadAvailableOrders();
+    }
+  }
+
+  /// Recharge `driverApprovalStatus` / `isAvailable` / `driverRejectionReason`
+  /// depuis `GET /users/me` et synchronise le user stocké localement.
+  Future<void> _refreshDriverStatus() async {
+    try {
+      final res = await _api.get('/users/me');
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final user = User.fromJson(data);
+        await _authService.saveUser(user);
+        if (mounted) {
+          setState(() {
+            _driverApprovalStatus = user.driverApprovalStatus;
+            _driverRejectionReason = user.driverRejectionReason;
+            _isAvailable = user.isAvailable;
+          });
+        }
+      }
+    } catch (_) {
+      // Pas de connexion : on garde les valeurs locales déjà affichées.
+    } finally {
+      if (mounted) setState(() => _statusLoading = false);
+    }
   }
 
   Future<void> _loadAvailableOrders() async {
@@ -106,6 +167,35 @@ class _DriverScreenState extends State<DriverScreen> {
         }
       }
     } catch (_) {}
+  }
+
+  /// Bascule la disponibilité du livreur. Verrouillé si le compte n'est pas
+  /// validé (le backend refuserait de toute façon avec un 403).
+  Future<void> _toggleAvailability(bool value) async {
+    if (!_isApproved || _togglingAvailability) return;
+    setState(() => _togglingAvailability = true);
+    try {
+      final effective = await _driverService.setAvailability(value);
+      if (!mounted) return;
+      setState(() {
+        _isAvailable = effective;
+      });
+      showAdaptiveSnack(
+        context,
+        effective ? 'Vous êtes maintenant disponible' : 'Vous êtes maintenant indisponible',
+      );
+      // Si on vient de passer disponible et que le radar n'avait jamais été
+      // chargé (ex. compte validé entre-temps), on rafraîchit la liste.
+      if (effective) {
+        await _loadAvailableOrders();
+      }
+    } catch (e) {
+      if (mounted) {
+        showAdaptiveSnack(context, e.toString().replaceFirst('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _togglingAvailability = false);
+    }
   }
 
   /// Initialise `OrderSocketController` et abonne les streams pertinents
@@ -654,6 +744,141 @@ class _DriverScreenState extends State<DriverScreen> {
   }
 
   Widget _buildRadar() {
+    if (_statusLoading) {
+      return Center(child: adaptiveLoader(color: const Color(0xFF10B981)));
+    }
+
+    return Column(
+      children: [
+        _buildAvailabilityHeader(),
+        Expanded(child: _buildRadarBody()),
+      ],
+    );
+  }
+
+  /// En-tête toujours visible en haut du Radar : bandeau de statut si le
+  /// compte n'est pas validé, sinon le switch de disponibilité.
+  Widget _buildAvailabilityHeader() {
+    if (!_isApproved) {
+      return _buildApprovalBanner();
+    }
+    return _buildAvailabilitySwitch();
+  }
+
+  /// Bandeau affiché tant que le compte livreur n'est pas `APPROVED`.
+  Widget _buildApprovalBanner() {
+    final isRejected = _driverApprovalStatus == 'REJECTED';
+    final color = isRejected ? const Color(0xFFEF4444) : const Color(0xFFF59E0B);
+    final title = isRejected
+        ? 'Votre compte livreur a été refusé'
+        : 'Compte en attente de validation';
+    final subtitle = isRejected
+        ? (_driverRejectionReason?.trim().isNotEmpty == true
+            ? _driverRejectionReason!
+            : 'Contactez le support pour plus de détails.')
+        : 'Votre compte est en attente de validation par un administrateur. '
+            'Vous pourrez accepter des courses une fois validé.';
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(isRejected ? Icons.error_outline : Icons.hourglass_top, color: color),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Switch « Disponible / Indisponible » — actif uniquement si le compte
+  /// est validé (sinon désactivé, cf. `_buildApprovalBanner`).
+  Widget _buildAvailabilitySwitch() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _isAvailable ? Icons.wifi_tethering : Icons.wifi_tethering_off,
+            color: _isAvailable ? const Color(0xFF10B981) : Colors.white38,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _isAvailable ? 'Disponible' : 'Indisponible',
+              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+            ),
+          ),
+          if (_togglingAvailability)
+            SizedBox(
+              width: 24,
+              height: 24,
+              child: adaptiveLoader(color: const Color(0xFF10B981)),
+            )
+          else
+            Switch(
+              value: _isAvailable,
+              activeThumbColor: const Color(0xFF10B981),
+              onChanged: _toggleAvailability,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRadarBody() {
+    if (!_isApproved) {
+      // Compte non validé : pas de radar, le bandeau ci-dessus suffit.
+      return const SizedBox.shrink();
+    }
+
+    if (!_isAvailable) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.pause_circle_outline, color: Colors.white38, size: 48),
+              const SizedBox(height: 16),
+              const Text(
+                'Vous êtes indisponible.',
+                style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Passez disponible pour recevoir des courses.',
+                style: TextStyle(color: Colors.white54, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return availableOrders.isEmpty
         ? Center(
             child: Column(

@@ -13,6 +13,9 @@ User _$UserFromJson(Map<String, dynamic> json) => User(
   phone: json['phone'] as String,
   role: json['role'] as String,
   profilePhotoUrl: json['profilePhotoUrl'] as String?,
+  driverApprovalStatus: json['driverApprovalStatus'] as String?,
+  isAvailable: json['isAvailable'] as bool? ?? false,
+  driverRejectionReason: json['driverRejectionReason'] as String?,
 );
 
 Map<String, dynamic> _$UserToJson(User instance) => <String, dynamic>{
@@ -22,6 +25,9 @@ Map<String, dynamic> _$UserToJson(User instance) => <String, dynamic>{
   'phone': instance.phone,
   'role': instance.role,
   'profilePhotoUrl': instance.profilePhotoUrl,
+  'driverApprovalStatus': instance.driverApprovalStatus,
+  'isAvailable': instance.isAvailable,
+  'driverRejectionReason': instance.driverRejectionReason,
 };
 
 AuthResult _$AuthResultFromJson(Map<String, dynamic> json) => AuthResult(
