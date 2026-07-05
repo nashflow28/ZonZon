@@ -14,6 +14,7 @@ import { PositionsService } from './positions.service';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PricingService } from '../pricing/pricing.service';
+import { MerchantDriversService } from '../merchant-drivers/merchant-drivers.service';
 import {
   DeliveryOrder,
   OrderStatus,
@@ -85,6 +86,7 @@ describe('OrdersService', () => {
     findByPhone: jest.Mock;
     findLivreursWithFcmToken: jest.Mock;
     findEligibleLivreurIds: jest.Mock;
+    findAvailableDrivers: jest.Mock;
   };
   let gateway: {
     broadcastNewOrder: jest.Mock;
@@ -103,6 +105,13 @@ describe('OrdersService', () => {
     getMinPriceFcfa: jest.Mock;
     getConfig: jest.Mock;
     updateConfig: jest.Mock;
+  };
+  let merchantDriversService: {
+    isAffiliated: jest.Mock;
+    listDriversForMerchant: jest.Mock;
+    addAffiliation: jest.Mock;
+    removeAffiliation: jest.Mock;
+    listMerchantIdsForDriver: jest.Mock;
   };
   let originalOrsKey: string | undefined;
 
@@ -133,6 +142,7 @@ describe('OrdersService', () => {
       findByPhone: jest.fn(),
       findLivreursWithFcmToken: jest.fn().mockResolvedValue([]),
       findEligibleLivreurIds: jest.fn().mockResolvedValue([]),
+      findAvailableDrivers: jest.fn().mockResolvedValue([]),
     } as any;
     gateway = {
       broadcastNewOrder: jest.fn(),
@@ -155,6 +165,13 @@ describe('OrdersService', () => {
       getConfig: jest.fn(),
       updateConfig: jest.fn(),
     };
+    merchantDriversService = {
+      isAffiliated: jest.fn().mockResolvedValue(false),
+      listDriversForMerchant: jest.fn().mockResolvedValue([]),
+      addAffiliation: jest.fn(),
+      removeAffiliation: jest.fn(),
+      listMerchantIdsForDriver: jest.fn().mockResolvedValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -168,6 +185,7 @@ describe('OrdersService', () => {
         { provide: NotificationsService, useValue: notifications },
         { provide: PositionsService, useValue: positionsService },
         { provide: PricingService, useValue: pricingService },
+        { provide: MerchantDriversService, useValue: merchantDriversService },
       ],
     }).compile();
 
@@ -595,6 +613,70 @@ describe('OrdersService', () => {
         clientUser.id,
       );
     });
+
+    // ── Priorité 3, Lot 3, item 1 : course réservée (preferredLivreur) ──────
+
+    it('refuse un livreur non-preferred sur une course réservée à un autre livreur', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      ordersRepository.findOne.mockResolvedValueOnce({
+        id: 'ord-reserved',
+        status: OrderStatus.PENDING,
+        client: { id: clientUser.id },
+        preferredLivreur: { id: 'livreur-2' },
+      });
+
+      await expect(
+        service.acceptOrder('ord-reserved', livreurUser.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      // L'UPDATE ne doit même pas être tenté
+      expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
+    });
+
+    it('autorise le livreur preferred à accepter la course qui lui est réservée', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      ordersRepository.findOne
+        .mockResolvedValueOnce({
+          id: 'ord-reserved-2',
+          status: OrderStatus.PENDING,
+          client: { id: clientUser.id },
+          preferredLivreur: { id: livreurUser.id },
+        })
+        .mockResolvedValueOnce({
+          id: 'ord-reserved-2',
+          status: OrderStatus.ACCEPTED,
+          client: { id: clientUser.id },
+          livreur: livreurUser,
+        });
+      ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
+
+      const result = await service.acceptOrder(
+        'ord-reserved-2',
+        livreurUser.id,
+      );
+      expect(result.status).toBe(OrderStatus.ACCEPTED);
+      expect(ordersRepository.__updateExecute).toHaveBeenCalledTimes(1);
+    });
+
+    it('une course non réservée (preferredLivreur null) reste acceptable par n’importe quel livreur', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      ordersRepository.findOne
+        .mockResolvedValueOnce({
+          id: 'ord-open',
+          status: OrderStatus.PENDING,
+          client: { id: clientUser.id },
+          preferredLivreur: null,
+        })
+        .mockResolvedValueOnce({
+          id: 'ord-open',
+          status: OrderStatus.ACCEPTED,
+          client: { id: clientUser.id },
+          livreur: livreurUser,
+        });
+      ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
+
+      const result = await service.acceptOrder('ord-open', livreurUser.id);
+      expect(result.status).toBe(OrderStatus.ACCEPTED);
+    });
   });
 
   describe('findAvailable', () => {
@@ -627,11 +709,31 @@ describe('OrdersService', () => {
       const result = await service.findAvailable(livreurUser);
 
       expect(result).toBe(orders);
-      expect(ordersRepository.find).toHaveBeenCalledWith(
+      const arg = ordersRepository.find.mock.calls[0][0];
+      // `where` composite (array) : courses non réservées + réservées à CE livreur
+      expect(Array.isArray(arg.where)).toBe(true);
+      expect(arg.where).toEqual([
+        expect.objectContaining({ status: OrderStatus.PENDING }),
         expect.objectContaining({
-          where: expect.objectContaining({ status: OrderStatus.PENDING }),
+          status: OrderStatus.PENDING,
+          preferredLivreur: { id: livreurUser.id },
         }),
-      );
+      ]);
+    });
+
+    it('exclut une course réservée à un AUTRE livreur (via le where composite passé au repo)', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      ordersRepository.find.mockResolvedValue([]);
+
+      await service.findAvailable(livreurUser);
+
+      const arg = ordersRepository.find.mock.calls[0][0];
+      // Le 2e bras du where ne matche que preferredLivreur = CE livreur —
+      // une course réservée à un autre livreur ne serait donc renvoyée par
+      // aucun des deux bras (status=PENDING+livreur IS NULL+preferredLivreur
+      // IS NULL, OU preferredLivreur = ce livreur).
+      expect(arg.where[1].preferredLivreur).toEqual({ id: livreurUser.id });
+      expect(arg.where[0].preferredLivreur).toBeDefined();
     });
   });
 
@@ -1106,6 +1208,116 @@ describe('OrdersService', () => {
         }),
       );
     });
+
+    // ── Priorité 3, Lot 3, item 1 : attribution manuelle (preferredLivreurId) ──
+
+    it('preferredLivreurId affilié → réserve la course et broadcast ciblé (Set d’un seul id)', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === livreurUser.id) return { ...livreurUser, isAvailable: false };
+        return null;
+      });
+      usersService.findByPhone.mockResolvedValue(null);
+      merchantDriversService.isAffiliated.mockResolvedValue(true);
+
+      const result = await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+        preferredLivreurId: livreurUser.id,
+      } as any);
+
+      expect(merchantDriversService.isAffiliated).toHaveBeenCalledWith(
+        merchantUser.id,
+        livreurUser.id,
+      );
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          preferredLivreur: expect.objectContaining({ id: livreurUser.id }),
+        }),
+      );
+      expect(gateway.broadcastNewOrder).toHaveBeenCalledWith(
+        result,
+        new Set([livreurUser.id]),
+      );
+      // Le broadcast large (findEligibleLivreurIds) ne doit pas être utilisé
+      // puisque le ciblage est exclusif au livreur préféré.
+      expect(usersService.findEligibleLivreurIds).not.toHaveBeenCalled();
+    });
+
+    it('preferredLivreurId non affilié ET indisponible → BadRequestException', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === livreurUser.id) return { ...livreurUser, isAvailable: false };
+        return null;
+      });
+      usersService.findByPhone.mockResolvedValue(null);
+      merchantDriversService.isAffiliated.mockResolvedValue(false);
+
+      await expect(
+        service.createMerchantOrder(merchantUser.id, {
+          ...dto,
+          clientPhone: '+22899999999',
+          preferredLivreurId: livreurUser.id,
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('preferredLivreurId non affilié MAIS disponible → autorisé', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === livreurUser.id) return livreurUser; // isAvailable: true
+        return null;
+      });
+      usersService.findByPhone.mockResolvedValue(null);
+      merchantDriversService.isAffiliated.mockResolvedValue(false);
+
+      const result = await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+        preferredLivreurId: livreurUser.id,
+      } as any);
+
+      expect(result).toBeDefined();
+      expect(gateway.broadcastNewOrder).toHaveBeenCalledWith(
+        result,
+        new Set([livreurUser.id]),
+      );
+    });
+
+    it('preferredLivreurId pointant vers un non-livreur → BadRequestException', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === clientUser.id) return clientUser;
+        return null;
+      });
+      usersService.findByPhone.mockResolvedValue(null);
+
+      await expect(
+        service.createMerchantOrder(merchantUser.id, {
+          ...dto,
+          clientPhone: '+22899999999',
+          preferredLivreurId: clientUser.id,
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('preferredLivreurId non APPROVED → BadRequestException', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === livreurUser.id)
+          return { ...livreurUser, driverApprovalStatus: 'PENDING' };
+        return null;
+      });
+      usersService.findByPhone.mockResolvedValue(null);
+
+      await expect(
+        service.createMerchantOrder(merchantUser.id, {
+          ...dto,
+          clientPhone: '+22899999999',
+          preferredLivreurId: livreurUser.id,
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
   });
 
   describe('findForUser', () => {
@@ -1345,6 +1557,95 @@ describe('OrdersService', () => {
       await expect(
         service.updatePaymentStatus('missing', PaymentStatus.PAID, adminUser),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('findAvailableDriversForActor', () => {
+    const driverA = {
+      id: 'driver-a',
+      firstName: 'Anna',
+      lastName: 'A',
+      vehicle: { type: 'MOTO' },
+    };
+    const driverB = {
+      id: 'driver-b',
+      firstName: 'Ben',
+      lastName: 'B',
+      vehicle: null,
+    };
+    const driverC = {
+      id: 'driver-c',
+      firstName: 'Cid',
+      lastName: 'C',
+      vehicle: null,
+    };
+
+    it('sans coordonnées : renvoie tous les livreurs disponibles sans distance', async () => {
+      usersService.findAvailableDrivers.mockResolvedValue([driverA, driverB]);
+
+      const result = await service.findAvailableDriversForActor(clientUser);
+
+      expect(result).toHaveLength(2);
+      expect(result.every((d) => d.distanceKm === null)).toBe(true);
+      expect(positionsService.findLatestForLivreur).not.toHaveBeenCalled();
+    });
+
+    it('avec coordonnées : calcule la distance et trie par distance croissante (sans position en fin)', async () => {
+      usersService.findAvailableDrivers.mockResolvedValue([
+        driverA,
+        driverB,
+        driverC,
+      ]);
+      // driverA loin (~50km), driverB proche (~1km), driverC sans position
+      positionsService.findLatestForLivreur.mockImplementation(
+        async (id: string) => {
+          if (id === driverA.id) return { lat: 6.6, lng: 1.22 };
+          if (id === driverB.id) return { lat: 6.135, lng: 1.225 };
+          return null;
+        },
+      );
+
+      const result = await service.findAvailableDriversForActor(
+        clientUser,
+        6.13,
+        1.22,
+      );
+
+      expect(result.map((d) => d.id)).toEqual([
+        driverB.id,
+        driverA.id,
+        driverC.id,
+      ]);
+      expect(result[0].distanceKm).toBeLessThan(result[1].distanceKm!);
+      expect(result[2].distanceKm).toBeNull();
+    });
+
+    it('COMMERCANT : place ses livreurs affiliés en tête avec isAffiliated=true', async () => {
+      usersService.findAvailableDrivers.mockResolvedValue([
+        driverA,
+        driverB,
+      ]);
+      merchantDriversService.listDriversForMerchant.mockResolvedValue([
+        driverB,
+      ]);
+
+      const result = await service.findAvailableDriversForActor(merchantUser);
+
+      expect(merchantDriversService.listDriversForMerchant).toHaveBeenCalledWith(
+        merchantUser.id,
+      );
+      expect(result[0].id).toBe(driverB.id);
+      expect(result[0].isAffiliated).toBe(true);
+      expect(result[1].isAffiliated).toBe(false);
+    });
+
+    it('non-COMMERCANT : n’appelle pas listDriversForMerchant (tous isAffiliated=false)', async () => {
+      usersService.findAvailableDrivers.mockResolvedValue([driverA]);
+
+      const result = await service.findAvailableDriversForActor(clientUser);
+
+      expect(merchantDriversService.listDriversForMerchant).not.toHaveBeenCalled();
+      expect(result[0].isAffiliated).toBe(false);
     });
   });
 });

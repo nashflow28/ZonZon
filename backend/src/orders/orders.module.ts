@@ -10,6 +10,7 @@ import { DriverPosition } from '../entities/driver-position.entity';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PricingModule } from '../pricing/pricing.module';
+import { MerchantDriversModule } from '../merchant-drivers/merchant-drivers.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PricingModule } from '../pricing/pricing.module';
     UsersModule,
     NotificationsModule,
     PricingModule,
+    MerchantDriversModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: '7d' },

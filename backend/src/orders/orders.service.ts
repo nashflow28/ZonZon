@@ -7,6 +7,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -35,6 +36,7 @@ import { DriverApprovalStatus, UserRole } from '../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { haversineKm } from '../common/geo';
 import { PricingService } from '../pricing/pricing.service';
+import { MerchantDriversService } from '../merchant-drivers/merchant-drivers.service';
 
 type RouteCacheEntry = { km: number; at: number };
 type RouteWithGeometry = { km: number; geometry: number[][] };
@@ -121,6 +123,7 @@ export class OrdersService {
     private notifications: NotificationsService,
     private positionsService: PositionsService,
     private pricing: PricingService,
+    @Optional() private merchantDriversService?: MerchantDriversService,
   ) {}
 
   /** Tarif au km courant, avec fallback sur la constante si la config DB échoue. */
@@ -371,10 +374,74 @@ export class OrdersService {
     };
   }
 
+  /**
+   * Vérifie qu'un `preferredLivreurId` (attribution manuelle, Priorité 3
+   * Lot 3 item 1) désigne bien un livreur APPROVED. Lève BadRequestException
+   * sinon. Renvoie le User chargé (utile pour la notif FCM ciblée).
+   */
+  private async assertValidPreferredLivreur(preferredLivreurId: string) {
+    const driver = await this.usersService.findOne(preferredLivreurId);
+    if (driver.role !== UserRole.LIVREUR) {
+      throw new BadRequestException(
+        'Le livreur sélectionné doit être un livreur',
+      );
+    }
+    if (driver.driverApprovalStatus !== DriverApprovalStatus.APPROVED) {
+      throw new BadRequestException(
+        "Le livreur sélectionné n'est pas encore validé par un administrateur",
+      );
+    }
+    return driver;
+  }
+
+  /**
+   * Diffuse une nouvelle course : broadcast ciblé (1 seul livreur) si
+   * `preferredLivreur` est défini, sinon broadcast large classique (tous
+   * les livreurs éligibles). Factorisé entre `createOrder` et
+   * `createMerchantOrder`.
+   */
+  private async dispatchNewOrder(
+    saved: DeliveryOrder,
+    preferredLivreurId?: string,
+  ): Promise<void> {
+    if (preferredLivreurId) {
+      const targetIds = new Set([preferredLivreurId]);
+      this.ordersGateway.broadcastNewOrder(saved, targetIds);
+      // Notifie directement CE livreur en FCM s'il est offline, au lieu du
+      // fallback large `notifyOfflineLivreurs` (qui viserait tous les
+      // livreurs éligibles).
+      if (!this.ordersGateway.isUserConnected(preferredLivreurId)) {
+        void this.notifications.sendToUser(preferredLivreurId, {
+          title: 'Course réservée pour vous',
+          body: `Pickup: ${saved.pickupAddress ?? 'adresse non renseignée'}`,
+          data: { kind: 'new_order', orderId: saved.id },
+        });
+      }
+      return;
+    }
+
+    const eligibleIds = new Set(
+      await this.usersService.findEligibleLivreurIds(),
+    );
+    this.ordersGateway.broadcastNewOrder(saved, eligibleIds);
+
+    // Fallback FCM : un livreur qui a fermé l'app (donc pas connecté au WS)
+    // ne reçoit pas l'évent `newOrderAvailable`. On lui envoie une push.
+    // Fire-and-forget pour ne pas bloquer la réponse HTTP.
+    void this.notifyOfflineLivreurs(saved);
+  }
+
   async createOrder(clientId: string, dto: CreateOrderDto) {
     const client = await this.usersService.findOne(clientId);
     if (client.role !== UserRole.CLIENT) {
       throw new ForbiddenException('Seul un client peut créer une commande');
+    }
+
+    let preferredLivreur: any = null;
+    if (dto.preferredLivreurId) {
+      preferredLivreur = await this.assertValidPreferredLivreur(
+        dto.preferredLivreurId,
+      );
     }
 
     const { distanceKm, priceFcfa } = await this.buildOrderPricing(dto);
@@ -391,19 +458,12 @@ export class OrdersService {
       distanceKm,
       priceFcfa,
       status: OrderStatus.PENDING,
+      preferredLivreur,
     });
 
     const saved = await this.ordersRepository.save(order);
 
-    const eligibleIds = new Set(
-      await this.usersService.findEligibleLivreurIds(),
-    );
-    this.ordersGateway.broadcastNewOrder(saved, eligibleIds);
-
-    // Fallback FCM : un livreur qui a fermé l'app (donc pas connecté au WS)
-    // ne reçoit pas l'évent `newOrderAvailable`. On lui envoie une push.
-    // Fire-and-forget pour ne pas bloquer la réponse HTTP.
-    void this.notifyOfflineLivreurs(saved);
+    await this.dispatchNewOrder(saved, preferredLivreur?.id);
 
     return saved;
   }
@@ -421,6 +481,27 @@ export class OrdersService {
       throw new ForbiddenException(
         'Seul un commerçant peut créer une livraison pour un client',
       );
+    }
+
+    // Attribution manuelle (Priorité 3, Lot 3, item 1) : le livreur doit
+    // être APPROVED. Pour un commerçant on accepte soit un livreur affilié
+    // (relation de confiance via `merchant-drivers`), soit un livreur
+    // APPROVED + actuellement disponible (comme pour un broadcast normal) —
+    // ce qui permet aussi de réserver un livreur externe recommandé.
+    let preferredLivreur: any = null;
+    if (dto.preferredLivreurId) {
+      preferredLivreur = await this.assertValidPreferredLivreur(
+        dto.preferredLivreurId,
+      );
+      const affiliated = await this.merchantDriversService?.isAffiliated(
+        merchantId,
+        dto.preferredLivreurId,
+      );
+      if (!affiliated && !preferredLivreur.isAvailable) {
+        throw new BadRequestException(
+          'Ce livreur doit être affilié à votre compte ou actuellement disponible',
+        );
+      }
     }
 
     let client: any = null;
@@ -476,15 +557,12 @@ export class OrdersService {
       distanceKm,
       priceFcfa,
       status: OrderStatus.PENDING,
+      preferredLivreur,
     });
 
     const saved = await this.ordersRepository.save(order);
 
-    const eligibleIds = new Set(
-      await this.usersService.findEligibleLivreurIds(),
-    );
-    this.ordersGateway.broadcastNewOrder(saved, eligibleIds);
-    void this.notifyOfflineLivreurs(saved);
+    await this.dispatchNewOrder(saved, preferredLivreur?.id);
 
     if (client?.id) {
       void this.notifications.sendToUser(client.id, {
@@ -666,8 +744,23 @@ export class OrdersService {
     if (!u.isAvailable) {
       return [];
     }
+    // Exclut les courses réservées à un AUTRE livreur (attribution manuelle,
+    // Priorité 3 Lot 3 item 1). Une course sans preferredLivreurId reste
+    // visible par tous (rétro-compat) ; une course réservée à CE livreur
+    // reste visible pour lui.
     return this.ordersRepository.find({
-      where: { status: OrderStatus.PENDING, livreur: IsNull() },
+      where: [
+        {
+          status: OrderStatus.PENDING,
+          livreur: IsNull(),
+          preferredLivreur: IsNull(),
+        },
+        {
+          status: OrderStatus.PENDING,
+          livreur: IsNull(),
+          preferredLivreur: { id: u.id },
+        },
+      ],
       relations: ['client'],
       order: { createdAt: 'DESC' },
     });
@@ -717,14 +810,26 @@ export class OrdersService {
     }
 
     // 1) Vérifier l'existence avant l'UPDATE pour distinguer 404 (introuvable)
-    //    de 409 (déjà prise par un autre livreur).
+    //    de 409 (déjà prise par un autre livreur) et 403 (réservée à un
+    //    autre livreur — attribution manuelle, Priorité 3 Lot 3 item 1).
     const existing = await this.ordersRepository.findOne({
       where: { id: orderId },
+      relations: ['preferredLivreur'],
     });
     if (!existing) throw new NotFoundException('Commande introuvable');
 
+    if (
+      existing.preferredLivreur?.id &&
+      existing.preferredLivreur.id !== livreurId
+    ) {
+      throw new ForbiddenException(
+        'Cette course est réservée à un autre livreur',
+      );
+    }
+
     // 2) UPDATE atomique : seul le premier livreur dont la transaction
-    //    arrive en DB matchera (status=PENDING ET livreurId IS NULL).
+    //    arrive en DB matchera (status=PENDING ET livreurId IS NULL ET
+    //    (preferredLivreurId IS NULL OU = ce livreur)).
     const result = await this.ordersRepository
       .createQueryBuilder()
       .update(DeliveryOrder)
@@ -736,6 +841,10 @@ export class OrdersService {
       .where('id = :id', { id: orderId })
       .andWhere('status = :pending', { pending: OrderStatus.PENDING })
       .andWhere('livreurId IS NULL')
+      .andWhere(
+        '(preferredLivreurId IS NULL OR preferredLivreurId = :livreurId)',
+        { livreurId },
+      )
       .execute();
 
     if (!result.affected || result.affected === 0) {
@@ -1058,5 +1167,122 @@ export class OrdersService {
 
     order.paymentStatus = paymentStatus;
     return this.ordersRepository.save(order);
+  }
+
+  /**
+   * Liste des livreurs disponibles pour un choix manuel (Priorité 3, Lot 3,
+   * item 1) : `GET /orders/available-drivers`. Renvoie les livreurs
+   * APPROVED + isAvailable, chacun avec `{ id, firstName, lastName,
+   * vehicle?, distanceKm? }`.
+   *
+   * - Si `lat`/`lng` sont fournis, on calcule la distance depuis la
+   *   dernière position connue du livreur (PositionsService) et on trie par
+   *   distance croissante ; les livreurs sans position connue sont mis en
+   *   fin de liste.
+   * - Si l'acteur est un COMMERCANT, ses livreurs affiliés sont placés en
+   *   tête (flag `isAffiliated: true`), triés eux-mêmes par distance si
+   *   disponible.
+   */
+  async findAvailableDriversForActor(
+    actor: any,
+    lat?: number,
+    lng?: number,
+  ): Promise<
+    Array<{
+      id: string;
+      firstName: string;
+      lastName: string;
+      vehicle: any;
+      distanceKm: number | null;
+      isAffiliated: boolean;
+    }>
+  > {
+    const drivers = await this.usersService.findAvailableDrivers();
+
+    const hasCoords =
+      typeof lat === 'number' &&
+      typeof lng === 'number' &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng);
+
+    let affiliatedIds = new Set<string>();
+    const actorId = actor?.id ?? actor?.sub;
+    if (actor?.role === UserRole.COMMERCANT && actorId) {
+      const affiliatedDrivers =
+        (await this.merchantDriversService?.listDriversForMerchant(
+          actorId,
+        )) ?? [];
+      affiliatedIds = new Set(affiliatedDrivers.map((d: any) => d.id));
+    }
+
+    const enriched = await Promise.all(
+      drivers.map(async (driver) => {
+        let distanceKm: number | null = null;
+        if (hasCoords) {
+          const pos = await this.positionsService.findLatestForLivreur(
+            driver.id,
+          );
+          if (pos) {
+            distanceKm = parseFloat(
+              haversineKm(pos.lat, pos.lng, lat!, lng!).toFixed(2),
+            );
+          }
+        }
+        return {
+          id: driver.id,
+          firstName: driver.firstName,
+          lastName: driver.lastName,
+          vehicle: (driver as any).vehicle ?? null,
+          distanceKm,
+          isAffiliated: affiliatedIds.has(driver.id),
+        };
+      }),
+    );
+
+    enriched.sort((a, b) => {
+      // Affiliés d'abord
+      if (a.isAffiliated !== b.isAffiliated) {
+        return a.isAffiliated ? -1 : 1;
+      }
+      // Puis par distance croissante (null = fin de liste)
+      if (a.distanceKm === null && b.distanceKm === null) return 0;
+      if (a.distanceKm === null) return 1;
+      if (b.distanceKm === null) return -1;
+      return a.distanceKm - b.distanceKm;
+    });
+
+    return enriched;
+  }
+
+  /**
+   * Réassignation manuelle (optionnelle, Priorité 3 Lot 3 item 1) : permet
+   * à un commerçant/admin de désigner (ou changer) le livreur préféré d'une
+   * course encore PENDING et non acceptée, par exemple si le premier
+   * livreur ciblé n'a pas répondu. Re-déclenche le broadcast ciblé + la
+   * notification FCM vers ce nouveau livreur.
+   */
+  async assignPreferredLivreur(
+    orderId: string,
+    livreurId: string,
+  ): Promise<DeliveryOrder> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client', 'livreur', 'preferredLivreur'],
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+
+    if (order.status !== OrderStatus.PENDING || order.livreur) {
+      throw new BadRequestException(
+        'Seule une course PENDING non encore acceptée peut être réassignée',
+      );
+    }
+
+    const driver = await this.assertValidPreferredLivreur(livreurId);
+    order.preferredLivreur = driver;
+    const saved = await this.ordersRepository.save(order);
+
+    await this.dispatchNewOrder(saved, driver.id);
+
+    return saved;
   }
 }

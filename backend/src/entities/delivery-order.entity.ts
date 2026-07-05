@@ -56,6 +56,16 @@ export class DeliveryOrder {
   merchant: User | null;
 
   /**
+   * Livreur choisi manuellement à la création (réservation) — Priorité 3,
+   * Lot 3, item 1. `null` = comportement par défaut (broadcast à tous les
+   * livreurs éligibles, acceptation par le premier). Quand renseigné, seul
+   * ce livreur peut voir/accepter la course (cf. `findAvailable`,
+   * `acceptOrder` dans `OrdersService`).
+   */
+  @ManyToOne(() => User, { nullable: true })
+  preferredLivreur: User | null;
+
+  /**
    * Numéro de téléphone du destinataire quand la livraison est créée par un
    * commerçant pour un client SANS compte ZonZon. Renseigné également (pour
    * cohérence d'affichage) quand un compte client existe.

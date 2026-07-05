@@ -24,6 +24,7 @@ import { DriverPosition } from './entities/driver-position.entity';
 import { DeviceToken } from './entities/device-token.entity';
 import { PricingConfig } from './entities/pricing-config.entity';
 import { Zone } from './entities/zone.entity';
+import { MerchantDriver } from './entities/merchant-driver.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -37,6 +38,7 @@ import { RatingsModule } from './ratings/ratings.module';
 import { AuditLogModule } from './audit-log/audit-log.module';
 import { PricingModule } from './pricing/pricing.module';
 import { ZonesModule } from './zones/zones.module';
+import { MerchantDriversModule } from './merchant-drivers/merchant-drivers.module';
 
 @Module({
   imports: [
@@ -97,6 +99,7 @@ import { ZonesModule } from './zones/zones.module';
         DeviceToken,
         PricingConfig,
         Zone,
+        MerchantDriver,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',
@@ -119,6 +122,7 @@ import { ZonesModule } from './zones/zones.module';
     AuditLogModule,
     PricingModule,
     ZonesModule,
+    MerchantDriversModule,
   ],
   controllers: [AppController],
   providers: [

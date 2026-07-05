@@ -17,6 +17,8 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
 import { EstimateOrderDto } from './dto/estimate-order.dto';
 import { ListOrdersDto } from './dto/list-orders.dto';
+import { AvailableDriversQueryDto } from './dto/available-drivers-query.dto';
+import { AssignOrderDto } from './dto/assign-order.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
@@ -66,6 +68,19 @@ export class OrdersController {
     return this.ordersService.findAvailable(user);
   }
 
+  @Roles(UserRole.COMMERCANT, UserRole.CLIENT, UserRole.ADMIN)
+  @Get('available-drivers')
+  findAvailableDrivers(
+    @Query() query: AvailableDriversQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.findAvailableDriversForActor(
+      user,
+      query.lat,
+      query.lng,
+    );
+  }
+
   @Get('mine')
   findMine(@CurrentUser() user: AuthenticatedUser) {
     return this.ordersService.findForUser(user);
@@ -101,5 +116,18 @@ export class OrdersController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.ordersService.updatePaymentStatus(id, dto.paymentStatus, user);
+  }
+
+  /**
+   * Réassignation manuelle (optionnelle, Priorité 3 Lot 3 item 1) : utile
+   * si le premier livreur ciblé n'a pas répondu à temps.
+   */
+  @Roles(UserRole.COMMERCANT, UserRole.ADMIN)
+  @Patch(':id/assign')
+  assign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignOrderDto,
+  ) {
+    return this.ordersService.assignPreferredLivreur(id, dto.livreurId);
   }
 }

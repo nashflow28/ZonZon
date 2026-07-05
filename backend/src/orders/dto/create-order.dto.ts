@@ -3,6 +3,7 @@ import {
   IsLongitude,
   IsOptional,
   IsString,
+  IsUUID,
   MaxLength,
 } from 'class-validator';
 
@@ -34,4 +35,12 @@ export class CreateOrderDto {
   @IsString()
   @MaxLength(500)
   description: string;
+
+  /**
+   * Livreur choisi manuellement par le client (réservation) — Priorité 3,
+   * Lot 3, item 1. Optionnel : si absent, comportement de broadcast normal.
+   */
+  @IsOptional()
+  @IsUUID()
+  preferredLivreurId?: string;
 }

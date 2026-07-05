@@ -64,4 +64,13 @@ export class CreateMerchantOrderDto {
   @IsInt()
   @Min(0)
   priceFcfa?: number;
+
+  /**
+   * Livreur choisi manuellement par le commerçant (réservation) —
+   * Priorité 3, Lot 3, item 1. Optionnel : si absent, comportement de
+   * broadcast normal (tous les livreurs éligibles).
+   */
+  @IsOptional()
+  @IsUUID()
+  preferredLivreurId?: string;
 }

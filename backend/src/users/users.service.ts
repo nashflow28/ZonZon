@@ -224,4 +224,21 @@ export class UsersService {
       select: ['id', 'firstName', 'fcmToken'],
     });
   }
+
+  /**
+   * Livreurs disponibles pour une attribution manuelle (Priorité 3, Lot 3,
+   * item 1) : APPROVED + isAvailable, avec leur véhicule. Utilisé par
+   * `GET /orders/available-drivers` (enrichi ensuite avec distance/
+   * affiliation côté OrdersService).
+   */
+  findAvailableDrivers(): Promise<User[]> {
+    return this.usersRepository.find({
+      where: {
+        role: UserRole.LIVREUR,
+        driverApprovalStatus: DriverApprovalStatus.APPROVED,
+        isAvailable: true,
+      },
+      relations: ['vehicle'],
+    });
+  }
 }
