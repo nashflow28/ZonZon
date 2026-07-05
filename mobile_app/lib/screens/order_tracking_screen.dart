@@ -206,11 +206,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     });
   }
 
-  /// Recharge les détails à jour de la commande depuis `GET /orders`.
+  /// Recharge les détails à jour de la commande depuis `GET /orders/mine`.
   /// Utilisé au boot et après un orderAccepted (pour récupérer le livreur).
   Future<void> _refreshDetails() async {
     try {
-      final res = await _api.get('/orders');
+      final res = await _api.get('/orders/mine');
       if (!mounted) return;
       if (res.statusCode != 200 && res.statusCode != 201) return;
       final list = jsonDecode(res.body);

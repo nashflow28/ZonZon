@@ -25,14 +25,6 @@ export class ReportsController {
     return this.reportsService.weeklyReport(from, to);
   }
 
-  @Post('commissions/:id/pay')
-  payCommission(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.reportsService.markPaid(id, (user.id ?? user.sub) as string);
-  }
-
   @Post('commissions/:id/mark-paid')
   markPaidCommission(
     @Param('id') id: string,

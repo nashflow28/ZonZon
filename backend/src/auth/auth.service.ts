@@ -1,11 +1,13 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
+import { UserRole } from '../entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
@@ -28,6 +30,15 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
+    // Défense en profondeur : même si le DTO restreint déjà les rôles
+    // acceptés (@IsIn CLIENT/LIVREUR/COMMERCANT), on refuse explicitement
+    // toute tentative de création d'un ADMIN via l'inscription publique.
+    if ((dto.role as unknown as UserRole) === UserRole.ADMIN) {
+      throw new ForbiddenException(
+        "Impossible de créer un compte administrateur via l'inscription publique",
+      );
+    }
+
     const existing = await this.usersService.findByPhone(dto.phone);
     if (existing) {
       throw new ConflictException('Ce numéro de téléphone est déjà utilisé');

@@ -14,9 +14,23 @@ describe('AppController', () => {
     appController = app.get<AppController>(AppController);
   });
 
-  describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+  describe('getHealth', () => {
+    it('should return a health status object with status "ok"', () => {
+      const result = appController.getHealth() as {
+        status: string;
+        uptime: number;
+        timestamp: string;
+        env: string;
+      };
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          status: 'ok',
+          uptime: expect.any(Number),
+          timestamp: expect.any(String),
+          env: expect.any(String),
+        }),
+      );
     });
   });
 });

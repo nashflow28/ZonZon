@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 
@@ -113,6 +117,20 @@ describe('AuthService', () => {
         'u-2',
         VehicleType.MOTO,
       );
+    });
+
+    it('refuse la création d’un compte ADMIN via l’inscription publique (escalade de privilèges)', async () => {
+      await expect(
+        service.register({
+          ...dto,
+          phone: '+22890000099',
+          role: UserRole.ADMIN,
+        } as any),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      // Aucun accès DB ne doit avoir lieu : le refus est immédiat.
+      expect(usersService.findByPhone).not.toHaveBeenCalled();
+      expect(usersService.createWithPassword).not.toHaveBeenCalled();
     });
   });
 
