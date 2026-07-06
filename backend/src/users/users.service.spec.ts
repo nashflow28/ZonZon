@@ -243,6 +243,32 @@ describe('UsersService', () => {
     });
   });
 
+  describe('updateProfilePhoto', () => {
+    it('met à jour profilePhotoUrl à la racine /uploads/', async () => {
+      usersRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      const result = await service.updateProfilePhoto('user-1', 'photo.jpg');
+
+      expect(usersRepository.update).toHaveBeenCalledWith('user-1', {
+        profilePhotoUrl: '/uploads/photo.jpg',
+      });
+      expect(result).toEqual({ profilePhotoUrl: '/uploads/photo.jpg' });
+    });
+  });
+
+  describe('updateIdCardPhoto', () => {
+    it('met à jour idCardPhotoUrl dans le sous-dossier /uploads/identity/', async () => {
+      usersRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      const result = await service.updateIdCardPhoto('user-1', 'cni.jpg');
+
+      expect(usersRepository.update).toHaveBeenCalledWith('user-1', {
+        idCardPhotoUrl: '/uploads/identity/cni.jpg',
+      });
+      expect(result).toEqual({ idCardPhotoUrl: '/uploads/identity/cni.jpg' });
+    });
+  });
+
   describe('findEligibleLivreurIds', () => {
     it('renvoie les ids des livreurs APPROVED + isAvailable', async () => {
       usersRepository.find.mockResolvedValue([

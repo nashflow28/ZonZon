@@ -15,7 +15,7 @@ import {
 
 function ensureUploadDirs() {
   const root = process.env.UPLOAD_DIR || 'uploads';
-  for (const sub of ['shops', 'products', 'avatars']) {
+  for (const sub of ['shops', 'products', 'avatars', 'identity']) {
     fs.mkdirSync(path.join(process.cwd(), root, sub), { recursive: true });
   }
 }

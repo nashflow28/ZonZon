@@ -11,6 +11,19 @@ export const profilePhotoStorage = diskStorage({
   },
 });
 
+/**
+ * Stockage dédié pour les photos de pièce d'identité des livreurs (données
+ * sensibles) : écrit dans un sous-dossier `identity` séparé de la racine des
+ * avatars, cf. pattern `makeStorage` de shops/upload.config.ts.
+ */
+export const idCardPhotoStorage = diskStorage({
+  destination: `${process.env.UPLOAD_DIR || 'uploads'}/identity`,
+  filename: (_req, file, cb) => {
+    const ext = extname(file.originalname).toLowerCase();
+    cb(null, `${randomUUID()}${ext}`);
+  },
+});
+
 export const imageFileFilter = (
   _req: any,
   file: Express.Multer.File,

@@ -19,7 +19,11 @@ import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/types';
-import { imageFileFilter, profilePhotoStorage } from './upload.config';
+import {
+  idCardPhotoStorage,
+  imageFileFilter,
+  profilePhotoStorage,
+} from './upload.config';
 import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AvailabilityDto } from './dto/availability.dto';
@@ -112,6 +116,29 @@ export class UsersController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     return this.usersService.updateProfilePhoto(
+      user.id ?? user.sub,
+      file.filename,
+    );
+  }
+
+  /**
+   * Upload de la photo de pièce d'identité du livreur (CNI, passeport...).
+   * Pas de restriction de rôle (cohérent avec /me/photo) : tout user
+   * authentifié peut uploader SA propre pièce d'identité.
+   */
+  @Post('me/id-card-photo')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: idCardPhotoStorage,
+      fileFilter: imageFileFilter,
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  uploadIdCardPhoto(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.usersService.updateIdCardPhoto(
       user.id ?? user.sub,
       file.filename,
     );

@@ -5,9 +5,11 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToOne,
+  ManyToOne,
   JoinColumn,
 } from 'typeorm';
 import { User } from './user.entity';
+import { Zone } from './zone.entity';
 
 export enum VehicleType {
   MOTO = 'MOTO',
@@ -32,6 +34,15 @@ export class Vehicle {
   @OneToOne(() => User, (user) => user.vehicle)
   @JoinColumn()
   driver: User;
+
+  /**
+   * Zone habituelle du livreur (Priorité 3 backlog V1) : utile pour
+   * l'attribution manuelle et pour que l'admin voie le secteur du livreur
+   * en attente de validation. Nullable : un livreur peut ne pas en déclarer.
+   */
+  @ManyToOne(() => Zone, { nullable: true })
+  @JoinColumn()
+  usualZone: Zone | null;
 
   @CreateDateColumn()
   createdAt: Date;

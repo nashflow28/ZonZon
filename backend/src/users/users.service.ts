@@ -123,7 +123,7 @@ export class UsersService {
         role: UserRole.LIVREUR,
         driverApprovalStatus: DriverApprovalStatus.PENDING,
       },
-      relations: ['vehicle'],
+      relations: ['vehicle', 'vehicle.usualZone'],
     });
   }
 
@@ -156,6 +156,17 @@ export class UsersService {
     const publicUrl = `/uploads/${filename}`;
     await this.usersRepository.update(userId, { profilePhotoUrl: publicUrl });
     return { profilePhotoUrl: publicUrl };
+  }
+
+  /**
+   * Enregistre la photo de la pièce d'identité d'un livreur (dossier dédié
+   * `identity`, cf. idCardPhotoStorage). Utilisé par l'admin pour la
+   * validation du compte livreur.
+   */
+  async updateIdCardPhoto(userId: string, filename: string) {
+    const publicUrl = `/uploads/identity/${filename}`;
+    await this.usersRepository.update(userId, { idCardPhotoUrl: publicUrl });
+    return { idCardPhotoUrl: publicUrl };
   }
 
   async updateFcmToken(userId: string, token: string | null) {
