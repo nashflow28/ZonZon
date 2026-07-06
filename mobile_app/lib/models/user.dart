@@ -11,6 +11,10 @@ class User {
   final String role;
   final String? profilePhotoUrl;
 
+  /// Photo de la pièce d'identité du livreur, nécessaire à la validation
+  /// admin du compte (`POST /users/me/id-card-photo`).
+  final String? idCardPhotoUrl;
+
   /// Statut de validation du compte livreur par un admin.
   /// `"PENDING"` | `"APPROVED"` | `"REJECTED"` | `null` (non-livreurs, ou
   /// anciennes réponses backend qui ne renvoyaient pas encore ce champ).
@@ -31,6 +35,7 @@ class User {
     required this.phone,
     required this.role,
     this.profilePhotoUrl,
+    this.idCardPhotoUrl,
     this.driverApprovalStatus,
     this.isAvailable = false,
     this.driverRejectionReason,
@@ -63,6 +68,7 @@ class User {
       phone: phone,
       role: role,
       profilePhotoUrl: profilePhotoUrl,
+      idCardPhotoUrl: idCardPhotoUrl,
       driverApprovalStatus: driverApprovalStatus ?? this.driverApprovalStatus,
       isAvailable: isAvailable ?? this.isAvailable,
       driverRejectionReason:

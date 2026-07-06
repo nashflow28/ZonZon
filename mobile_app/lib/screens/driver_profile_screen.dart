@@ -31,12 +31,18 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   Map<String, dynamic>? _stats;
   bool _loading = true;
   bool _togglingAvailability = false;
+  bool _uploadingIdCard = false;
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
   final _plateCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   String _vehicleType = 'MOTO';
+
+  /// Zones actives récupérées via `GET /zones`, pour le sélecteur de zone
+  /// habituelle du véhicule. Chaque entrée contient au moins `id` et `name`.
+  List<Map<String, dynamic>> _zones = [];
+  String? _selectedZoneId;
 
   @override
   void initState() {
@@ -59,10 +65,12 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       final results = await Future.wait([
         _api.get('/users/me'),
         _api.get('/vehicles/me'),
+        _api.get('/zones'),
       ]);
 
       final userRes = results[0];
       final vehicleRes = results[1];
+      final zonesRes = results[2];
 
       if (userRes.statusCode == 200) {
         final data = jsonDecode(userRes.body) as Map<String, dynamic>;
@@ -82,6 +90,18 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         _vehicleType = _vehicle!['type'] ?? 'MOTO';
         _plateCtrl.text = _vehicle!['licensePlate'] ?? '';
         _descCtrl.text = _vehicle!['description'] ?? '';
+        final usualZone = _vehicle!['usualZone'];
+        _selectedZoneId = usualZone is Map ? usualZone['id'] as String? : null;
+      }
+
+      if (zonesRes.statusCode == 200) {
+        final decoded = jsonDecode(zonesRes.body);
+        if (decoded is List) {
+          _zones = decoded
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .toList();
+        }
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
@@ -125,6 +145,49 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     }
   }
 
+  Future<void> _pickAndUploadIdCardPhoto() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      imageQuality: 80,
+    );
+    if (picked == null) return;
+
+    setState(() => _uploadingIdCard = true);
+    try {
+      final token = await _auth.getToken();
+      MediaType mimeFromPath(String p) {
+        final ext = p.toLowerCase().split('.').last;
+        return switch (ext) {
+          'png' => MediaType('image', 'png'),
+          'webp' => MediaType('image', 'webp'),
+          _ => MediaType('image', 'jpeg'),
+        };
+      }
+
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$apiUrl$apiPrefix/users/me/id-card-photo'),
+      )
+        ..headers['Authorization'] = 'Bearer $token'
+        ..files.add(await http.MultipartFile.fromPath(
+          'file',
+          picked.path,
+          contentType: mimeFromPath(picked.path),
+        ));
+
+      final response = await request.send();
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await _load();
+        if (mounted) {
+          showAdaptiveSnack(context, 'Pièce d\'identité mise à jour');
+        }
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingIdCard = false);
+    }
+  }
+
   Future<void> _saveProfile() async {
     final res = await _api.patch('/users/me', body: {
       'firstName': _firstNameCtrl.text.trim(),
@@ -142,6 +205,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     final body = <String, dynamic>{'type': _vehicleType};
     if (_plateCtrl.text.trim().isNotEmpty) body['licensePlate'] = _plateCtrl.text.trim();
     if (_descCtrl.text.trim().isNotEmpty) body['description'] = _descCtrl.text.trim();
+    // Toujours envoyé explicitement (y compris `null`) pour permettre le
+    // retrait de la zone habituelle quand "Aucune" est sélectionnée.
+    body['usualZoneId'] = _selectedZoneId;
 
     final res = await _api.put('/vehicles/me', body: body);
     if (res.statusCode == 200 || res.statusCode == 201) {
@@ -211,6 +277,8 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           const SizedBox(height: 16),
           _buildSection('Informations personnelles', _buildProfileFields()),
           const SizedBox(height: 16),
+          _buildSection('Pièce d\'identité', _buildIdCardSection()),
+          const SizedBox(height: 16),
           _buildSection('Mon véhicule', _buildVehicleFields()),
           const SizedBox(height: 24),
           SizedBox(
@@ -264,6 +332,81 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                 child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Section "Pièce d'identité" : vignette (rectangle) de la pièce
+  /// d'identité actuelle ou un placeholder, avec un bouton d'upload vers
+  /// `POST /users/me/id-card-photo`.
+  Widget _buildIdCardSection() {
+    final idCardUrl = _user?.idCardPhotoUrl;
+    final needsIdCard = _user?.isDriverApproved == false;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: double.infinity,
+            height: 160,
+            color: const Color(0xFF0F172A),
+            child: idCardUrl != null
+                ? Image.network(
+                    '$apiUrl$idCardUrl',
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                        _idCardPlaceholder(),
+                  )
+                : _idCardPlaceholder(),
+          ),
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _uploadingIdCard ? null : _pickAndUploadIdCardPhoto,
+            icon: _uploadingIdCard
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: adaptiveLoader(color: const Color(0xFF3B82F6)),
+                  )
+                : const Icon(Icons.upload_outlined, color: Color(0xFF3B82F6)),
+            label: Text(
+              idCardUrl != null ? 'Changer la pièce d\'identité' : 'Ajouter',
+              style: const TextStyle(color: Color(0xFF3B82F6)),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: Color(0xFF3B82F6)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        if (needsIdCard) ...[
+          const SizedBox(height: 10),
+          const Text(
+            'La pièce d\'identité est nécessaire à la validation de votre compte par un administrateur.',
+            style: TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _idCardPlaceholder() {
+    return const Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.badge_outlined, color: Colors.white38, size: 36),
+          SizedBox(height: 8),
+          Text(
+            'Aucune pièce d\'identité',
+            style: TextStyle(color: Colors.white54, fontSize: 13),
           ),
         ],
       ),
@@ -494,6 +637,21 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         _field('Plaque d’immatriculation', _plateCtrl, Icons.badge_outlined),
         const SizedBox(height: 12),
         _field('Description (modèle, couleur…)', _descCtrl, Icons.info_outline),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String?>(
+          initialValue: _selectedZoneId,
+          dropdownColor: const Color(0xFF0F172A),
+          decoration: _inputDecoration('Zone habituelle', Icons.map_outlined),
+          style: const TextStyle(color: Colors.white),
+          items: [
+            const DropdownMenuItem<String?>(value: null, child: Text('Aucune')),
+            ..._zones.map((z) => DropdownMenuItem<String?>(
+                  value: z['id'] as String?,
+                  child: Text(z['name']?.toString() ?? ''),
+                )),
+          ],
+          onChanged: (v) => setState(() => _selectedZoneId = v),
+        ),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,

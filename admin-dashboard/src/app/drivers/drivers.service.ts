@@ -5,10 +5,17 @@ import { environment } from '../../environments/environment';
 
 export type DriverApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 
+export interface DriverZone {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
 export interface DriverVehicle {
   type: string;
   licensePlate?: string;
   description?: string;
+  usualZone?: DriverZone | null;
 }
 
 export interface PendingDriver {
@@ -22,6 +29,7 @@ export interface PendingDriver {
   driverRejectionReason?: string | null;
   vehicle?: DriverVehicle | null;
   profilePhotoUrl?: string | null;
+  idCardPhotoUrl?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })

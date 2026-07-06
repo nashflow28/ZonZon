@@ -144,6 +144,17 @@ export class DriverValidationComponent implements OnInit, OnDestroy {
       : `${environment.apiUrl}${driver.profilePhotoUrl}`;
   }
 
+  idCardPhotoSrc(driver: PendingDriver): string | null {
+    if (!driver.idCardPhotoUrl) return null;
+    return driver.idCardPhotoUrl.startsWith('http')
+      ? driver.idCardPhotoUrl
+      : `${environment.apiUrl}${driver.idCardPhotoUrl}`;
+  }
+
+  usualZoneLabel(driver: PendingDriver): string | null {
+    return driver.vehicle?.usualZone?.name ?? null;
+  }
+
   initials(driver: PendingDriver): string {
     return `${(driver.firstName?.[0] ?? '').toUpperCase()}${(driver.lastName?.[0] ?? '').toUpperCase()}`;
   }

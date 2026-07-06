@@ -37,7 +37,8 @@ import {
   UserCheck,
   Plus,
   Trash2,
-  Pencil
+  Pencil,
+  IdCard
 } from 'lucide-angular';
 
 export const appIcons = {
@@ -76,7 +77,8 @@ export const appIcons = {
   UserCheck,
   Plus,
   Trash2,
-  Pencil
+  Pencil,
+  IdCard
 };
 
 export const provideLucideIcons = (): Provider => ({

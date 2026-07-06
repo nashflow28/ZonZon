@@ -55,6 +55,11 @@
   - [x] Mobile commerçant : `driver_picker_sheet` (choix livreur via `available-drivers` → `preferredLivreurId`) + écran « Mes livreurs » (affiliés). analyze 10 / test 10/10.
 - [ ] **Fallback auto livreur public** si affiliés indisponibles (attribution auto avancée — classé « après V1 » dans le CDC, à planifier)
 
+### 🟢 Profil livreur complet (conformité CDC)
+- [x] **Photo de pièce d'identité** — `User.idCardPhotoUrl`, `POST /users/me/id-card-photo` (storage dédié `uploads/identity/`). Mobile : upload/aperçu dans l'écran Profil livreur. Admin : vignette + alerte « non fournie » dans l'écran de validation. *(2026-07-05)*
+- [x] **Zone habituelle** — `Vehicle.usualZone` (FK `Zone`), `usualZoneId` sur `PUT /vehicles/me`. Mobile : dropdown zones actives. Admin : affichée à côté du véhicule dans la validation. *(2026-07-05)*
+- Vérifs : backend jest 221/221 (15 suites) ; admin build prod OK ; mobile analyze 10 (préexistantes) / test 10/10.
+
 ---
 
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)

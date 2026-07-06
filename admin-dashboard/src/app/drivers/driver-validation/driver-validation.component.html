@@ -66,7 +66,31 @@
             <ng-container *ngIf="driver.vehicle?.licensePlate">
               · {{ driver.vehicle?.licensePlate }}
             </ng-container>
+            <ng-container *ngIf="usualZoneLabel(driver) as zone; else noZone">
+              · {{ zone }}
+            </ng-container>
+            <ng-template #noZone>
+              · <span class="text-slate-500 italic">Zone non renseignée</span>
+            </ng-template>
           </span>
+        </div>
+
+        <!-- Identity document -->
+        <div class="bg-slate-900/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3 text-sm">
+          <ng-container *ngIf="idCardPhotoSrc(driver) as idSrc; else noIdCard">
+            <a [href]="idSrc" target="_blank" rel="noopener"
+               class="w-12 h-12 rounded-lg bg-slate-900 border border-slate-700/50 overflow-hidden shrink-0 hover:ring-2 hover:ring-sky-500/60 transition"
+               title="Voir la pièce d'identité en grand">
+              <img [src]="idSrc" alt="Pièce d'identité" class="w-full h-full object-cover" />
+            </a>
+            <span class="text-slate-300">Pièce d'identité fournie</span>
+          </ng-container>
+          <ng-template #noIdCard>
+            <div class="w-12 h-12 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+              <lucide-icon name="id-card" class="w-5 h-5 text-amber-400"></lucide-icon>
+            </div>
+            <span class="text-amber-300 font-semibold">Pièce d'identité non fournie</span>
+          </ng-template>
         </div>
 
         <!-- Reject reason inline panel -->
