@@ -97,6 +97,17 @@ export class User {
   isAvailable: boolean;
 
   /**
+   * Visibilité du livreur pour le broadcast général (CDC V1 §9.3). Un
+   * livreur "privé" (`isPublic = false`) ne reçoit pas les courses du
+   * broadcast général (Type 2 client / Type 1 sans livreur choisi) — il ne
+   * travaille que sur assignation manuelle de son commerçant
+   * (`preferredLivreurId`). Grandfathered `true` pour tous les comptes
+   * existants (aucun changement de comportement rétroactif).
+   */
+  @Column({ type: 'boolean', default: true })
+  isPublic: boolean;
+
+  /**
    * Statut de compte (P0 sécurité). Tous les comptes existants sont
    * "grandfathered" ACTIVE via le `default` de la migration — aucune
    * suspension rétroactive.

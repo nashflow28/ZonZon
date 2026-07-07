@@ -85,6 +85,45 @@ describe('ZonesService', () => {
       );
       expect(repo.save).not.toHaveBeenCalled();
     });
+
+    // ── P2 (CDC V1 §7) : zones enrichies ──────────────────────────────────
+
+    it('accepte un CreateZoneDto complet (description, basePrice, pricePerKmOverride)', async () => {
+      repo.findOne.mockResolvedValue(null);
+      repo.save.mockImplementation(async (z: any) => ({ id: 'new-2', ...z }));
+
+      const result = await service.create({
+        name: 'Baguida',
+        description: 'Zone côtière',
+        basePrice: 500,
+        pricePerKmOverride: 150,
+      });
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'Baguida',
+          description: 'Zone côtière',
+          basePrice: 500,
+          pricePerKmOverride: 150,
+        }),
+      );
+      expect(result.id).toBe('new-2');
+    });
+
+    it('crée avec description/basePrice/pricePerKmOverride null par défaut si non fournis', async () => {
+      repo.findOne.mockResolvedValue(null);
+      repo.save.mockImplementation(async (z: any) => z);
+
+      await service.create('Adidogomé');
+
+      expect(repo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: null,
+          basePrice: null,
+          pricePerKmOverride: null,
+        }),
+      );
+    });
   });
 
   describe('update', () => {
@@ -139,6 +178,29 @@ describe('ZonesService', () => {
       await expect(
         service.update('missing', { name: 'X' }),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('met à jour description/basePrice/pricePerKmOverride', async () => {
+      const zone = {
+        id: 'z1',
+        name: 'Bè',
+        active: true,
+        description: null,
+        basePrice: null,
+        pricePerKmOverride: null,
+      };
+      repo.findOne.mockResolvedValue(zone);
+      repo.save.mockImplementation(async (z: any) => z);
+
+      const result = await service.update('z1', {
+        description: 'Nouvelle description',
+        basePrice: 300,
+        pricePerKmOverride: 100,
+      });
+
+      expect(result.description).toBe('Nouvelle description');
+      expect(result.basePrice).toBe(300);
+      expect(result.pricePerKmOverride).toBe(100);
     });
   });
 

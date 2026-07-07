@@ -8,6 +8,7 @@ import {
   ManyToOne,
 } from 'typeorm';
 import { User } from './user.entity';
+import { Zone } from './zone.entity';
 
 export enum OrderStatus {
   PENDING = 'PENDING',
@@ -68,6 +69,21 @@ export class DeliveryOrder {
    */
   @ManyToOne(() => User, { nullable: true })
   preferredLivreur: User | null;
+
+  /**
+   * Zone de retrait (référentiel `zones`, CDC V1 §7) — renseignée
+   * optionnellement par le client/commerçant à la création. PAS de
+   * dérivation automatique depuis les coordonnées GPS en V1.
+   */
+  @ManyToOne(() => Zone, { nullable: true, onDelete: 'SET NULL' })
+  pickupZone: Zone | null;
+
+  /**
+   * Zone de destination (référentiel `zones`, CDC V1 §7) — mêmes règles que
+   * `pickupZone`.
+   */
+  @ManyToOne(() => Zone, { nullable: true, onDelete: 'SET NULL' })
+  destinationZone: Zone | null;
 
   /**
    * Numéro de téléphone du destinataire quand la livraison est créée par un

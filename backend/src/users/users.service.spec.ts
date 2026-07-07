@@ -275,7 +275,7 @@ describe('UsersService', () => {
   });
 
   describe('findEligibleLivreurIds', () => {
-    it('renvoie les ids des livreurs APPROVED + isAvailable', async () => {
+    it('renvoie les ids des livreurs APPROVED + isAvailable + isPublic', async () => {
       usersRepository.find.mockResolvedValue([
         { id: 'l1' },
         { id: 'l2' },
@@ -290,9 +290,56 @@ describe('UsersService', () => {
             role: UserRole.LIVREUR,
             driverApprovalStatus: DriverApprovalStatus.APPROVED,
             isAvailable: true,
+            isPublic: true,
           },
         }),
       );
+    });
+
+    it('exclut isPublic=false du filtre (query where isPublic: true)', async () => {
+      // Le filtre `isPublic: true` est passé directement à la query — un
+      // livreur privé (isPublic=false) ne matcherait donc jamais cette
+      // condition côté DB réelle. On vérifie ici que le service construit
+      // bien la requête avec ce filtre (CDC V1 §9.3).
+      usersRepository.find.mockResolvedValue([]);
+
+      await service.findEligibleLivreurIds();
+
+      const callArg = usersRepository.find.mock.calls[0][0];
+      expect(callArg.where.isPublic).toBe(true);
+    });
+  });
+
+  // ── P2 (CDC V1 §9.3) : livreur privé / public ─────────────────────────────
+
+  describe('setPublicVisibility', () => {
+    it('bascule isPublic à false pour un livreur', async () => {
+      const livreur = {
+        id: 'livreur-1',
+        role: UserRole.LIVREUR,
+        isPublic: true,
+      };
+      usersRepository.findOne.mockResolvedValue(livreur);
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      const result = await service.setPublicVisibility('livreur-1', false);
+
+      expect(result).toEqual({ isPublic: false });
+      expect(usersRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isPublic: false }),
+      );
+    });
+
+    it('rejette avec ForbiddenException si ce n’est pas un livreur', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        id: 'client-1',
+        role: UserRole.CLIENT,
+      });
+
+      await expect(
+        service.setPublicVisibility('client-1', false),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(usersRepository.save).not.toHaveBeenCalled();
     });
   });
 

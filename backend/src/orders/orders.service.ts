@@ -559,6 +559,10 @@ export class OrdersService {
       status: OrderStatus.PENDING,
       paymentStatus: PaymentStatus.UNPAID,
       preferredLivreur,
+      pickupZone: dto.pickupZoneId ? ({ id: dto.pickupZoneId } as any) : null,
+      destinationZone: dto.destinationZoneId
+        ? ({ id: dto.destinationZoneId } as any)
+        : null,
     });
 
     const saved = await this.ordersRepository.save(order);
@@ -678,6 +682,10 @@ export class OrdersService {
       status: OrderStatus.PENDING,
       paymentStatus: PaymentStatus.UNPAID,
       preferredLivreur,
+      pickupZone: dto.pickupZoneId ? ({ id: dto.pickupZoneId } as any) : null,
+      destinationZone: dto.destinationZoneId
+        ? ({ id: dto.destinationZoneId } as any)
+        : null,
     });
 
     const saved = await this.ordersRepository.save(order);
@@ -1032,7 +1040,7 @@ export class OrdersService {
     // 3) Recharger l'order avec ses relations pour le broadcast et la push
     const updated = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['client', 'livreur'],
+      relations: ['client', 'livreur', 'merchant'],
     });
     if (!updated) {
       // Edge case ultra-improbable (suppression concurrente)
@@ -1040,10 +1048,13 @@ export class OrdersService {
     }
 
     // 4) Le livreur (firstName utilisé dans la notif) a déjà été chargé en (0).
+    // `merchantId` (CDC V1 §11.2) permet au gateway de forwarder aussi la
+    // position GPS live et les mises à jour de statut au commerçant créateur.
     this.ordersGateway.broadcastOrderAccepted(
       updated.id,
       livreur.id,
       updated.client?.id,
+      updated.merchant?.id,
     );
 
     // Push notification au client si offline
@@ -1068,7 +1079,7 @@ export class OrdersService {
   ) {
     const order = await this.ordersRepository.findOne({
       where: { id },
-      relations: ['client', 'livreur'],
+      relations: ['client', 'livreur', 'merchant'],
     });
     if (!order) throw new NotFoundException('Commande introuvable');
 
@@ -1135,6 +1146,7 @@ export class OrdersService {
       status,
       order.client?.id,
       order.livreur?.id,
+      order.merchant?.id,
     );
 
     // Push au client pour les transitions importantes

@@ -41,6 +41,8 @@ import { UsersService } from '../src/users/users.service';
 import { DeviceTokensService } from '../src/users/device-tokens.service';
 import { MerchantDriversController } from '../src/merchant-drivers/merchant-drivers.controller';
 import { MerchantDriversService } from '../src/merchant-drivers/merchant-drivers.service';
+import { ZonesController } from '../src/zones/zones.controller';
+import { ZonesService } from '../src/zones/zones.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { PositionsService } from '../src/orders/positions.service';
 import { PricingService } from '../src/pricing/pricing.service';
@@ -54,6 +56,7 @@ import { DeliveryOrder } from '../src/entities/delivery-order.entity';
 import { DeliveryStatusHistory } from '../src/entities/delivery-status-history.entity';
 import { PriceChange } from '../src/entities/price-change.entity';
 import { PaymentStatusHistory } from '../src/entities/payment-status-history.entity';
+import { Zone } from '../src/entities/zone.entity';
 
 jest.mock('axios');
 export const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -294,6 +297,7 @@ export interface TestAppBundle {
   statusHistoryRepo: ReturnType<typeof makeInMemoryRepo<DeliveryStatusHistory>>;
   priceChangeRepo: ReturnType<typeof makeInMemoryRepo<PriceChange>>;
   paymentHistoryRepo: ReturnType<typeof makeInMemoryRepo<PaymentStatusHistory>>;
+  zonesRepo: ReturnType<typeof makeInMemoryRepo<Zone>>;
   fakeGateway: {
     broadcastNewOrder: jest.Mock;
     broadcastOrderAccepted: jest.Mock;
@@ -344,6 +348,7 @@ export async function buildTestApp(): Promise<TestAppBundle> {
   const statusHistoryRepo = makeInMemoryRepo<DeliveryStatusHistory>();
   const priceChangeRepo = makeInMemoryRepo<PriceChange>();
   const paymentHistoryRepo = makeInMemoryRepo<PaymentStatusHistory>();
+  const zonesRepo = makeInMemoryRepo<Zone>();
 
   // Stub gateway so we do not need socket.io infrastructure
   const fakeGateway = {
@@ -383,12 +388,14 @@ export async function buildTestApp(): Promise<TestAppBundle> {
       OrdersController,
       UsersController,
       MerchantDriversController,
+      ZonesController,
     ],
     providers: [
       AuthService,
       UsersService,
       OrdersService,
       MerchantDriversService,
+      ZonesService,
       DeviceTokensService,
       JwtStrategy,
       { provide: APP_GUARD, useClass: JwtAuthGuard },
@@ -427,6 +434,10 @@ export async function buildTestApp(): Promise<TestAppBundle> {
         provide: getRepositoryToken(PaymentStatusHistory),
         useValue: paymentHistoryRepo,
       },
+      {
+        provide: getRepositoryToken(Zone),
+        useValue: zonesRepo,
+      },
     ],
   }).compile();
 
@@ -449,6 +460,7 @@ export async function buildTestApp(): Promise<TestAppBundle> {
     statusHistoryRepo,
     priceChangeRepo,
     paymentHistoryRepo,
+    zonesRepo,
     fakeGateway,
   };
 }

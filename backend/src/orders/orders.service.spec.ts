@@ -321,6 +321,56 @@ describe('OrdersService', () => {
       );
     });
 
+    // ── P2 (CDC V1 §7) : liaison livraison ↔ zone ────────────────────────────
+
+    it('stocke pickupZoneId/destinationZoneId quand fournis', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-zones',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, {
+        ...dto,
+        pickupZoneId: 'zone-pickup-1',
+        destinationZoneId: 'zone-dest-1',
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pickupZone: { id: 'zone-pickup-1' },
+          destinationZone: { id: 'zone-dest-1' },
+        }),
+      );
+    });
+
+    it('pickupZone/destinationZone restent null si non fournis (rétro-compat)', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-no-zones',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, dto);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pickupZone: null,
+          destinationZone: null,
+        }),
+      );
+    });
+
     it('rejette si l’utilisateur n’est pas un client', async () => {
       usersService.findOne.mockResolvedValue(livreurUser);
       await expect(
@@ -576,6 +626,41 @@ describe('OrdersService', () => {
         'ord-1',
         livreurUser.id,
         clientUser.id,
+        undefined,
+      );
+    });
+
+    // ── P2 (CDC V1 §11.2) : GPS strict + accès commerçant ───────────────────
+
+    it('passe le merchantId au gateway quand la course a un commerçant créateur (Type 1)', async () => {
+      routeFindOne({
+        byId: {
+          'ord-merchant': [
+            {
+              id: 'ord-merchant',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+            },
+            {
+              id: 'ord-merchant',
+              status: OrderStatus.ACCEPTED,
+              client: { id: clientUser.id },
+              merchant: { id: merchantUser.id },
+              livreur: livreurUser,
+            },
+          ],
+        },
+      });
+      ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
+      usersService.findOne.mockResolvedValue(livreurUser);
+
+      await service.acceptOrder('ord-merchant', livreurUser.id);
+
+      expect(gateway.broadcastOrderAccepted).toHaveBeenCalledWith(
+        'ord-merchant',
+        livreurUser.id,
+        clientUser.id,
+        merchantUser.id,
       );
     });
 
@@ -736,6 +821,7 @@ describe('OrdersService', () => {
         'ord-concurrent',
         livreurUser.id,
         clientUser.id,
+        undefined,
       );
     });
 
@@ -898,6 +984,26 @@ describe('OrdersService', () => {
       );
       expect(result.status).toBe(OrderStatus.IN_PROGRESS);
       expect(gateway.broadcastStatusUpdate).toHaveBeenCalled();
+    });
+
+    // ── P2 (CDC V1 §11.2) : accès commerçant ────────────────────────────────
+
+    it('passe le merchantId au gateway.broadcastStatusUpdate quand la course a un commerçant créateur', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildOrder(OrderStatus.ACCEPTED),
+        merchant: { id: merchantUser.id },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      await service.updateStatus('o', OrderStatus.IN_PROGRESS, livreurUser);
+
+      expect(gateway.broadcastStatusUpdate).toHaveBeenCalledWith(
+        'o',
+        OrderStatus.IN_PROGRESS,
+        clientUser.id,
+        livreurUser.id,
+        merchantUser.id,
+      );
     });
 
     it('permet IN_PROGRESS → COMPLETED par le livreur', async () => {
@@ -1244,6 +1350,29 @@ describe('OrdersService', () => {
       await expect(
         service.createMerchantOrder(merchantUser.id, dto as any),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    // ── P2 (CDC V1 §7) : liaison livraison ↔ zone ────────────────────────────
+
+    it('stocke pickupZoneId/destinationZoneId quand fournis par le commerçant', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        return null;
+      });
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+        pickupZoneId: 'zone-pickup-2',
+        destinationZoneId: 'zone-dest-2',
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pickupZone: { id: 'zone-pickup-2' },
+          destinationZone: { id: 'zone-dest-2' },
+        }),
+      );
     });
 
     it('rattache un client existant via clientId', async () => {

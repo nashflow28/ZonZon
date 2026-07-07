@@ -82,4 +82,18 @@ export class CreateMerchantOrderDto {
   @IsOptional()
   @IsUUID()
   preferredLivreurId?: string;
+
+  /**
+   * Zone de retrait (référentiel `zones`, CDC V1 §7) — optionnelle,
+   * renseignée par le commerçant. Aucune dérivation automatique depuis les
+   * coordonnées GPS en V1.
+   */
+  @IsOptional()
+  @IsUUID()
+  pickupZoneId?: string;
+
+  /** Zone de destination (référentiel `zones`, CDC V1 §7) — optionnelle. */
+  @IsOptional()
+  @IsUUID()
+  destinationZoneId?: string;
 }

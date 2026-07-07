@@ -29,6 +29,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AvailabilityDto } from './dto/availability.dto';
 import { DriverApprovalDto } from './dto/driver-approval.dto';
 import { SuspendUserDto } from './dto/suspend-user.dto';
+import { VisibilityDto } from './dto/visibility.dto';
 
 @Controller('users')
 @UseGuards(RolesGuard)
@@ -102,6 +103,24 @@ export class UsersController {
     @Body() dto: AvailabilityDto,
   ) {
     return this.usersService.setAvailability(user.id ?? user.sub, dto.available);
+  }
+
+  /**
+   * Bascule la visibilité publique du livreur (CDC V1 §9.3). Un livreur
+   * privé (`isPublic = false`) n'est plus ciblé par le broadcast général de
+   * nouvelles courses — il reste éligible à l'attribution manuelle par un
+   * commerçant (`preferredLivreurId`).
+   */
+  @Roles(UserRole.LIVREUR)
+  @Patch('me/visibility')
+  setMyVisibility(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: VisibilityDto,
+  ) {
+    return this.usersService.setPublicVisibility(
+      user.id ?? user.sub,
+      dto.isPublic,
+    );
   }
 
   @Post('me/photo')

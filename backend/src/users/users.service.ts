@@ -174,8 +174,12 @@ export class UsersService {
 
   /**
    * Renvoie les ids des livreurs éligibles à recevoir une nouvelle course
-   * (validés par un admin ET actuellement disponibles). Utilisé pour filtrer
-   * le broadcast Socket.IO d'une nouvelle course.
+   * (validés par un admin ET actuellement disponibles ET publics). Utilisé
+   * pour filtrer le broadcast Socket.IO d'une nouvelle course.
+   *
+   * `isPublic = false` (CDC V1 §9.3) exclut le livreur du broadcast général :
+   * il ne reçoit alors des courses que via attribution manuelle
+   * (`preferredLivreurId`), ciblage qui n'est PAS filtré par cette méthode.
    */
   async findEligibleLivreurIds(): Promise<string[]> {
     const eligible = await this.usersRepository.find({
@@ -183,10 +187,32 @@ export class UsersService {
         role: UserRole.LIVREUR,
         driverApprovalStatus: DriverApprovalStatus.APPROVED,
         isAvailable: true,
+        isPublic: true,
       },
       select: ['id'],
     });
     return eligible.map((u) => u.id);
+  }
+
+  /**
+   * Bascule la visibilité publique d'un livreur (CDC V1 §9.3) —
+   * `PATCH /users/me/visibility`. Un livreur privé (`isPublic = false`) ne
+   * reçoit plus les courses du broadcast général ; il reste éligible à
+   * l'attribution manuelle par un commerçant (`preferredLivreurId`).
+   */
+  async setPublicVisibility(
+    userId: string,
+    isPublic: boolean,
+  ): Promise<{ isPublic: boolean }> {
+    const user = await this.findOne(userId);
+    if (user.role !== UserRole.LIVREUR) {
+      throw new ForbiddenException(
+        'Seul un livreur peut modifier sa visibilité',
+      );
+    }
+    user.isPublic = isPublic;
+    await this.usersRepository.save(user);
+    return { isPublic };
   }
 
   async attachVehicle(userId: string, type: VehicleType) {

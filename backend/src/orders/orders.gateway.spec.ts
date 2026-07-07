@@ -358,6 +358,181 @@ describe('OrdersGateway', () => {
 
       expect(activeOrders.has('driver-1')).toBe(true);
     });
+
+    // ── P2 (CDC V1 §11.2) : accès commerçant ──────────────────────────────
+
+    it('émet aussi orderStatusUpdated au commerçant quand merchantId est fourni', () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+
+      gateway.broadcastStatusUpdate(
+        'ord-1',
+        'EN_ROUTE_PICKUP',
+        'client-1',
+        'driver-1',
+        'merchant-1',
+      );
+
+      const emits = emitCalls.filter((c) => c.event === 'orderStatusUpdated');
+      expect(emits).toHaveLength(3);
+      const rooms = emits.map((e) => e.room).sort();
+      expect(rooms).toEqual([
+        'user:client-1',
+        'user:driver-1',
+        'user:merchant-1',
+      ]);
+    });
+
+    it("n'émet pas au commerçant si merchantId est absent", () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+
+      gateway.broadcastStatusUpdate('ord-1', 'EN_ROUTE_PICKUP', 'client-1');
+
+      const emits = emitCalls.filter((c) => c.event === 'orderStatusUpdated');
+      expect(emits).toHaveLength(1);
+    });
+  });
+
+  describe('broadcastOrderAccepted (merchant)', () => {
+    it('émet orderAccepted au commerçant et mémorise merchantId dans activeOrders', () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+
+      gateway.broadcastOrderAccepted(
+        'ord-1',
+        'driver-1',
+        'client-1',
+        'merchant-1',
+      );
+
+      const emits = emitCalls.filter(
+        (c) => c.event === 'orderAccepted' && c.room === 'user:merchant-1',
+      );
+      expect(emits).toHaveLength(1);
+
+      const activeOrders: Map<string, any> = (gateway as any).activeOrders;
+      expect(activeOrders.get('driver-1')).toEqual({
+        orderId: 'ord-1',
+        clientId: 'client-1',
+        merchantId: 'merchant-1',
+      });
+    });
+
+    it("n'émet pas au commerçant si merchantId est absent (rétro-compat)", () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+
+      gateway.broadcastOrderAccepted('ord-1', 'driver-1', 'client-1');
+
+      const merchantEmits = emitCalls.filter(
+        (c) => c.event === 'orderAccepted' && c.room.startsWith('user:') &&
+          c.room !== 'user:client-1',
+      );
+      expect(merchantEmits).toHaveLength(0);
+    });
+  });
+
+  describe('handleDriverLocation', () => {
+    function buildLivreurClientMock(sub: string) {
+      return {
+        data: { user: { sub, role: UserRole.LIVREUR } },
+      } as any;
+    }
+
+    it('ignore silencieusement si le livreur n’a pas de course active (GPS strict §11.2)', () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+      const client = buildLivreurClientMock('driver-1');
+
+      gateway.handleDriverLocation(client, { lat: 6.13, lng: 1.22 });
+
+      const positionEmits = emitCalls.filter(
+        (c) => c.event === 'driver:position',
+      );
+      expect(positionEmits).toHaveLength(0);
+      const driverPositions: Map<string, any> = (gateway as any)
+        .driverPositions;
+      expect(driverPositions.has('driver-1')).toBe(false);
+    });
+
+    it('forward la position au client ET au commerçant si course active avec les deux', () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+      const activeOrders: Map<string, any> = (gateway as any).activeOrders;
+      activeOrders.set('driver-1', {
+        orderId: 'ord-1',
+        clientId: 'client-1',
+        merchantId: 'merchant-1',
+      });
+      const client = buildLivreurClientMock('driver-1');
+
+      gateway.handleDriverLocation(client, { lat: 6.13, lng: 1.22 });
+
+      const positionEmits = emitCalls.filter(
+        (c) => c.event === 'driver:position',
+      );
+      const rooms = positionEmits.map((e) => e.room).sort();
+      expect(rooms).toEqual(['user:client-1', 'user:merchant-1']);
+    });
+
+    it('persiste la position (via positionsService) uniquement quand une course est active', () => {
+      const { server } = buildMockServer([]);
+      gateway.server = server;
+      const positionsService = { upsertPosition: jest.fn() };
+      (gateway as any).positionsService = positionsService;
+
+      const activeOrders: Map<string, any> = (gateway as any).activeOrders;
+      activeOrders.set('driver-1', { orderId: 'ord-1', clientId: 'client-1' });
+      const client = buildLivreurClientMock('driver-1');
+
+      gateway.handleDriverLocation(client, { lat: 6.13, lng: 1.22 });
+
+      expect(positionsService.upsertPosition).toHaveBeenCalledWith(
+        'driver-1',
+        6.13,
+        1.22,
+        'ord-1',
+      );
+    });
+
+    it('ignore les coordonnées invalides même avec une course active', () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+      const activeOrders: Map<string, any> = (gateway as any).activeOrders;
+      activeOrders.set('driver-1', { orderId: 'ord-1', clientId: 'client-1' });
+      const client = buildLivreurClientMock('driver-1');
+
+      gateway.handleDriverLocation(client, {
+        lat: 999,
+        lng: 1.22,
+      });
+
+      const positionEmits = emitCalls.filter(
+        (c) => c.event === 'driver:position',
+      );
+      expect(positionEmits).toHaveLength(0);
+    });
+
+    it('ignore si le user n’est pas un livreur', () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+      const activeOrders: Map<string, any> = (gateway as any).activeOrders;
+      activeOrders.set('client-not-driver', {
+        orderId: 'ord-1',
+        clientId: 'client-1',
+      });
+      const client = {
+        data: { user: { sub: 'client-not-driver', role: UserRole.CLIENT } },
+      } as any;
+
+      gateway.handleDriverLocation(client, { lat: 6.13, lng: 1.22 });
+
+      const positionEmits = emitCalls.filter(
+        (c) => c.event === 'driver:position',
+      );
+      expect(positionEmits).toHaveLength(0);
+    });
   });
 
   describe('handleChatJoin', () => {
@@ -398,6 +573,45 @@ describe('OrdersGateway', () => {
       await gateway.handleChatJoin(client, { orderId: 'order-1' });
 
       expect(joinedRooms).toEqual(['order:order-1:chat']);
+    });
+
+    // ── P2 (CDC V1 §13.2) : commerçant dans le chat ───────────────────────
+
+    it('rejoint la room si le user est le commerçant créateur de la commande', async () => {
+      const { client, joinedRooms } = buildClientMock({
+        sub: 'merchant-1',
+        role: UserRole.COMMERCANT,
+      });
+      ordersRepository.findOne.mockResolvedValue({
+        client: { id: 'client-1' },
+        livreur: { id: 'driver-1' },
+        merchant: { id: 'merchant-1' },
+      });
+
+      await gateway.handleChatJoin(client, { orderId: 'order-1' });
+
+      expect(joinedRooms).toEqual(['order:order-1:chat']);
+      expect(ordersRepository.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          relations: expect.arrayContaining(['merchant']),
+        }),
+      );
+    });
+
+    it("refuse un commerçant qui n'est pas le créateur de la commande", async () => {
+      const { client, joinedRooms } = buildClientMock({
+        sub: 'merchant-intrus',
+        role: UserRole.COMMERCANT,
+      });
+      ordersRepository.findOne.mockResolvedValue({
+        client: { id: 'client-1' },
+        livreur: { id: 'driver-1' },
+        merchant: { id: 'merchant-1' },
+      });
+
+      await gateway.handleChatJoin(client, { orderId: 'order-1' });
+
+      expect(joinedRooms).toEqual([]);
     });
 
     it('rejoint la room si le user est ADMIN (sans requête DB)', async () => {

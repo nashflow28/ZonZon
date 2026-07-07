@@ -30,7 +30,7 @@ export class ZonesController {
   @Roles(UserRole.ADMIN)
   @Post()
   create(@Body() dto: CreateZoneDto) {
-    return this.zonesService.create(dto.name);
+    return this.zonesService.create(dto);
   }
 
   @Roles(UserRole.ADMIN)

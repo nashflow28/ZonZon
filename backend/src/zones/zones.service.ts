@@ -41,10 +41,23 @@ export class ZonesService {
     }
   }
 
-  async create(name: string): Promise<Zone> {
-    const trimmed = name.trim();
+  /**
+   * Accepte soit un simple nom (rétro-compat historique), soit un
+   * `CreateZoneDto` complet avec les champs enrichis (§7 CDC V1) :
+   * `description`, `basePrice`, `pricePerKmOverride`.
+   */
+  async create(input: string | CreateZoneDto): Promise<Zone> {
+    const dto: CreateZoneDto =
+      typeof input === 'string' ? { name: input } : input;
+    const trimmed = dto.name.trim();
     await this.assertNameAvailable(trimmed);
-    const zone = this.zonesRepo.create({ name: trimmed, active: true });
+    const zone = this.zonesRepo.create({
+      name: trimmed,
+      active: true,
+      description: dto.description ?? null,
+      basePrice: dto.basePrice ?? null,
+      pricePerKmOverride: dto.pricePerKmOverride ?? null,
+    });
     return this.zonesRepo.save(zone);
   }
 
@@ -60,6 +73,15 @@ export class ZonesService {
     }
     if (dto.active !== undefined) {
       zone.active = dto.active;
+    }
+    if (dto.description !== undefined) {
+      zone.description = dto.description;
+    }
+    if (dto.basePrice !== undefined) {
+      zone.basePrice = dto.basePrice;
+    }
+    if (dto.pricePerKmOverride !== undefined) {
+      zone.pricePerKmOverride = dto.pricePerKmOverride;
     }
     return this.zonesRepo.save(zone);
   }

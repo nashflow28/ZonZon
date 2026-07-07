@@ -23,7 +23,11 @@ import {
 import { PositionsService } from './positions.service';
 
 type DriverPosition = { lat: number; lng: number; at: number };
-type ActiveOrderRef = { orderId: string; clientId?: string };
+type ActiveOrderRef = {
+  orderId: string;
+  clientId?: string;
+  merchantId?: string;
+};
 
 const POSITION_TTL_MS = 5 * 60 * 1000;
 
@@ -119,6 +123,13 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`Socket disconnected: ${client.id}`);
   }
 
+  /**
+   * GPS strict (CDC V1 §11.2) : on ne persiste/forward la position QUE si le
+   * livreur a une course active (`activeOrders` mappé par `broadcastOrderAccepted`
+   * et purgé sur statut terminal). Un livreur sans course active qui émet sa
+   * position ne doit pas la voir relayée ni stockée — évite un tracking
+   * hors-course. Forward au client ET au commerçant de la course active.
+   */
   @SubscribeMessage('driver:location')
   handleDriverLocation(
     @ConnectedSocket() client: Socket,
@@ -126,6 +137,13 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {
     const user = client.data?.user;
     if (!user || user.role !== UserRole.LIVREUR) {
+      return;
+    }
+
+    const active = this.activeOrders.get(user.sub);
+    if (!active) {
+      // Pas de course active : on ignore silencieusement (pas de forward,
+      // pas de persistance).
       return;
     }
 
@@ -147,10 +165,18 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const at = Date.now();
     this.driverPositions.set(user.sub, { lat, lng, at });
 
-    // Forward au client de l'ordre actif (s'il y en a un)
-    const active = this.activeOrders.get(user.sub);
-    if (active?.clientId) {
+    // Forward au client ET au commerçant de la course active.
+    if (active.clientId) {
       this.server.to(`user:${active.clientId}`).emit('driver:position', {
+        orderId: active.orderId,
+        livreurId: user.sub,
+        lat,
+        lng,
+        at,
+      });
+    }
+    if (active.merchantId) {
+      this.server.to(`user:${active.merchantId}`).emit('driver:position', {
         orderId: active.orderId,
         livreurId: user.sub,
         lat,
@@ -166,7 +192,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
         user.sub,
         lat,
         lng,
-        active?.orderId ?? null,
+        active.orderId,
       );
     }
   }
@@ -293,6 +319,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     orderId: string,
     livreurId: string,
     clientId?: string,
+    merchantId?: string,
   ) {
     this.server
       .to(`role:${UserRole.LIVREUR}`)
@@ -302,8 +329,14 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
         .to(`user:${clientId}`)
         .emit('orderAccepted', { orderId, livreurId });
     }
+    if (merchantId) {
+      this.server
+        .to(`user:${merchantId}`)
+        .emit('orderAccepted', { orderId, livreurId });
+    }
     // Mémorise le mapping pour forwarder la position du livreur au client
-    this.activeOrders.set(livreurId, { orderId, clientId });
+    // et au commerçant (GPS strict, CDC V1 §11.2).
+    this.activeOrders.set(livreurId, { orderId, clientId, merchantId });
 
     // Si on a déjà la dernière position connue du livreur, on la pousse tout de suite
     // pour que le client voie un marker dès l'acceptation (sinon il faut attendre ~30s).
@@ -326,12 +359,17 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     status: string,
     clientId?: string,
     livreurId?: string,
+    merchantId?: string,
   ) {
     const payload = { orderId, status };
     if (clientId)
       this.server.to(`user:${clientId}`).emit('orderStatusUpdated', payload);
     if (livreurId)
       this.server.to(`user:${livreurId}`).emit('orderStatusUpdated', payload);
+    if (merchantId)
+      this.server
+        .to(`user:${merchantId}`)
+        .emit('orderStatusUpdated', payload);
 
     // Cleanup du mapping quand la course se termine (statuts terminaux)
     if (
@@ -372,9 +410,11 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /**
    * Vérifie que `userId` est autorisé à accéder au chat de la commande
-   * `orderId` : il doit être le client OU le livreur de cette commande,
-   * ou un ADMIN. Utilisé pour empêcher n'importe quel utilisateur
-   * authentifié de rejoindre une room de chat qui ne le concerne pas.
+   * `orderId` : il doit être le client, le livreur, OU le commerçant
+   * créateur de cette commande (CDC V1 §13.2 — le commerçant peut
+   * participer à la conversation de SES livraisons), ou un ADMIN. Utilisé
+   * pour empêcher n'importe quel utilisateur authentifié de rejoindre une
+   * room de chat qui ne le concerne pas.
    */
   private async isUserPartyToOrder(
     orderId: string,
@@ -385,11 +425,15 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     const order = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['client', 'livreur'],
+      relations: ['client', 'livreur', 'merchant'],
     });
     if (!order) return false;
 
-    return order.client?.id === userId || order.livreur?.id === userId;
+    return (
+      order.client?.id === userId ||
+      order.livreur?.id === userId ||
+      order.merchant?.id === userId
+    );
   }
 
   @SubscribeMessage('chat:leave')
