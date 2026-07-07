@@ -28,6 +28,7 @@ import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AvailabilityDto } from './dto/availability.dto';
 import { DriverApprovalDto } from './dto/driver-approval.dto';
+import { SuspendUserDto } from './dto/suspend-user.dto';
 
 @Controller('users')
 @UseGuards(RolesGuard)
@@ -187,5 +188,30 @@ export class UsersController {
       admin.id ?? admin.sub,
       dto.reason,
     );
+  }
+
+  /**
+   * Suspend un compte (P0 sécurité, CDC V1). Bloque immédiatement la
+   * connexion et les actions sensibles (création/acceptation de commande),
+   * quel que soit le rôle du compte ciblé.
+   */
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/suspend')
+  suspend(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SuspendUserDto,
+    @CurrentUser() admin: AuthenticatedUser,
+  ) {
+    return this.usersService.suspend(id, admin.id ?? admin.sub, dto.reason);
+  }
+
+  /** Réactive un compte préalablement suspendu. */
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/reactivate')
+  reactivate(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() admin: AuthenticatedUser,
+  ) {
+    return this.usersService.reactivate(id, admin.id ?? admin.sub);
   }
 }

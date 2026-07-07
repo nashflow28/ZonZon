@@ -20,7 +20,7 @@ import {
   OrderStatus,
   PaymentStatus,
 } from '../entities/delivery-order.entity';
-import { UserRole } from '../entities/user.entity';
+import { UserRole, UserStatus } from '../entities/user.entity';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -53,6 +53,7 @@ const clientUser = {
   firstName: 'Alice',
   lastName: 'Client',
   phone: '+22890000001',
+  status: UserStatus.ACTIVE,
 };
 const livreurUser = {
   id: 'livreur-1',
@@ -62,6 +63,7 @@ const livreurUser = {
   phone: '+22890000002',
   driverApprovalStatus: 'APPROVED',
   isAvailable: true,
+  status: UserStatus.ACTIVE,
 };
 const adminUser = {
   id: 'admin-1',
@@ -69,6 +71,7 @@ const adminUser = {
   firstName: 'Admin',
   lastName: 'Root',
   phone: '+22890000003',
+  status: UserStatus.ACTIVE,
 };
 const merchantUser = {
   id: 'merchant-1',
@@ -76,6 +79,7 @@ const merchantUser = {
   firstName: 'Marc',
   lastName: 'Commercant',
   phone: '+22890000005',
+  status: UserStatus.ACTIVE,
 };
 
 describe('OrdersService', () => {
@@ -291,6 +295,18 @@ describe('OrdersService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    // ── P0 sécurité (CDC V1) : suspension de compte ─────────────────────────
+
+    it('rejette si le client est SUSPENDED (défense en profondeur)', async () => {
+      usersService.findOne.mockResolvedValue({
+        ...clientUser,
+        status: UserStatus.SUSPENDED,
+      });
+      await expect(
+        service.createOrder(clientUser.id, dto as any),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
     it('rejette si les coordonnées sont manquantes', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
       const badDto = { ...dto, pickupLat: undefined };
@@ -475,21 +491,47 @@ describe('OrdersService', () => {
   });
 
   describe('acceptOrder', () => {
+    // `findOne` est appelé à 2 ou 3 endroits distincts d'`acceptOrder` :
+    //   1) recherche d'une course active du livreur (where.livreur défini)
+    //   2) recherche de la commande à accepter par id (where.id défini)
+    //   3) reload après l'UPDATE atomique (where.id défini, appelé une 2e fois)
+    // Ce helper route chaque appel selon la forme du `where` pour ne pas
+    // dépendre d'un ordre séquentiel fragile (mockResolvedValueOnce en chaîne).
+    const routeFindOne = (opts: {
+      activeOrder?: any; // résultat pour la recherche "course active" (par défaut: aucune)
+      byId: Record<string, any[]>; // orderId -> [existenceCheckResult, reloadResult]
+    }) => {
+      const reloadCallCount: Record<string, number> = {};
+      ordersRepository.findOne.mockImplementation(async (query: any) => {
+        if (query?.where?.livreur) {
+          return opts.activeOrder ?? null;
+        }
+        const id = query?.where?.id;
+        const results = opts.byId[id] ?? [];
+        const count = reloadCallCount[id] ?? 0;
+        reloadCallCount[id] = count + 1;
+        return results[count] ?? null;
+      });
+    };
+
     it('passe PENDING → ACCEPTED via UPDATE atomique', async () => {
-      // 1er findOne : check d'existence (avant UPDATE)
-      // 2e findOne : reload après UPDATE pour broadcast/notif
-      ordersRepository.findOne
-        .mockResolvedValueOnce({
-          id: 'ord-1',
-          status: OrderStatus.PENDING,
-          client: { id: clientUser.id },
-        })
-        .mockResolvedValueOnce({
-          id: 'ord-1',
-          status: OrderStatus.ACCEPTED,
-          client: { id: clientUser.id },
-          livreur: livreurUser,
-        });
+      routeFindOne({
+        byId: {
+          'ord-1': [
+            {
+              id: 'ord-1',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+            },
+            {
+              id: 'ord-1',
+              status: OrderStatus.ACCEPTED,
+              client: { id: clientUser.id },
+              livreur: livreurUser,
+            },
+          ],
+        },
+      });
       ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
       usersService.findOne.mockResolvedValue(livreurUser);
 
@@ -506,10 +548,16 @@ describe('OrdersService', () => {
 
     it('throw ConflictException si UPDATE n’affecte aucune ligne (déjà prise)', async () => {
       usersService.findOne.mockResolvedValue(livreurUser);
-      ordersRepository.findOne.mockResolvedValueOnce({
-        id: 'o',
-        status: OrderStatus.ACCEPTED,
-        client: { id: clientUser.id },
+      routeFindOne({
+        byId: {
+          o: [
+            {
+              id: 'o',
+              status: OrderStatus.ACCEPTED,
+              client: { id: clientUser.id },
+            },
+          ],
+        },
       });
       ordersRepository.__updateExecute.mockResolvedValue({ affected: 0 });
       await expect(
@@ -520,7 +568,7 @@ describe('OrdersService', () => {
 
     it('throw NotFoundException si introuvable', async () => {
       usersService.findOne.mockResolvedValue(livreurUser);
-      ordersRepository.findOne.mockResolvedValue(null);
+      routeFindOne({ byId: {} });
       await expect(
         service.acceptOrder('o', livreurUser.id),
       ).rejects.toBeInstanceOf(NotFoundException);
@@ -552,6 +600,42 @@ describe('OrdersService', () => {
       expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
     });
 
+    // ── P0 sécurité (CDC V1) : suspension de compte ─────────────────────────
+
+    it('throw ForbiddenException si le livreur est suspendu (status=SUSPENDED)', async () => {
+      usersService.findOne.mockResolvedValue({
+        ...livreurUser,
+        status: UserStatus.SUSPENDED,
+      });
+      await expect(
+        service.acceptOrder('o', livreurUser.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(ordersRepository.findOne).not.toHaveBeenCalled();
+      expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
+    });
+
+    // ── P0 sécurité (CDC V1) : une seule course active ──────────────────────
+
+    it('throw ConflictException si le livreur a déjà une course active', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      // La recherche "course active" (where.livreur) renvoie une course en
+      // cours → le flow doit s'arrêter avant même de chercher la commande
+      // visée par son id.
+      routeFindOne({
+        activeOrder: {
+          id: 'ord-already-active',
+          status: OrderStatus.IN_PROGRESS,
+          livreur: { id: livreurUser.id },
+        },
+        byId: {},
+      });
+
+      await expect(
+        service.acceptOrder('ord-new', livreurUser.id),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
+    });
+
     it('atomicité : 2 livreurs en concurrence → 1 seul gagne, l’autre reçoit ConflictException', async () => {
       const livreur2 = {
         id: 'livreur-2',
@@ -561,27 +645,35 @@ describe('OrdersService', () => {
         phone: '+22890000004',
         driverApprovalStatus: 'APPROVED',
         isAvailable: true,
+        status: UserStatus.ACTIVE,
       };
 
-      // Existence checks pour les 2 appels + reload pour le gagnant
-      ordersRepository.findOne
-        .mockResolvedValueOnce({
-          id: 'ord-concurrent',
-          status: OrderStatus.PENDING,
-          client: { id: clientUser.id },
-        })
-        .mockResolvedValueOnce({
-          id: 'ord-concurrent',
-          status: OrderStatus.ACCEPTED,
-          client: { id: clientUser.id },
-          livreur: livreurUser,
-        })
-        .mockResolvedValueOnce({
-          id: 'ord-concurrent',
-          status: OrderStatus.ACCEPTED,
-          client: { id: clientUser.id },
-          livreur: livreurUser,
-        });
+      routeFindOne({
+        byId: {
+          'ord-concurrent': [
+            // 1er appel (livreurUser) : check d'existence → PENDING
+            {
+              id: 'ord-concurrent',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+            },
+            // 1er appel (livreurUser) : reload après UPDATE gagnant → ACCEPTED
+            {
+              id: 'ord-concurrent',
+              status: OrderStatus.ACCEPTED,
+              client: { id: clientUser.id },
+              livreur: livreurUser,
+            },
+            // 2e appel (livreur2) : check d'existence → déjà ACCEPTED (perdant)
+            {
+              id: 'ord-concurrent',
+              status: OrderStatus.ACCEPTED,
+              client: { id: clientUser.id },
+              livreur: livreurUser,
+            },
+          ],
+        },
+      });
 
       // 1er UPDATE : 1 ligne affectée (gagne) ; 2e : 0 ligne (perd)
       ordersRepository.__updateExecute
@@ -618,11 +710,17 @@ describe('OrdersService', () => {
 
     it('refuse un livreur non-preferred sur une course réservée à un autre livreur', async () => {
       usersService.findOne.mockResolvedValue(livreurUser);
-      ordersRepository.findOne.mockResolvedValueOnce({
-        id: 'ord-reserved',
-        status: OrderStatus.PENDING,
-        client: { id: clientUser.id },
-        preferredLivreur: { id: 'livreur-2' },
+      routeFindOne({
+        byId: {
+          'ord-reserved': [
+            {
+              id: 'ord-reserved',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+              preferredLivreur: { id: 'livreur-2' },
+            },
+          ],
+        },
       });
 
       await expect(
@@ -634,19 +732,24 @@ describe('OrdersService', () => {
 
     it('autorise le livreur preferred à accepter la course qui lui est réservée', async () => {
       usersService.findOne.mockResolvedValue(livreurUser);
-      ordersRepository.findOne
-        .mockResolvedValueOnce({
-          id: 'ord-reserved-2',
-          status: OrderStatus.PENDING,
-          client: { id: clientUser.id },
-          preferredLivreur: { id: livreurUser.id },
-        })
-        .mockResolvedValueOnce({
-          id: 'ord-reserved-2',
-          status: OrderStatus.ACCEPTED,
-          client: { id: clientUser.id },
-          livreur: livreurUser,
-        });
+      routeFindOne({
+        byId: {
+          'ord-reserved-2': [
+            {
+              id: 'ord-reserved-2',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+              preferredLivreur: { id: livreurUser.id },
+            },
+            {
+              id: 'ord-reserved-2',
+              status: OrderStatus.ACCEPTED,
+              client: { id: clientUser.id },
+              livreur: livreurUser,
+            },
+          ],
+        },
+      });
       ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
 
       const result = await service.acceptOrder(
@@ -659,19 +762,24 @@ describe('OrdersService', () => {
 
     it('une course non réservée (preferredLivreur null) reste acceptable par n’importe quel livreur', async () => {
       usersService.findOne.mockResolvedValue(livreurUser);
-      ordersRepository.findOne
-        .mockResolvedValueOnce({
-          id: 'ord-open',
-          status: OrderStatus.PENDING,
-          client: { id: clientUser.id },
-          preferredLivreur: null,
-        })
-        .mockResolvedValueOnce({
-          id: 'ord-open',
-          status: OrderStatus.ACCEPTED,
-          client: { id: clientUser.id },
-          livreur: livreurUser,
-        });
+      routeFindOne({
+        byId: {
+          'ord-open': [
+            {
+              id: 'ord-open',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+              preferredLivreur: null,
+            },
+            {
+              id: 'ord-open',
+              status: OrderStatus.ACCEPTED,
+              client: { id: clientUser.id },
+              livreur: livreurUser,
+            },
+          ],
+        },
+      });
       ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
 
       const result = await service.acceptOrder('ord-open', livreurUser.id);
@@ -1079,6 +1187,21 @@ describe('OrdersService', () => {
         service.createMerchantOrder(clientUser.id, {
           ...dto,
           clientId: 'client-2',
+        } as any),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    // ── P0 sécurité (CDC V1) : suspension de compte ─────────────────────────
+
+    it('rejette si le commerçant est SUSPENDED (défense en profondeur)', async () => {
+      usersService.findOne.mockResolvedValue({
+        ...merchantUser,
+        status: UserStatus.SUSPENDED,
+      });
+      await expect(
+        service.createMerchantOrder(merchantUser.id, {
+          ...dto,
+          clientPhone: '+22899999999',
         } as any),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });

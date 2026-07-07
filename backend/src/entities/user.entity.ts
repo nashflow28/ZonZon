@@ -24,6 +24,18 @@ export enum DriverApprovalStatus {
   REJECTED = 'REJECTED',
 }
 
+/**
+ * Statut de compte global (P0 sécurité — CDC V1) : distinct de
+ * `driverApprovalStatus` (workflow de validation livreur). Un compte
+ * SUSPENDED est bloqué à la connexion et en défense en profondeur sur les
+ * actions sensibles (création de commande, acceptation de course), quel que
+ * soit son rôle (CLIENT, LIVREUR, COMMERCANT).
+ */
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+}
+
 @Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
@@ -83,6 +95,14 @@ export class User {
   /** Disponibilité déclarée par le livreur (bascule manuelle côté mobile). */
   @Column({ type: 'boolean', default: false })
   isAvailable: boolean;
+
+  /**
+   * Statut de compte (P0 sécurité). Tous les comptes existants sont
+   * "grandfathered" ACTIVE via le `default` de la migration — aucune
+   * suspension rétroactive.
+   */
+  @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
+  status: UserStatus;
 
   @OneToOne(() => Vehicle, (vehicle) => vehicle.driver)
   vehicle: Vehicle;

@@ -3,7 +3,12 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
 import { UsersService } from './users.service';
-import { DriverApprovalStatus, User, UserRole } from '../entities/user.entity';
+import {
+  DriverApprovalStatus,
+  User,
+  UserRole,
+  UserStatus,
+} from '../entities/user.entity';
 import { Vehicle } from '../entities/vehicle.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
 
@@ -286,6 +291,122 @@ describe('UsersService', () => {
             driverApprovalStatus: DriverApprovalStatus.APPROVED,
             isAvailable: true,
           },
+        }),
+      );
+    });
+  });
+
+  // ── P0 sécurité (CDC V1) : suspension de compte ───────────────────────────
+
+  describe('suspend', () => {
+    const activeUser = () => ({
+      id: 'user-1',
+      role: UserRole.CLIENT,
+      status: UserStatus.ACTIVE,
+    });
+
+    it('positionne status=SUSPENDED et renvoie le user à jour', async () => {
+      usersRepository.findOne.mockResolvedValue(activeUser());
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      const result = await service.suspend('user-1', 'admin-1', 'Fraude');
+
+      expect(result.status).toBe(UserStatus.SUSPENDED);
+      expect(usersRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: UserStatus.SUSPENDED }),
+      );
+    });
+
+    it('appelle auditLog.log en fire-and-forget avec la reason (@Optional)', async () => {
+      const auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getRepositoryToken(User), useValue: usersRepository },
+          {
+            provide: getRepositoryToken(Vehicle),
+            useValue: mockVehiclesRepo(),
+          },
+          { provide: AuditLogService, useValue: auditLog },
+        ],
+      }).compile();
+      const svc = module.get<UsersService>(UsersService);
+
+      usersRepository.findOne.mockResolvedValue(activeUser());
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      await svc.suspend('user-1', 'admin-1', 'Fraude avérée');
+      await new Promise((r) => setImmediate(r));
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminId: 'admin-1',
+          action: 'USER_SUSPEND',
+          targetType: 'User',
+          targetId: 'user-1',
+          metadata: { reason: 'Fraude avérée' },
+        }),
+      );
+    });
+
+    it('ne casse pas si auditLog est absent (non injecté)', async () => {
+      usersRepository.findOne.mockResolvedValue(activeUser());
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      await expect(
+        service.suspend('user-1', 'admin-1'),
+      ).resolves.toEqual(
+        expect.objectContaining({ status: UserStatus.SUSPENDED }),
+      );
+    });
+  });
+
+  describe('reactivate', () => {
+    const suspendedUser = () => ({
+      id: 'user-1',
+      role: UserRole.CLIENT,
+      status: UserStatus.SUSPENDED,
+    });
+
+    it('positionne status=ACTIVE et renvoie le user à jour', async () => {
+      usersRepository.findOne.mockResolvedValue(suspendedUser());
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      const result = await service.reactivate('user-1', 'admin-1');
+
+      expect(result.status).toBe(UserStatus.ACTIVE);
+      expect(usersRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ status: UserStatus.ACTIVE }),
+      );
+    });
+
+    it('appelle auditLog.log en fire-and-forget (@Optional)', async () => {
+      const auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getRepositoryToken(User), useValue: usersRepository },
+          {
+            provide: getRepositoryToken(Vehicle),
+            useValue: mockVehiclesRepo(),
+          },
+          { provide: AuditLogService, useValue: auditLog },
+        ],
+      }).compile();
+      const svc = module.get<UsersService>(UsersService);
+
+      usersRepository.findOne.mockResolvedValue(suspendedUser());
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      await svc.reactivate('user-1', 'admin-1');
+      await new Promise((r) => setImmediate(r));
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminId: 'admin-1',
+          action: 'USER_REACTIVATE',
+          targetType: 'User',
+          targetId: 'user-1',
         }),
       );
     });

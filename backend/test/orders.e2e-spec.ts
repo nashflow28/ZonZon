@@ -2,145 +2,40 @@
  * E2E test for the orders flow.
  *
  * Strategy: we build the HTTP pipeline (controllers + services + guards + JWT)
- * WITHOUT TypeORM/MySQL/SQLite. Repositories are replaced with in-memory
+ * WITHOUT TypeORM/MySQL. Repositories are replaced with in-memory
  * implementations via `getRepositoryToken()`. Axios is mocked globally so the
  * OSRM route distance is deterministic (3 km → 450 FCFA).
  *
- * This mirrors a real HTTP run (register → create order → accept → progress
- * → complete → second livreur tries to accept) while keeping the test hermetic.
+ * This mirrors a real HTTP run: register → admin approves the driver →
+ * driver goes available → create order → accept → progress → complete →
+ * second livreur tries to accept (409).
+ *
+ * NOTE : depuis l'introduction du workflow de validation livreur
+ * (DriverApprovalStatus PENDING/APPROVED/REJECTED) et de la disponibilité
+ * (`isAvailable`), un livreur fraîchement inscrit est PENDING + indisponible.
+ * Il doit être approuvé par un ADMIN puis passer disponible avant de
+ * pouvoir voir/accepter une course — cf. `driver-validation.e2e-spec.ts`
+ * pour les tests dédiés à ce workflow.
  */
 
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
-import { Test } from '@nestjs/testing';
-import { JwtModule } from '@nestjs/jwt';
-import { PassportModule } from '@nestjs/passport';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { INestApplication } from '@nestjs/common';
 import request = require('supertest');
-import axios from 'axios';
 
-import { AuthController } from '../src/auth/auth.controller';
-import { AuthService } from '../src/auth/auth.service';
-import { JwtStrategy } from '../src/auth/jwt.strategy';
-import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
-import { OrdersController } from '../src/orders/orders.controller';
-import { OrdersService } from '../src/orders/orders.service';
-import { OrdersGateway } from '../src/orders/orders.gateway';
-import { UsersService } from '../src/users/users.service';
-import { User, UserRole } from '../src/entities/user.entity';
-import { Vehicle } from '../src/entities/vehicle.entity';
+import { UserRole } from '../src/entities/user.entity';
+import { OrderStatus } from '../src/entities/delivery-order.entity';
 import {
-  DeliveryOrder,
-  OrderStatus,
-} from '../src/entities/delivery-order.entity';
-
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
-
-/**
- * Minimal in-memory repository that covers what services & JWT strategy call:
- * find, findOne, save, create, update.
- */
-function makeInMemoryRepo<T extends { id?: string }>() {
-  const store = new Map<string, T>();
-  let seq = 0;
-  const nextId = () => `id-${++seq}`;
-
-  const matches = (entity: any, where: any): boolean => {
-    if (!where) return true;
-    if (Array.isArray(where)) return where.some((w) => matches(entity, w));
-    return Object.entries(where).every(([k, v]) => {
-      if (v && typeof v === 'object' && !Array.isArray(v)) {
-        // nested relation filter like { client: { id: '...' } }
-        return matches(entity[k], v);
-      }
-      return entity[k] === v;
-    });
-  };
-
-  return {
-    _store: store,
-    create: jest.fn((data: Partial<T>) => ({ ...(data as any) })),
-    save: jest.fn(async (entity: any) => {
-      const withId: T = entity.id ? entity : { ...entity, id: nextId() };
-      store.set((withId as any).id, withId);
-      return withId;
-    }),
-    findOne: jest.fn(async (opts: any) => {
-      for (const v of store.values()) {
-        if (matches(v, opts?.where)) return v;
-      }
-      return null;
-    }),
-    find: jest.fn(async (opts: any) => {
-      const out: any[] = [];
-      for (const v of store.values()) {
-        if (matches(v, opts?.where)) out.push(v);
-      }
-      return out;
-    }),
-    update: jest.fn(async (id: string, patch: any) => {
-      const cur = store.get(id);
-      if (cur) store.set(id, { ...cur, ...patch });
-      return { affected: 1 };
-    }),
-  };
-}
+  TestAppBundle,
+  buildTestApp,
+  registerAndLogin,
+} from './test-helpers';
 
 describe('Orders (e2e)', () => {
+  let bundle: TestAppBundle;
   let app: INestApplication;
-  let usersRepo: ReturnType<typeof makeInMemoryRepo<User>>;
-  let vehiclesRepo: ReturnType<typeof makeInMemoryRepo<Vehicle>>;
-  let ordersRepo: ReturnType<typeof makeInMemoryRepo<DeliveryOrder>>;
 
   beforeAll(async () => {
-    process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
-    mockedAxios.get.mockResolvedValue({
-      data: { routes: [{ distance: 3000 }] },
-    });
-
-    usersRepo = makeInMemoryRepo<User>();
-    vehiclesRepo = makeInMemoryRepo<Vehicle>();
-    ordersRepo = makeInMemoryRepo<DeliveryOrder>();
-
-    // Stub gateway so we do not need socket.io infrastructure
-    const fakeGateway = {
-      broadcastNewOrder: jest.fn(),
-      broadcastOrderAccepted: jest.fn(),
-      broadcastStatusUpdate: jest.fn(),
-    };
-
-    const moduleRef = await Test.createTestingModule({
-      imports: [
-        PassportModule,
-        JwtModule.register({
-          secret: process.env.JWT_SECRET,
-          signOptions: { expiresIn: '7d' },
-        }),
-      ],
-      controllers: [AuthController, OrdersController],
-      providers: [
-        AuthService,
-        UsersService,
-        OrdersService,
-        JwtStrategy,
-        { provide: APP_GUARD, useClass: JwtAuthGuard },
-        { provide: OrdersGateway, useValue: fakeGateway },
-        { provide: getRepositoryToken(User), useValue: usersRepo },
-        { provide: getRepositoryToken(Vehicle), useValue: vehiclesRepo },
-        { provide: getRepositoryToken(DeliveryOrder), useValue: ordersRepo },
-      ],
-    }).compile();
-
-    app = moduleRef.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
-    await app.init();
+    bundle = await buildTestApp();
+    app = bundle.app;
   });
 
   afterAll(async () => {
@@ -148,10 +43,40 @@ describe('Orders (e2e)', () => {
   });
 
   // Shared state between steps
+  let adminToken: string;
   let clientToken: string;
   let livreurToken: string;
+  let livreurId: string;
   let secondLivreurToken: string;
+  let secondLivreurId: string;
   let orderId: string;
+
+  it('POST /auth/register — admin → 201 + token', async () => {
+    // Note: /auth/register REFUSE explicitement le rôle ADMIN (sécurité).
+    // On simule un admin déjà existant en le créant directement via le repo,
+    // puis on se logue normalement.
+    const { usersRepo } = bundle;
+    const admin = usersRepo.create({
+      firstName: 'Admin',
+      lastName: 'Zonzon',
+      phone: '+22890000099',
+      role: UserRole.ADMIN,
+      password: undefined,
+    });
+    await usersRepo.save(admin);
+
+    // On génère le token directement via login n'est pas possible sans mdp;
+    // à la place on utilise un JWT signé identique à ce que ferait AuthService.
+    const jwt = require('@nestjs/jwt');
+    const { JwtService } = jwt;
+    const jwtService = new JwtService({ secret: process.env.JWT_SECRET });
+    adminToken = jwtService.sign({
+      phone: admin.phone,
+      sub: (admin as any).id,
+      role: UserRole.ADMIN,
+    });
+    expect(adminToken).toBeDefined();
+  });
 
   it('POST /auth/register — client → 201 + token', async () => {
     const res = await request(app.getHttpServer())
@@ -170,7 +95,7 @@ describe('Orders (e2e)', () => {
     clientToken = res.body.access_token;
   });
 
-  it('POST /auth/register — livreur (MOTO) → 201 + token', async () => {
+  it('POST /auth/register — livreur (MOTO) → 201 + token, PENDING par défaut', async () => {
     const res = await request(app.getHttpServer())
       .post('/auth/register')
       .send({
@@ -185,7 +110,9 @@ describe('Orders (e2e)', () => {
 
     expect(res.body.access_token).toBeDefined();
     expect(res.body.user.role).toBe(UserRole.LIVREUR);
+    expect(res.body.user.driverApprovalStatus).toBe('PENDING');
     livreurToken = res.body.access_token;
+    livreurId = res.body.user.id;
   });
 
   it('POST /auth/register — second livreur → 201 + token', async () => {
@@ -201,6 +128,33 @@ describe('Orders (e2e)', () => {
       })
       .expect(201);
     secondLivreurToken = res.body.access_token;
+    secondLivreurId = res.body.user.id;
+  });
+
+  it('ADMIN approuve les deux livreurs puis ils passent disponibles', async () => {
+    await request(app.getHttpServer())
+      .patch(`/users/${livreurId}/driver-approval`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'APPROVED' })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch(`/users/${secondLivreurId}/driver-approval`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'APPROVED' })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch('/users/me/availability')
+      .set('Authorization', `Bearer ${livreurToken}`)
+      .send({ available: true })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .patch('/users/me/availability')
+      .set('Authorization', `Bearer ${secondLivreurToken}`)
+      .send({ available: true })
+      .expect(200);
   });
 
   it('POST /orders (client) → 201, prix calculé', async () => {
@@ -218,15 +172,15 @@ describe('Orders (e2e)', () => {
       })
       .expect(201);
 
-    // 3000 m → 3 km → 3 * 150 = 450
+    // 3000 m → 3 km → 3 * 150 = 450 (pricePerKm stubbé à 150 dans PricingService)
     expect(Number(res.body.priceFcfa)).toBe(450);
     expect(res.body.status).toBe(OrderStatus.PENDING);
     orderId = res.body.id;
   });
 
-  it('GET /orders (livreur) — retourne la commande', async () => {
+  it('GET /orders/available (livreur validé + dispo) — retourne la commande', async () => {
     const res = await request(app.getHttpServer())
-      .get('/orders')
+      .get('/orders/available')
       .set('Authorization', `Bearer ${livreurToken}`)
       .expect(200);
 

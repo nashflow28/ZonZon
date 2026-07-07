@@ -1,6 +1,8 @@
 import { Component, EventEmitter, Input, OnDestroy, Output, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Order } from '../../orders.service';
+import { FormsModule } from '@angular/forms';
+import { LucideAngularModule } from 'lucide-angular';
+import { AvailableDriver, Order, OrdersService, PaymentStatus } from '../../orders.service';
 import { ChatMessage, MessagesService } from '../messages.service';
 import { LiveStatusService } from '../live-status.service';
 
@@ -10,10 +12,20 @@ interface TimelineStep {
   state: 'done' | 'current' | 'future' | 'cancelled';
 }
 
+/// Les 5 valeurs possibles pour le <select> de statut de paiement, avec
+/// libellé FR (contrat backend déjà déployé, cf. PATCH /orders/:id/payment-status).
+const PAYMENT_STATUS_OPTIONS: { value: PaymentStatus; label: string }[] = [
+  { value: 'UNPAID', label: 'Non payé' },
+  { value: 'PAY_ON_DELIVERY', label: 'À la livraison' },
+  { value: 'PAID', label: 'Payé' },
+  { value: 'RECEIVED_BY_MERCHANT', label: 'Reçu (commerçant)' },
+  { value: 'RECEIVED_BY_LIVREUR', label: 'Reçu (livreur)' },
+];
+
 @Component({
   selector: 'app-order-detail',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule, LucideAngularModule],
   templateUrl: './order-detail.component.html',
   styleUrl: './order-detail.component.css'
 })
@@ -21,6 +33,7 @@ export class OrderDetailComponent implements OnDestroy {
   private readonly _order = signal<Order | null>(null);
   private messagesService = inject(MessagesService);
   private liveStatus = inject(LiveStatusService);
+  private ordersService = inject(OrdersService);
 
   readonly messages = signal<ChatMessage[]>([]);
   readonly messagesLoading = signal(false);
@@ -37,8 +50,116 @@ export class OrderDetailComponent implements OnDestroy {
   }
 
   @Output() close = new EventEmitter<void>();
+  /// Émis quand une commande a été modifiée localement (paiement ou
+  /// réassignation), pour que le parent (ex: liste des archives) mette à
+  /// jour sa ligne sans devoir tout recharger.
+  @Output() orderUpdated = new EventEmitter<Order>();
 
   readonly isOpen = computed(() => this._order() !== null);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Statut de paiement — édition
+  // ──────────────────────────────────────────────────────────────────────────
+  readonly paymentOptions = PAYMENT_STATUS_OPTIONS;
+  readonly paymentSaving = signal(false);
+  readonly paymentError = signal<string | null>(null);
+  readonly paymentSuccess = signal(false);
+
+  updatePaymentStatus(value: string): void {
+    const o = this._order();
+    if (!o) return;
+    const paymentStatus = value as PaymentStatus;
+    if (paymentStatus === o.paymentStatus) return;
+
+    this.paymentSaving.set(true);
+    this.paymentError.set(null);
+    this.paymentSuccess.set(false);
+
+    this.ordersService.updatePaymentStatus(o.id, paymentStatus).subscribe({
+      next: (updated) => {
+        const merged: Order = { ...o, ...updated, paymentStatus: updated?.paymentStatus ?? paymentStatus };
+        this._order.set(merged);
+        this.paymentSaving.set(false);
+        this.paymentSuccess.set(true);
+        this.orderUpdated.emit(merged);
+        setTimeout(() => this.paymentSuccess.set(false), 2000);
+      },
+      error: (err) => {
+        console.error('Erreur mise à jour statut paiement', err);
+        this.paymentSaving.set(false);
+        this.paymentError.set(
+          err?.error?.message || 'Impossible de mettre à jour le statut de paiement.'
+        );
+      }
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Réassignation manuelle du livreur
+  // ──────────────────────────────────────────────────────────────────────────
+  readonly canAssign = computed(() => this._order()?.status === 'PENDING');
+  readonly assignPanelOpen = signal(false);
+  readonly driversLoading = signal(false);
+  readonly driversError = signal<string | null>(null);
+  readonly availableDrivers = signal<AvailableDriver[]>([]);
+  readonly assigningDriverId = signal<string | null>(null);
+  readonly assignError = signal<string | null>(null);
+
+  openAssignPanel(): void {
+    this.assignPanelOpen.set(true);
+    this.driversError.set(null);
+    this.assignError.set(null);
+    this.loadAvailableDrivers();
+  }
+
+  closeAssignPanel(): void {
+    this.assignPanelOpen.set(false);
+  }
+
+  private loadAvailableDrivers(): void {
+    this.driversLoading.set(true);
+    this.driversError.set(null);
+    this.ordersService.getAvailableDrivers().subscribe({
+      next: (drivers) => {
+        this.availableDrivers.set(drivers ?? []);
+        this.driversLoading.set(false);
+      },
+      error: (err) => {
+        console.error('Erreur chargement livreurs disponibles', err);
+        this.driversError.set('Impossible de charger les livreurs disponibles.');
+        this.driversLoading.set(false);
+      }
+    });
+  }
+
+  chooseDriver(driver: AvailableDriver): void {
+    const o = this._order();
+    if (!o) return;
+    this.assigningDriverId.set(driver.id);
+    this.assignError.set(null);
+
+    this.ordersService.assignDriver(o.id, driver.id).subscribe({
+      next: (updated) => {
+        const merged: Order = { ...o, ...updated };
+        this._order.set(merged);
+        this.assigningDriverId.set(null);
+        this.assignPanelOpen.set(false);
+        this.orderUpdated.emit(merged);
+      },
+      error: (err) => {
+        console.error('Erreur réassignation livreur', err);
+        this.assigningDriverId.set(null);
+        this.assignError.set(
+          err?.error?.message ||
+          "Cette course n'est plus assignable (déjà acceptée ou annulée)."
+        );
+      }
+    });
+  }
+
+  driverFullName(d: AvailableDriver): string {
+    return `${d.firstName ?? ''} ${d.lastName ?? ''}`.trim() || 'Livreur';
+  }
 
   readonly shortId = computed(() => {
     const o = this._order();

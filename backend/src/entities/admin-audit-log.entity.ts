@@ -17,7 +17,9 @@ export type AuditAction =
   | 'USER_DELETE'
   | 'USER_RESTORE'
   | 'DRIVER_APPROVE'
-  | 'DRIVER_REJECT';
+  | 'DRIVER_REJECT'
+  | 'USER_SUSPEND'
+  | 'USER_REACTIVATE';
 
 @Entity('admin_audit_logs')
 @Index(['adminId', 'createdAt'])

@@ -39,6 +39,25 @@ export interface PagedOrders {
   hasMore: boolean;
 }
 
+/// Valeurs possibles du statut de paiement (contrat backend déployé).
+export type PaymentStatus =
+  | 'UNPAID'
+  | 'PAID'
+  | 'PAY_ON_DELIVERY'
+  | 'RECEIVED_BY_MERCHANT'
+  | 'RECEIVED_BY_LIVREUR';
+
+/// Livreur disponible pour une réassignation manuelle, tel que renvoyé par
+/// `GET /orders/available-drivers`.
+export interface AvailableDriver {
+  id: string;
+  firstName: string;
+  lastName: string;
+  vehicle?: string | null;
+  distanceKm?: number | null;
+  isAffiliated: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -80,5 +99,27 @@ export class OrdersService {
         return res;
       })
     );
+  }
+
+  /// Met à jour le statut de paiement d'une livraison.
+  /// Backend : PATCH /orders/:id/payment-status { paymentStatus }
+  updatePaymentStatus(orderId: string, paymentStatus: PaymentStatus): Observable<Order> {
+    return this.http.patch<Order>(`${this.apiUrl}/${orderId}/payment-status`, { paymentStatus });
+  }
+
+  /// Réassigne manuellement un livreur à une course encore PENDING.
+  /// Backend : PATCH /orders/:id/assign { livreurId }
+  assignDriver(orderId: string, livreurId: string): Observable<Order> {
+    return this.http.patch<Order>(`${this.apiUrl}/${orderId}/assign`, { livreurId });
+  }
+
+  /// Liste des livreurs disponibles pour un choix manuel (avec distance
+  /// optionnelle si lat/lng fournis).
+  /// Backend : GET /orders/available-drivers?lat=&lng=
+  getAvailableDrivers(lat?: number, lng?: number): Observable<AvailableDriver[]> {
+    let params = new HttpParams();
+    if (lat !== undefined) params = params.set('lat', String(lat));
+    if (lng !== undefined) params = params.set('lng', String(lng));
+    return this.http.get<AvailableDriver[]>(`${this.apiUrl}/available-drivers`, { params });
   }
 }

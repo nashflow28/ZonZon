@@ -14,6 +14,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Between,
   FindOptionsWhere,
+  In,
   IsNull,
   LessThanOrEqual,
   MoreThanOrEqual,
@@ -32,7 +33,11 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateMerchantOrderDto } from './dto/create-merchant-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { ListOrdersDto } from './dto/list-orders.dto';
-import { DriverApprovalStatus, UserRole } from '../entities/user.entity';
+import {
+  DriverApprovalStatus,
+  UserRole,
+  UserStatus,
+} from '../entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { haversineKm } from '../common/geo';
 import { PricingService } from '../pricing/pricing.service';
@@ -436,6 +441,11 @@ export class OrdersService {
     if (client.role !== UserRole.CLIENT) {
       throw new ForbiddenException('Seul un client peut créer une commande');
     }
+    // P0 sécurité (CDC V1) : défense en profondeur — un compte suspendu ne
+    // peut pas créer de commande même s'il détient encore un JWT valide.
+    if (client.status === UserStatus.SUSPENDED) {
+      throw new ForbiddenException('Compte suspendu');
+    }
 
     let preferredLivreur: any = null;
     if (dto.preferredLivreurId) {
@@ -481,6 +491,11 @@ export class OrdersService {
       throw new ForbiddenException(
         'Seul un commerçant peut créer une livraison pour un client',
       );
+    }
+    // P0 sécurité (CDC V1) : défense en profondeur — un compte suspendu ne
+    // peut pas créer de livraison même s'il détient encore un JWT valide.
+    if (merchant.status === UserStatus.SUSPENDED) {
+      throw new ForbiddenException('Compte suspendu');
     }
 
     // Attribution manuelle (Priorité 3, Lot 3, item 1) : le livreur doit
@@ -806,6 +821,38 @@ export class OrdersService {
     if (!livreur.isAvailable) {
       throw new ForbiddenException(
         'Vous êtes indisponible — passez disponible pour accepter une course',
+      );
+    }
+    // P0 sécurité (CDC V1) : défense en profondeur — un livreur suspendu ne
+    // peut pas accepter de course même s'il détient encore un JWT valide.
+    if (livreur.status === UserStatus.SUSPENDED) {
+      throw new ForbiddenException('Compte suspendu');
+    }
+
+    // 0bis) Règle « une seule course active » (P0, CDC V1) : un livreur ne
+    // peut pas accepter une nouvelle course tant qu'il en a déjà une en
+    // cours (ACCEPTED → NEAR_CLIENT). Le CDC préconise de considérer le
+    // livreur comme « non disponible » dans ce cas, mais on NE modifie PAS
+    // `isAvailable` automatiquement ici : ce flag est piloté manuellement
+    // par le livreur côté mobile (bascule dispo/indispo) et une double
+    // écriture implicite perturberait cet affichage. La présente vérification
+    // suffit à bloquer l'acceptation, ce qui satisfait la règle métier sans
+    // toucher à l'UX de disponibilité.
+    const activeOrder = await this.ordersRepository.findOne({
+      where: {
+        livreur: { id: livreurId },
+        status: In([
+          OrderStatus.ACCEPTED,
+          OrderStatus.EN_ROUTE_PICKUP,
+          OrderStatus.AT_PICKUP,
+          OrderStatus.IN_PROGRESS,
+          OrderStatus.NEAR_CLIENT,
+        ]),
+      },
+    });
+    if (activeOrder) {
+      throw new ConflictException(
+        "Vous avez déjà une course active. Terminez-la avant d'en accepter une autre.",
       );
     }
 

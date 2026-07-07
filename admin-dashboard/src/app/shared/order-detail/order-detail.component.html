@@ -102,7 +102,16 @@
 
       <!-- Livreur -->
       <section class="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4">
-        <h3 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">Livreur</h3>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Livreur</h3>
+          <button *ngIf="canAssign()" type="button"
+                  (click)="openAssignPanel()"
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold
+                         bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-200 transition">
+            <lucide-icon name="user-plus" class="w-3.5 h-3.5"></lucide-icon>
+            Assigner un livreur
+          </button>
+        </div>
         <ng-container *ngIf="o.livreur; else noLivreur">
           <div class="flex items-center gap-3">
             <div class="w-11 h-11 rounded-full bg-emerald-600/30 border border-emerald-500/50 flex items-center justify-center font-bold text-emerald-200">
@@ -132,6 +141,89 @@
         <ng-template #noLivreur>
           <div class="text-sm text-slate-400">Aucun livreur assigné pour le moment.</div>
         </ng-template>
+
+        <!-- Panneau de choix du livreur (réassignation manuelle, uniquement si PENDING) -->
+        <div *ngIf="assignPanelOpen()" class="mt-4 pt-4 border-t border-slate-700/50">
+          <div class="flex items-center justify-between mb-2">
+            <h4 class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Livreurs disponibles</h4>
+            <button type="button" (click)="closeAssignPanel()"
+                    class="text-slate-500 hover:text-slate-300 transition">
+              <lucide-icon name="x" class="w-4 h-4"></lucide-icon>
+            </button>
+          </div>
+
+          <div *ngIf="driversLoading()" class="flex items-center gap-2 text-sm text-slate-400 py-3">
+            <lucide-icon name="loader" class="w-4 h-4 animate-spin"></lucide-icon>
+            Recherche des livreurs disponibles…
+          </div>
+
+          <div *ngIf="!driversLoading() && driversError()"
+               class="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            {{ driversError() }}
+          </div>
+
+          <div *ngIf="!driversLoading() && !driversError() && availableDrivers().length === 0"
+               class="text-sm text-slate-400 italic py-2">
+            Aucun livreur disponible pour le moment.
+          </div>
+
+          <div *ngIf="assignError()"
+               class="text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 mb-2">
+            {{ assignError() }}
+          </div>
+
+          <ul *ngIf="!driversLoading() && availableDrivers().length > 0"
+              class="space-y-2 max-h-64 overflow-y-auto zz-scrollbar pr-1">
+            <li *ngFor="let d of availableDrivers()"
+                class="flex items-center justify-between gap-2 bg-slate-900/50 border border-slate-700/60 rounded-xl px-3 py-2">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-semibold text-white truncate">{{ driverFullName(d) }}</span>
+                  <span *ngIf="d.isAffiliated"
+                        class="px-1.5 py-0.5 rounded-full text-[10px] font-bold border bg-violet-500/20 text-violet-300 border-violet-500/40">
+                    Affilié
+                  </span>
+                </div>
+                <div class="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                  <span *ngIf="d.vehicle">{{ d.vehicle }}</span>
+                  <span *ngIf="d.distanceKm != null" class="inline-flex items-center gap-1">
+                    <lucide-icon name="navigation" class="w-3 h-3"></lucide-icon>
+                    {{ d.distanceKm | number:'1.0-1' }} km
+                  </span>
+                </div>
+              </div>
+              <button type="button"
+                      (click)="chooseDriver(d)"
+                      [disabled]="assigningDriverId() === d.id"
+                      class="shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold
+                             bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-200
+                             disabled:opacity-50 disabled:cursor-not-allowed transition">
+                <lucide-icon *ngIf="assigningDriverId() === d.id" name="loader" class="w-3.5 h-3.5 animate-spin"></lucide-icon>
+                {{ assigningDriverId() === d.id ? 'Attribution…' : 'Choisir' }}
+              </button>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Paiement -->
+      <section class="bg-slate-800/40 border border-slate-700/50 rounded-2xl p-4">
+        <h3 class="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">Paiement</h3>
+        <div class="flex items-center gap-3">
+          <select
+            class="flex-1 bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2
+                   focus:outline-none focus:ring-2 focus:ring-sky-500 disabled:opacity-50"
+            [ngModel]="o.paymentStatus"
+            [disabled]="paymentSaving()"
+            (ngModelChange)="updatePaymentStatus($event)">
+            <option *ngFor="let opt of paymentOptions" [value]="opt.value">{{ opt.label }}</option>
+          </select>
+          <lucide-icon *ngIf="paymentSaving()" name="loader" class="w-4 h-4 text-slate-400 animate-spin"></lucide-icon>
+          <lucide-icon *ngIf="!paymentSaving() && paymentSuccess()" name="check" class="w-4 h-4 text-emerald-400"></lucide-icon>
+        </div>
+        <div *ngIf="paymentError()" class="mt-2 text-xs text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+          {{ paymentError() }}
+        </div>
       </section>
 
       <!-- Trajet -->

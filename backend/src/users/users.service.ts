@@ -8,7 +8,12 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Not, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { DriverApprovalStatus, User, UserRole } from '../entities/user.entity';
+import {
+  DriverApprovalStatus,
+  User,
+  UserRole,
+  UserStatus,
+} from '../entities/user.entity';
 import { Vehicle, VehicleType } from '../entities/vehicle.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
 
@@ -111,6 +116,46 @@ export class UsersService {
     user.isAvailable = available;
     await this.usersRepository.save(user);
     return { isAvailable: available };
+  }
+
+  /**
+   * Suspend un compte (P0 sécurité, CDC V1). Applicable à tout rôle
+   * (CLIENT, LIVREUR, COMMERCANT, ADMIN). Bloque la connexion
+   * (`AuthService.loginWithCredentials`) et sert de défense en profondeur
+   * sur les actions sensibles (`OrdersService`).
+   */
+  async suspend(id: string, adminId: string, reason?: string): Promise<User> {
+    const user = await this.findOne(id);
+    user.status = UserStatus.SUSPENDED;
+    const saved = await this.usersRepository.save(user);
+
+    void this.auditLog?.log({
+      adminId,
+      action: 'USER_SUSPEND',
+      targetType: 'User',
+      targetId: id,
+      metadata: reason ? { reason } : undefined,
+    });
+
+    return saved;
+  }
+
+  /**
+   * Réactive un compte préalablement suspendu.
+   */
+  async reactivate(id: string, adminId: string): Promise<User> {
+    const user = await this.findOne(id);
+    user.status = UserStatus.ACTIVE;
+    const saved = await this.usersRepository.save(user);
+
+    void this.auditLog?.log({
+      adminId,
+      action: 'USER_REACTIVATE',
+      targetType: 'User',
+      targetId: id,
+    });
+
+    return saved;
   }
 
   /**

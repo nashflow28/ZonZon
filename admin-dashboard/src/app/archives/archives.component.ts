@@ -127,6 +127,16 @@ export class ArchivesComponent implements OnInit, OnDestroy {
     this.selectedOrder.set(null);
   }
 
+  /// Appelé quand le panneau de détail modifie une commande (paiement ou
+  /// réassignation livreur) : on met à jour la ligne correspondante dans la
+  /// liste locale sans recharger toute la page.
+  onOrderUpdated(updated: Order): void {
+    this.orders.set(
+      this.orders().map((o) => (o.id === updated.id ? { ...o, ...updated } : o))
+    );
+    this.selectedOrder.set(updated);
+  }
+
   onFromChange(value: string): void {
     this.fromDate.set(value);
     this.reloadFromFirstPage();

@@ -17,6 +17,21 @@
 > **Contrainte absolue : ne rien casser** — tracking GPS, Socket.IO, FCM, messagerie client↔livreur, admin dashboard.
 > Ordre d'exécution : **backend d'abord**, puis fronts (Flutter, Angular).
 
+### 🆕 CDC V1 détaillé — audit `AUDIT_CDC_ZONZON_V1.md` (2026-07-07, conformité ~68%)
+- [x] **P0 — Suspension de compte** — `User.status` (ACTIVE/SUSPENDED), `PATCH /users/:id/suspend|reactivate` (ADMIN + audit), blocage login + create/accept. Migration `1779000000000`. *(backend, jest 232/232)*
+- [x] **P0 — Une seule course active par livreur** — `acceptOrder` refuse (`ConflictException`) si course `ACCEPTED…NEAR_CLIENT`. *(backend)*
+- [x] **Tests e2e règles métier** — infra hermétique réparée + 25 scénarios §21.4 (validation, permissions, propriété, double-accept). `test:e2e` 37/37. `TEST_PLAN_ZONZON_V1.md`. *(backend/test)*
+- [x] **Admin — gestion livraison** — édition `paymentStatus` + réassignation livreur dans le détail. *(admin)*
+- [ ] **P0 — Admin UI suspension/réactivation** des comptes (endpoints prêts) + mobile : message « compte suspendu » à la connexion
+- [ ] **P1 — Historique des statuts** (`DeliveryStatusHistory` : oldStatus/newStatus/changedBy/reason)
+- [ ] **P1 — Traçabilité du prix** (`estimatedPrice`/`finalPrice` + `priceWasManuallyAdjusted` + journal ancien/nouveau/par qui/raison)
+- [ ] **P1 — Historique de paiement** (journal des changements de `paymentStatus`) + alignement enum (`RECEIVED_BY_DRIVER`, `CASH_ON_DELIVERY`, `REFUNDED`)
+- [ ] **P2 — Signalements** (entité `Report` + endpoints + écran admin)
+- [ ] **P2 — Conversation multi-participants** (`Conversation`/`ConversationParticipants`, inclusion commerçant, accès admin litige)
+- [ ] **P2 — GPS strict** (refus hors course active) + diffusion au commerçant de ses livraisons
+- [ ] **P2 — Zones enrichies** (`description`/`basePrice`/`pricePerKmOverride`, liaison `pickupZoneId`/`destinationZoneId`, +6 quartiers) + `isPublic`/statut sur affiliation
+- [ ] **P2 — Notifications persistées** (table `Notifications`) + notifs validation/refus livreur & paiement reçu
+
 ### 🔴 Priorité 1 — Validation & disponibilité des livreurs
 - [x] **Backend — Validation admin obligatoire des livreurs** *(2026-07-05)*
   - `User.driverApprovalStatus` (PENDING/APPROVED/REJECTED, nullable) + `driverRejectionReason` ; `PENDING` à l'inscription LIVREUR. Migration `1778100000000` (grandfather des livreurs existants → APPROVED+disponibles).

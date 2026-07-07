@@ -189,4 +189,4 @@
 </div>
 
 <!-- Panneau de détail -->
-<app-order-detail [order]="selectedOrder()" (close)="closeDetail()"></app-order-detail>
+<app-order-detail [order]="selectedOrder()" (close)="closeDetail()" (orderUpdated)="onOrderUpdated($event)"></app-order-detail>

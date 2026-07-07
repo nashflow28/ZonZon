@@ -7,7 +7,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
-import { UserRole } from '../entities/user.entity';
+import { UserRole, UserStatus } from '../entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 
 @Injectable()
@@ -73,6 +73,12 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException(
         'Numéro de téléphone ou mot de passe incorrect',
+      );
+    }
+    // P0 sécurité (CDC V1) : un compte suspendu ne peut plus se connecter.
+    if (user.status === UserStatus.SUSPENDED) {
+      throw new UnauthorizedException(
+        'Compte suspendu. Contactez le support.',
       );
     }
     return this.login(user);

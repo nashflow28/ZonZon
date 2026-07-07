@@ -15,7 +15,7 @@ jest.mock('bcrypt', () => ({
 
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
-import { UserRole } from '../entities/user.entity';
+import { UserRole, UserStatus } from '../entities/user.entity';
 import { VehicleType } from '../entities/vehicle.entity';
 
 describe('AuthService', () => {
@@ -183,6 +183,37 @@ describe('AuthService', () => {
       const res = await service.loginWithCredentials('+228', 'good');
       expect(res.access_token).toBe('fake.jwt.token');
       expect(res.user).toEqual(expect.objectContaining({ id: 'u' }));
+    });
+
+    // ── P0 sécurité (CDC V1) : suspension de compte ─────────────────────────
+
+    it('throw UnauthorizedException si le compte est SUSPENDED', async () => {
+      usersService.findByPhone.mockResolvedValue({
+        id: 'u',
+        phone: '+228',
+        password: 'hash',
+        role: UserRole.CLIENT,
+        status: UserStatus.SUSPENDED,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      await expect(
+        service.loginWithCredentials('+228', 'good'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('autorise le login si le compte est ACTIVE', async () => {
+      usersService.findByPhone.mockResolvedValue({
+        id: 'u',
+        phone: '+228',
+        password: 'hash',
+        role: UserRole.CLIENT,
+        status: UserStatus.ACTIVE,
+      });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+      const res = await service.loginWithCredentials('+228', 'good');
+      expect(res.access_token).toBe('fake.jwt.token');
     });
   });
 });
