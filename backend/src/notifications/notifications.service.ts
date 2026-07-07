@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as admin from 'firebase-admin';
 import { User } from '../entities/user.entity';
+import { Notification } from '../entities/notification.entity';
 import { DeviceTokensService } from '../users/device-tokens.service';
 
 export interface PushPayload {
@@ -34,8 +35,39 @@ export class NotificationsService {
   constructor(
     @InjectRepository(User)
     private usersRepo: Repository<User>,
+    @InjectRepository(Notification)
+    private notificationsRepo: Repository<Notification>,
     private deviceTokens: DeviceTokensService,
   ) {}
+
+  /**
+   * Persiste une ligne `Notification` pour le centre de notifications
+   * (CDC V1 §18.12). Fire-and-forget : ne bloque JAMAIS l'envoi FCM ni
+   * l'appelant, et fonctionne indépendamment de la config Firebase.
+   */
+  private async persistNotification(
+    userId: string,
+    payload: PushPayload,
+  ): Promise<void> {
+    try {
+      await this.notificationsRepo.save(
+        this.notificationsRepo.create({
+          userId,
+          deliveryId: payload.data?.orderId ?? null,
+          type: payload.data?.kind ?? 'generic',
+          title: payload.title,
+          body: payload.body,
+          readAt: null,
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Échec de persistance de la notification (user ${userId}) : ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
 
   private ensureInit(): admin.app.App | null {
     if (this.initAttempted) return this.app;
@@ -67,6 +99,14 @@ export class NotificationsService {
   }
 
   async sendToUser(userId: string, payload: PushPayload): Promise<void> {
+    // Persistance indépendante de l'envoi FCM : même si Firebase n'est pas
+    // configuré (no-op ci-dessous), la notification reste consultable via
+    // le centre de notifications (GET /notifications). Les erreurs sont
+    // interceptées dans `persistNotification` elle-même (try/catch +
+    // Logger.warn) : cet `await` ne peut donc jamais rejeter et ne bloque
+    // jamais l'envoi FCM qui suit (persistance DB locale, quasi instantanée).
+    await this.persistNotification(userId, payload);
+
     const app = this.ensureInit();
     if (!app) return;
 

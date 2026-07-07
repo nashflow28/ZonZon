@@ -28,6 +28,8 @@ import { MerchantDriver } from './entities/merchant-driver.entity';
 import { DeliveryStatusHistory } from './entities/delivery-status-history.entity';
 import { PriceChange } from './entities/price-change.entity';
 import { PaymentStatusHistory } from './entities/payment-status-history.entity';
+import { Signalement } from './entities/signalement.entity';
+import { Notification } from './entities/notification.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -42,6 +44,7 @@ import { AuditLogModule } from './audit-log/audit-log.module';
 import { PricingModule } from './pricing/pricing.module';
 import { ZonesModule } from './zones/zones.module';
 import { MerchantDriversModule } from './merchant-drivers/merchant-drivers.module';
+import { SignalementsModule } from './signalements/signalements.module';
 
 @Module({
   imports: [
@@ -106,6 +109,8 @@ import { MerchantDriversModule } from './merchant-drivers/merchant-drivers.modul
         DeliveryStatusHistory,
         PriceChange,
         PaymentStatusHistory,
+        Signalement,
+        Notification,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',
@@ -129,6 +134,7 @@ import { MerchantDriversModule } from './merchant-drivers/merchant-drivers.modul
     PricingModule,
     ZonesModule,
     MerchantDriversModule,
+    SignalementsModule,
   ],
   controllers: [AppController],
   providers: [
