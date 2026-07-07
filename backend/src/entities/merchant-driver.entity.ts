@@ -10,6 +10,20 @@ import {
 import { User } from './user.entity';
 
 /**
+ * Statut du flux d'affiliation invite/accept (CDC V1 §9.2). Le commerçant
+ * initie l'invitation (PENDING) ; le livreur l'accepte (ACTIVE) ou la
+ * refuse (REJECTED). Le commerçant peut ensuite retirer une affiliation
+ * ACTIVE (REMOVED) — la ligne est conservée pour historique (soft-remove).
+ * Ré-inviter un livreur REJECTED/REMOVED le repasse en PENDING.
+ */
+export enum AffiliationStatus {
+  PENDING = 'PENDING',
+  ACTIVE = 'ACTIVE',
+  REJECTED = 'REJECTED',
+  REMOVED = 'REMOVED',
+}
+
+/**
  * Affiliation M:N entre un COMMERCANT et un LIVREUR (Priorité 3, Lot 3,
  * item 2). Un livreur peut être affilié à plusieurs commerçants et
  * inversement — cette table de jointure porte la relation.
@@ -40,6 +54,25 @@ export class MerchantDriver {
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'driverId' })
   driver: User;
+
+  /**
+   * Cycle de vie de l'invitation (§9.2). Grandfather : les lignes créées
+   * avant ce champ (migration `AddAffiliationStatus`) démarrent `ACTIVE`.
+   */
+  @Column({
+    type: 'enum',
+    enum: AffiliationStatus,
+    default: AffiliationStatus.ACTIVE,
+  })
+  status: AffiliationStatus;
+
+  /** Horodatage de l'acceptation par le livreur (status → ACTIVE). */
+  @Column({ type: 'datetime', nullable: true })
+  acceptedAt: Date | null;
+
+  /** Horodatage du retrait par le commerçant (status → REMOVED). */
+  @Column({ type: 'datetime', nullable: true })
+  removedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

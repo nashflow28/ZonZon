@@ -45,6 +45,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { haversineKm } from '../common/geo';
 import { PricingService } from '../pricing/pricing.service';
 import { MerchantDriversService } from '../merchant-drivers/merchant-drivers.service';
+import { Zone } from '../entities/zone.entity';
 
 type RouteCacheEntry = { km: number; at: number };
 type RouteWithGeometry = { km: number; geometry: number[][] };
@@ -138,6 +139,9 @@ export class OrdersService {
     private positionsService: PositionsService,
     private pricing: PricingService,
     @Optional() private merchantDriversService?: MerchantDriversService,
+    @Optional()
+    @InjectRepository(Zone)
+    private zonesRepository?: Repository<Zone>,
   ) {}
 
   /**
@@ -430,12 +434,24 @@ export class OrdersService {
    * Calcule distance (km, arrondie à 2 décimales, min 0.5) + prix (FCFA)
    * pour un pickup/delivery donné. Factorisé entre `createOrder` (Type 2 —
    * client) et `createMerchantOrder` (Type 1 — commerçant).
+   *
+   * Tarif effectif par zone (CDC V1 §7.3) : si `pickupZoneId` est fourni et
+   * que la zone de retrait existe avec des overrides, on les applique :
+   *   - `pricePerKm` effectif = `pickupZone.pricePerKmOverride` ?? tarif
+   *     global (`PricingService.getPricePerKm()`) ;
+   *   - `priceFcfa` = `(pickupZone.basePrice ?? 0) + round(distanceKm ×
+   *     pricePerKm effectif)` ;
+   *   - le plancher `minPriceFcfa` global s'applique ensuite, comme pour le
+   *     tarif global.
+   * Sans zone de retrait (ou zone sans overrides), le comportement est
+   * strictement identique à l'ancien calcul global.
    */
   private async buildOrderPricing(dto: {
     pickupLat?: number;
     pickupLng?: number;
     deliveryLat?: number;
     deliveryLng?: number;
+    pickupZoneId?: string;
   }): Promise<{ distanceKm: number; priceFcfa: number }> {
     let distanceKm = 0;
     if (dto.pickupLat && dto.pickupLng && dto.deliveryLat && dto.deliveryLng) {
@@ -451,11 +467,21 @@ export class OrdersService {
 
     if (distanceKm < 0.5) distanceKm = 0.5;
 
-    const pricePerKm = await this.getPricePerKm();
+    let pickupZone: Zone | null = null;
+    if (dto.pickupZoneId && this.zonesRepository) {
+      pickupZone = await this.zonesRepository
+        .findOne({ where: { id: dto.pickupZoneId } })
+        .catch(() => null);
+    }
+
+    const globalPricePerKm = await this.getPricePerKm();
+    const pricePerKm = pickupZone?.pricePerKmOverride ?? globalPricePerKm;
+    const basePrice = pickupZone?.basePrice ?? 0;
+
     const minPriceFcfa = await this.pricing
       .getMinPriceFcfa()
       .catch(() => null);
-    let priceFcfa = Math.round(distanceKm * pricePerKm);
+    let priceFcfa = basePrice + Math.round(distanceKm * pricePerKm);
     if (minPriceFcfa != null) {
       priceFcfa = Math.max(priceFcfa, minPriceFcfa);
     }
@@ -1544,7 +1570,13 @@ export class OrdersService {
         (await this.merchantDriversService?.listDriversForMerchant(
           actorId,
         )) ?? [];
-      affiliatedIds = new Set(affiliatedDrivers.map((d: any) => d.id));
+      // Seule une affiliation ACTIVE (invitation acceptée par le livreur,
+      // §9.2) compte pour le flag `isAffiliated` / le tri "affiliés en tête".
+      affiliatedIds = new Set(
+        affiliatedDrivers
+          .filter((d: any) => d.status === 'ACTIVE')
+          .map((d: any) => d.id),
+      );
     }
 
     const enriched = await Promise.all(

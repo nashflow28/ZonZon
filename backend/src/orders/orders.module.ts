@@ -10,6 +10,7 @@ import { DriverPosition } from '../entities/driver-position.entity';
 import { DeliveryStatusHistory } from '../entities/delivery-status-history.entity';
 import { PriceChange } from '../entities/price-change.entity';
 import { PaymentStatusHistory } from '../entities/payment-status-history.entity';
+import { Zone } from '../entities/zone.entity';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PricingModule } from '../pricing/pricing.module';
@@ -23,6 +24,7 @@ import { MerchantDriversModule } from '../merchant-drivers/merchant-drivers.modu
       DeliveryStatusHistory,
       PriceChange,
       PaymentStatusHistory,
+      Zone,
     ]),
     UsersModule,
     NotificationsModule,

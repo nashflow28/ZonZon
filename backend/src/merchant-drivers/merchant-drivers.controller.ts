@@ -36,6 +36,11 @@ export class MerchantDriversController {
     return this.merchantDriversService.listDriversForMerchant(merchantId!);
   }
 
+  /**
+   * Invite un livreur (§9.2) : crée l'affiliation en `PENDING` — elle ne
+   * devient active qu'après acceptation par le livreur via
+   * `PATCH /drivers/me/affiliations/:merchantId`.
+   */
   @Post()
   async add(
     @Body() dto: AddMerchantDriverDto,

@@ -11,6 +11,7 @@ import {
 } from '../entities/user.entity';
 import { Vehicle } from '../entities/vehicle.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const mockUsersRepo = () => ({
   find: jest.fn(),
@@ -198,6 +199,88 @@ describe('UsersService', () => {
           action: 'DRIVER_APPROVE',
           targetType: 'User',
           targetId: 'livreur-1',
+        }),
+      );
+    });
+
+    // ── §14.1 : notification au livreur à l'approbation/refus ─────────────
+
+    it('APPROVED : envoie une notification "Compte validé" au livreur (@Optional)', async () => {
+      const notifications = { sendToUser: jest.fn().mockResolvedValue(undefined) };
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getRepositoryToken(User), useValue: usersRepository },
+          {
+            provide: getRepositoryToken(Vehicle),
+            useValue: mockVehiclesRepo(),
+          },
+          { provide: NotificationsService, useValue: notifications },
+        ],
+      }).compile();
+      const svc = module.get<UsersService>(UsersService);
+
+      usersRepository.findOne.mockResolvedValue(pendingLivreur());
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      await svc.setDriverApproval('livreur-1', 'APPROVED', 'admin-1');
+      await new Promise((r) => setImmediate(r));
+
+      expect(notifications.sendToUser).toHaveBeenCalledWith(
+        'livreur-1',
+        expect.objectContaining({
+          title: 'Compte validé',
+          body: 'Votre compte livreur a été validé, vous pouvez passer disponible.',
+          data: { kind: 'driver_approval', status: 'APPROVED' },
+        }),
+      );
+    });
+
+    it('REJECTED avec reason : envoie une notification "Compte refusé" avec la raison en body', async () => {
+      const notifications = { sendToUser: jest.fn().mockResolvedValue(undefined) };
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getRepositoryToken(User), useValue: usersRepository },
+          {
+            provide: getRepositoryToken(Vehicle),
+            useValue: mockVehiclesRepo(),
+          },
+          { provide: NotificationsService, useValue: notifications },
+        ],
+      }).compile();
+      const svc = module.get<UsersService>(UsersService);
+
+      usersRepository.findOne.mockResolvedValue(pendingLivreur());
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      await svc.setDriverApproval(
+        'livreur-1',
+        'REJECTED',
+        'admin-1',
+        'Documents invalides',
+      );
+      await new Promise((r) => setImmediate(r));
+
+      expect(notifications.sendToUser).toHaveBeenCalledWith(
+        'livreur-1',
+        expect.objectContaining({
+          title: 'Compte refusé',
+          body: 'Documents invalides',
+          data: { kind: 'driver_approval', status: 'REJECTED' },
+        }),
+      );
+    });
+
+    it('ne casse pas si NotificationsService est absent (non injecté)', async () => {
+      usersRepository.findOne.mockResolvedValue(pendingLivreur());
+      usersRepository.save.mockImplementation(async (u: any) => u);
+
+      await expect(
+        service.setDriverApproval('livreur-1', 'APPROVED', 'admin-1'),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          driverApprovalStatus: DriverApprovalStatus.APPROVED,
         }),
       );
     });

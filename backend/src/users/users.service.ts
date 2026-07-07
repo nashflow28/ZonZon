@@ -1,9 +1,11 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
   Optional,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Not, Repository } from 'typeorm';
@@ -16,6 +18,7 @@ import {
 } from '../entities/user.entity';
 import { Vehicle, VehicleType } from '../entities/vehicle.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class UsersService {
@@ -25,6 +28,12 @@ export class UsersService {
     @InjectRepository(Vehicle)
     private vehiclesRepository: Repository<Vehicle>,
     @Optional() private auditLog?: AuditLogService,
+    // Cycle DI (NotificationsModule ↔ UsersModule) résolu par forwardRef
+    // (cf. UsersModule/NotificationsModule) + @Optional() pour ne pas
+    // casser les tests unitaires existants qui n'injectent pas ce service.
+    @Optional()
+    @Inject(forwardRef(() => NotificationsService))
+    private notifications?: NotificationsService,
   ) {}
 
   async createWithPassword(data: {
@@ -89,6 +98,22 @@ export class UsersService {
       targetId: id,
       metadata: reason ? { reason } : undefined,
     });
+
+    // Notification au livreur (§14.1) : fire-and-forget, ne bloque jamais
+    // l'action admin même si l'envoi échoue (FCM indisponible, etc.).
+    if (status === 'APPROVED') {
+      void this.notifications?.sendToUser(id, {
+        title: 'Compte validé',
+        body: 'Votre compte livreur a été validé, vous pouvez passer disponible.',
+        data: { kind: 'driver_approval', status: 'APPROVED' },
+      });
+    } else {
+      void this.notifications?.sendToUser(id, {
+        title: 'Compte refusé',
+        body: reason ?? 'Votre compte livreur a été refusé.',
+        data: { kind: 'driver_approval', status: 'REJECTED' },
+      });
+    }
 
     return saved;
   }

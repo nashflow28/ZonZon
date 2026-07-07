@@ -23,6 +23,7 @@ import {
 import { DeliveryStatusHistory } from '../entities/delivery-status-history.entity';
 import { PriceChange } from '../entities/price-change.entity';
 import { PaymentStatusHistory } from '../entities/payment-status-history.entity';
+import { Zone } from '../entities/zone.entity';
 import { UserRole, UserStatus } from '../entities/user.entity';
 
 jest.mock('axios');
@@ -135,6 +136,7 @@ describe('OrdersService', () => {
     removeAffiliation: jest.Mock;
     listMerchantIdsForDriver: jest.Mock;
   };
+  let zonesRepository: { findOne: jest.Mock };
   let originalOrsKey: string | undefined;
 
   beforeAll(() => {
@@ -197,6 +199,10 @@ describe('OrdersService', () => {
       removeAffiliation: jest.fn(),
       listMerchantIdsForDriver: jest.fn().mockResolvedValue([]),
     };
+    zonesRepository = {
+      // Par défaut, aucune zone trouvée → comportement global inchangé.
+      findOne: jest.fn().mockResolvedValue(null),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -216,6 +222,10 @@ describe('OrdersService', () => {
         {
           provide: getRepositoryToken(PaymentStatusHistory),
           useValue: paymentHistoryRepository,
+        },
+        {
+          provide: getRepositoryToken(Zone),
+          useValue: zonesRepository,
         },
         { provide: UsersService, useValue: usersService },
         { provide: OrdersGateway, useValue: gateway },
@@ -368,6 +378,170 @@ describe('OrdersService', () => {
           pickupZone: null,
           destinationZone: null,
         }),
+      );
+    });
+
+    // ── §7.3 : tarif effectif par zone ───────────────────────────────────────
+
+    it('applique pricePerKmOverride + basePrice de la zone de retrait', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      // 3 km, override 300 FCFA/km + basePrice 500 → 500 + round(3*300) = 1400
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      zonesRepository.findOne.mockResolvedValue({
+        id: 'zone-pickup-1',
+        basePrice: 500,
+        pricePerKmOverride: 300,
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-zone-price',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, {
+        ...dto,
+        pickupZoneId: 'zone-pickup-1',
+      } as any);
+
+      expect(zonesRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'zone-pickup-1' },
+      });
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          priceFcfa: 1400,
+          estimatedPrice: 1400,
+        }),
+      );
+    });
+
+    it('sans pricePerKmOverride, applique seulement basePrice + tarif global', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      // 3 km × 200 (global) + basePrice 100 = 700
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      zonesRepository.findOne.mockResolvedValue({
+        id: 'zone-pickup-1',
+        basePrice: 100,
+        pricePerKmOverride: null,
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-zone-baseprice-only',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, {
+        ...dto,
+        pickupZoneId: 'zone-pickup-1',
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ priceFcfa: 700 }),
+      );
+    });
+
+    it('zone sans overrides (basePrice/pricePerKmOverride null) → tarif global inchangé', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      zonesRepository.findOne.mockResolvedValue({
+        id: 'zone-pickup-1',
+        basePrice: null,
+        pricePerKmOverride: null,
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-zone-no-override',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, {
+        ...dto,
+        pickupZoneId: 'zone-pickup-1',
+      } as any);
+
+      // 3 km × 200 (global, aucun override) = 600, comme sans zone
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ priceFcfa: 600 }),
+      );
+    });
+
+    it('zone introuvable (findOne renvoie null) → fallback tarif global, pas de crash', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      zonesRepository.findOne.mockResolvedValue(null);
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-zone-not-found',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, {
+        ...dto,
+        pickupZoneId: 'zone-inconnue',
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ priceFcfa: 600 }),
+      );
+    });
+
+    it('sans pickupZoneId → comportement global inchangé, pas d’appel au repo Zone', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-no-zoneid',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, dto);
+
+      expect(zonesRepository.findOne).not.toHaveBeenCalled();
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ priceFcfa: 600 }),
+      );
+    });
+
+    it('le plancher minPriceFcfa global s’applique même avec un tarif par zone', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      // 3 km × 50 (override très bas) + basePrice 0 = 150, mais plancher 1000
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+      zonesRepository.findOne.mockResolvedValue({
+        id: 'zone-pickup-1',
+        basePrice: 0,
+        pricePerKmOverride: 50,
+      });
+      pricingService.getMinPriceFcfa.mockResolvedValue(1000);
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-zone-floor',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, {
+        ...dto,
+        pickupZoneId: 'zone-pickup-1',
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ priceFcfa: 1000 }),
       );
     });
 
@@ -1911,7 +2085,7 @@ describe('OrdersService', () => {
         driverB,
       ]);
       merchantDriversService.listDriversForMerchant.mockResolvedValue([
-        driverB,
+        { ...driverB, status: 'ACTIVE' },
       ]);
 
       const result = await service.findAvailableDriversForActor(merchantUser);

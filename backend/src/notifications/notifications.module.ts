@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../entities/user.entity';
 import { Notification } from '../entities/notification.entity';
@@ -10,7 +10,9 @@ import { UsersModule } from '../users/users.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, Notification]),
-    UsersModule,
+    // forwardRef : UsersModule importe aussi NotificationsModule (§14.1 —
+    // UsersService envoie une notif à l'approbation/refus livreur).
+    forwardRef(() => UsersModule),
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService, NotificationsQueryService],
