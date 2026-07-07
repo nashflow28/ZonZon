@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { LucideAngularModule } from 'lucide-angular';
-import { Zone, ZonesService } from './zones.service';
+import { UpdateZoneDto, Zone, ZonesService } from './zones.service';
 import { EmptyStateComponent } from '../shared/empty-state/empty-state.component';
 import { SkeletonRowComponent } from '../shared/skeleton/skeleton-row.component';
 import { PageActionsService } from '../shared/page-actions.service';
@@ -26,12 +26,18 @@ export class ZonesComponent implements OnInit, OnDestroy {
 
   // Ajout
   readonly newZoneName = signal<string>('');
+  readonly newZoneDescription = signal<string>('');
+  readonly newZoneBasePrice = signal<string>('');
+  readonly newZonePricePerKm = signal<string>('');
   readonly isCreating = signal<boolean>(false);
   readonly createError = signal<string>('');
 
-  // Édition inline (renommage)
+  // Édition inline (renommage + enrichissement tarifaire)
   readonly editingId = signal<string | null>(null);
   readonly editingName = signal<string>('');
+  readonly editingDescription = signal<string>('');
+  readonly editingBasePrice = signal<string>('');
+  readonly editingPricePerKm = signal<string>('');
   readonly editError = signal<string>('');
 
   // Suppression (confirmation)
@@ -66,6 +72,15 @@ export class ZonesComponent implements OnInit, OnDestroy {
     });
   }
 
+  /// Parse un champ prix (string du formulaire) en entier ≥0, ou undefined si vide/invalide.
+  private parsePrice(value: string): number | undefined {
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+    const n = Number(trimmed);
+    if (!Number.isFinite(n) || n < 0) return undefined;
+    return Math.round(n);
+  }
+
   createZone(): void {
     const name = this.newZoneName().trim();
     if (!name) return;
@@ -73,10 +88,21 @@ export class ZonesComponent implements OnInit, OnDestroy {
     this.isCreating.set(true);
     this.createError.set('');
 
-    this.zonesService.createZone(name).subscribe({
+    const description = this.newZoneDescription().trim();
+    const basePrice = this.parsePrice(this.newZoneBasePrice());
+    const pricePerKmOverride = this.parsePrice(this.newZonePricePerKm());
+
+    this.zonesService.createZone(name, {
+      description: description || undefined,
+      basePrice,
+      pricePerKmOverride
+    }).subscribe({
       next: (zone) => {
         this.zones.update((list) => [...list, zone]);
         this.newZoneName.set('');
+        this.newZoneDescription.set('');
+        this.newZoneBasePrice.set('');
+        this.newZonePricePerKm.set('');
         this.isCreating.set(false);
       },
       error: (err) => {
@@ -93,23 +119,40 @@ export class ZonesComponent implements OnInit, OnDestroy {
   startEdit(zone: Zone): void {
     this.editingId.set(zone.id);
     this.editingName.set(zone.name);
+    this.editingDescription.set(zone.description ?? '');
+    this.editingBasePrice.set(zone.basePrice != null ? String(zone.basePrice) : '');
+    this.editingPricePerKm.set(zone.pricePerKmOverride != null ? String(zone.pricePerKmOverride) : '');
     this.editError.set('');
   }
 
   cancelEdit(): void {
     this.editingId.set(null);
     this.editingName.set('');
+    this.editingDescription.set('');
+    this.editingBasePrice.set('');
+    this.editingPricePerKm.set('');
     this.editError.set('');
   }
 
   saveEdit(zone: Zone): void {
     const name = this.editingName().trim();
-    if (!name || name === zone.name) {
+    if (!name) {
       this.cancelEdit();
       return;
     }
 
-    this.zonesService.updateZone(zone.id, { name }).subscribe({
+    const description = this.editingDescription().trim();
+    const basePrice = this.parsePrice(this.editingBasePrice());
+    const pricePerKmOverride = this.parsePrice(this.editingPricePerKm());
+
+    const dto: UpdateZoneDto = {
+      name,
+      description,
+      basePrice,
+      pricePerKmOverride
+    };
+
+    this.zonesService.updateZone(zone.id, dto).subscribe({
       next: (updated) => {
         this.replaceLocal(updated);
         this.cancelEdit();
@@ -118,7 +161,7 @@ export class ZonesComponent implements OnInit, OnDestroy {
         if (err?.status === 409) {
           this.editError.set('Une zone porte déjà ce nom.');
         } else {
-          this.editError.set(err?.error?.message || 'Impossible de renommer la zone.');
+          this.editError.set(err?.error?.message || 'Impossible de mettre à jour la zone.');
         }
       }
     });
@@ -165,5 +208,14 @@ export class ZonesComponent implements OnInit, OnDestroy {
 
   private replaceLocal(updated: Zone): void {
     this.zones.set(this.zones().map((z) => (z.id === updated.id ? { ...z, ...updated } : z)));
+  }
+
+  /// Résumé tarifaire affiché dans la liste (ex. « base 500 FCFA · 250 FCFA/km »).
+  /// Retourne '' si aucune des deux valeurs n'est définie.
+  pricingSummary(zone: Zone): string {
+    const parts: string[] = [];
+    if (zone.basePrice != null) parts.push(`base ${zone.basePrice} FCFA`);
+    if (zone.pricePerKmOverride != null) parts.push(`${zone.pricePerKmOverride} FCFA/km`);
+    return parts.join(' · ');
   }
 }

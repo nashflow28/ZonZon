@@ -22,15 +22,17 @@
 - [x] **P0 — Une seule course active par livreur** — `acceptOrder` refuse (`ConflictException`) si course `ACCEPTED…NEAR_CLIENT`. *(backend)*
 - [x] **Tests e2e règles métier** — infra hermétique réparée + 25 scénarios §21.4 (validation, permissions, propriété, double-accept). `test:e2e` 37/37. `TEST_PLAN_ZONZON_V1.md`. *(backend/test)*
 - [x] **Admin — gestion livraison** — édition `paymentStatus` + réassignation livreur dans le détail. *(admin)*
-- [ ] **P0 — Admin UI suspension/réactivation** des comptes (endpoints prêts) + mobile : message « compte suspendu » à la connexion
-- [ ] **P1 — Historique des statuts** (`DeliveryStatusHistory` : oldStatus/newStatus/changedBy/reason)
-- [ ] **P1 — Traçabilité du prix** (`estimatedPrice`/`finalPrice` + `priceWasManuallyAdjusted` + journal ancien/nouveau/par qui/raison)
-- [ ] **P1 — Historique de paiement** (journal des changements de `paymentStatus`) + alignement enum (`RECEIVED_BY_DRIVER`, `CASH_ON_DELIVERY`, `REFUNDED`)
-- [ ] **P2 — Signalements** (entité `Report` + endpoints + écran admin)
-- [ ] **P2 — Conversation multi-participants** (`Conversation`/`ConversationParticipants`, inclusion commerçant, accès admin litige)
-- [ ] **P2 — GPS strict** (refus hors course active) + diffusion au commerçant de ses livraisons
-- [ ] **P2 — Zones enrichies** (`description`/`basePrice`/`pricePerKmOverride`, liaison `pickupZoneId`/`destinationZoneId`, +6 quartiers) + `isPublic`/statut sur affiliation
-- [ ] **P2 — Notifications persistées** (table `Notifications`) + notifs validation/refus livreur & paiement reçu
+- [x] **P0 — Admin UI suspension/réactivation** + mobile message « compte suspendu ». *(2026-07-07)*
+- [x] **P1 — Historique des statuts** (`DeliveryStatusHistory` + `GET /orders/:id/history`). *(2026-07-07)*
+- [x] **P1 — Traçabilité du prix** (`estimatedPrice` + `priceWasManuallyAdjusted` + table `price_changes` + `PATCH /orders/:id/price`). *(2026-07-07)*
+- [x] **P1 — Historique de paiement** (`payment_status_history` + `GET /orders/:id/payment-history`) + enum étendu (`CASH_ON_DELIVERY`, `REFUNDED`). *(2026-07-07)*
+- [x] **P2 — Signalements** (entité `Signalement` + `POST/GET/PATCH /signalements` + écran admin `/signalements` + bouton mobile « Signaler un problème »). *(2026-07-07)*
+- [x] **P2 — Commerçant dans le chat** (`isUserPartyToOrder` autorise le merchant créateur). Modèle chat par room conservé (pas de refonte `Conversation`/`Participants` — light V1). *(2026-07-07)*
+- [x] **P2 — GPS strict** (position ignorée hors course active) + diffusion au commerçant (position + statuts). *(2026-07-07)*
+- [x] **P2 — Zones enrichies** (`description`/`basePrice`/`pricePerKmOverride`, `pickupZoneId`/`destinationZoneId`, +6 quartiers) + admin. *(2026-07-07)*
+- [x] **P2 — Livreur privé/public** (`User.isPublic`, exclusion du broadcast si privé, `PATCH /users/me/visibility` + toggle mobile). *(2026-07-07)*
+- [x] **P2 — Notifications persistées** (table `notifications`, persistance dans `sendToUser`, `GET /notifications` + read/read-all + écran mobile). *(2026-07-07)*
+- [ ] **Reste (après V1)** : conversation multi-participants complète (entités dédiées) ; statut d'affiliation `MerchantDriver` (PENDING/ACTIVE/REJECTED/REMOVED) + flux invite/accept ; notifs in-app validation/refus livreur ; tarification géographique effective par zone.
 
 ### 🔴 Priorité 1 — Validation & disponibilité des livreurs
 - [x] **Backend — Validation admin obligatoire des livreurs** *(2026-07-05)*

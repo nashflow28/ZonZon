@@ -10,7 +10,9 @@ import '../router/app_router.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/driver_service.dart';
+import '../services/notifications_service.dart';
 import '../screens/order_history_screen.dart';
+import '../screens/notifications_screen.dart';
 import '../utils/platform_adapter.dart';
 
 class DriverProfileScreen extends StatefulWidget {
@@ -24,6 +26,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   final _api = ApiClient();
   final _auth = AuthService();
   final _driverService = DriverService();
+  final _notificationsService = NotificationsService();
   final _picker = ImagePicker();
 
   User? _user;
@@ -31,7 +34,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   Map<String, dynamic>? _stats;
   bool _loading = true;
   bool _togglingAvailability = false;
+  bool _togglingVisibility = false;
   bool _uploadingIdCard = false;
+  int _unreadNotificationsCount = 0;
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -48,6 +53,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadUnreadNotificationsCount();
   }
 
   @override
@@ -105,6 +111,23 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// Charge le nombre de notifications non lues pour afficher le badge sur
+  /// l'icône cloche. Non bloquant : échec silencieux (badge à 0).
+  Future<void> _loadUnreadNotificationsCount() async {
+    try {
+      final page = await _notificationsService.list();
+      if (!mounted) return;
+      setState(() {
+        _unreadNotificationsCount = page.items.where((n) => n.isUnread).length;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _openNotifications() async {
+    await pushAdaptive<void>(context, const NotificationsScreen());
+    if (mounted) _loadUnreadNotificationsCount();
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -241,6 +264,30 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     }
   }
 
+  Future<void> _toggleVisibility(bool value) async {
+    if (_user == null || _togglingVisibility) return;
+    setState(() => _togglingVisibility = true);
+    try {
+      final effective = await _driverService.setVisibility(value);
+      if (!mounted) return;
+      setState(() {
+        _user = _user!.copyWith(isPublic: effective);
+      });
+      showAdaptiveSnack(
+        context,
+        effective
+            ? 'Vous recevez à nouveau les courses publiques'
+            : 'Vous ne recevez plus que les courses assignées par un commerçant',
+      );
+    } catch (e) {
+      if (mounted) {
+        showAdaptiveSnack(context, e.toString().replaceFirst('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) setState(() => _togglingVisibility = false);
+    }
+  }
+
   Future<void> _logout() async {
     final confirmed = await showAdaptiveConfirmDialog(
       context,
@@ -267,9 +314,18 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: _NotificationsBellButton(
+              unreadCount: _unreadNotificationsCount,
+              onTap: _openNotifications,
+            ),
+          ),
           _buildPhotoSection(),
           const SizedBox(height: 24),
           _buildAvailabilitySection(),
+          const SizedBox(height: 16),
+          _buildVisibilitySection(),
           const SizedBox(height: 16),
           _buildStatsRow(),
           const SizedBox(height: 16),
@@ -494,6 +550,59 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     );
   }
 
+  /// Section « Visibilité » : bascule `isPublic` pour recevoir (ou non) les
+  /// courses du broadcast général. Indépendante de la disponibilité : un
+  /// livreur peut être disponible mais privé (assignation manuelle only).
+  Widget _buildVisibilitySection() {
+    final user = _user;
+    if (user == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E293B),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                user.isPublic ? Icons.public : Icons.lock_outline,
+                color: user.isPublic ? const Color(0xFF3B82F6) : Colors.white38,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Recevoir les courses publiques',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+              ),
+              if (_togglingVisibility)
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: adaptiveLoader(color: const Color(0xFF3B82F6)),
+                )
+              else
+                Switch(
+                  value: user.isPublic,
+                  activeThumbColor: const Color(0xFF3B82F6),
+                  onChanged: _toggleVisibility,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Désactivé, vous ne recevez que les courses assignées par un commerçant.',
+            style: TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatsRow() {
     final avg = (_stats?['average'] as num?)?.toStringAsFixed(1) ?? '-';
     final total = _stats?['total']?.toString() ?? '0';
@@ -689,6 +798,63 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF3B82F6)),
+      ),
+    );
+  }
+}
+
+/// Bouton icône cloche avec badge de non-lus, discret, pour accéder à
+/// l'écran des notifications in-app depuis le profil livreur.
+class _NotificationsBellButton extends StatelessWidget {
+  final int unreadCount;
+  final VoidCallback onTap;
+
+  const _NotificationsBellButton({
+    required this.unreadCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.notifications_outlined, color: Colors.white70, size: 26),
+              if (unreadCount > 0)
+                Positioned(
+                  top: -2,
+                  right: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+                    ),
+                    child: Text(
+                      unreadCount > 99 ? '99+' : '$unreadCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }

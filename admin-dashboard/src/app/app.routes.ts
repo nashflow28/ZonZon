@@ -47,6 +47,10 @@ export const routes: Routes = [
       {
         path: 'zones',
         loadComponent: () => import('./zones/zones.component').then(m => m.ZonesComponent)
+      },
+      {
+        path: 'signalements',
+        loadComponent: () => import('./signalements/signalements.component').then(m => m.SignalementsComponent)
       }
     ]
   },

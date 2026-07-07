@@ -13,6 +13,7 @@ import '../services/api_client.dart';
 import '../services/client_services.dart';
 import '../services/estimate_service.dart';
 import '../services/eta_service.dart';
+import '../services/signalement_service.dart';
 import '../services/whatsapp_service.dart';
 import '../utils/geo_utils.dart';
 import '../utils/order_status_utils.dart';
@@ -46,6 +47,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   final ApiClient _api = ApiClient();
   final EstimateService _estimateSvc = EstimateService();
   final EtaService _etaSvc = EtaService();
+  final SignalementService _signalementSvc = SignalementService();
   late final OrderSocketController _socketCtrl;
   late final ActiveOrdersStore _store;
 
@@ -442,6 +444,108 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     }
   }
 
+  /// Ouvre un dialog de signalement pour cette course
+  /// (`targetType: 'DELIVERY'`, `targetId: orderId`).
+  Future<void> _reportProblem() async {
+    final reasonController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text(
+          'Signaler un problème',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: reasonController,
+            maxLines: 3,
+            maxLength: 500,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              labelText: 'Décrivez le problème',
+              labelStyle: const TextStyle(color: Colors.white70),
+              hintText: 'Ex : le livreur est injoignable…',
+              hintStyle: const TextStyle(color: Colors.white38),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.05),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.15),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.15),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFF0EA5E9)),
+              ),
+            ),
+            validator: (value) {
+              final v = (value ?? '').trim();
+              if (v.length < 3) {
+                return 'Le motif doit contenir au moins 3 caractères.';
+              }
+              if (v.length > 500) {
+                return 'Le motif ne doit pas dépasser 500 caractères.';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+            onPressed: () {
+              if (formKey.currentState?.validate() != true) return;
+              Navigator.pop(ctx, true);
+            },
+            child: const Text('Envoyer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      reasonController.dispose();
+      return;
+    }
+
+    final reason = reasonController.text.trim();
+    reasonController.dispose();
+
+    try {
+      await _signalementSvc.report(
+        targetType: 'DELIVERY',
+        targetId: widget.orderId,
+        reason: reason,
+      );
+      if (!mounted) return;
+      showAdaptiveSnack(context, 'Signalement envoyé, merci.');
+    } catch (e) {
+      if (!mounted) return;
+      showAdaptiveSnack(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+        isError: true,
+      );
+    }
+  }
+
   String _extractApiError(int statusCode, String body) {
     try {
       final data = jsonDecode(body);
@@ -505,6 +609,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   : widget.orderId.substring(0, 6),
               status: _activeOrderStatus,
               onBack: () => context.pop(),
+              onReport: _reportProblem,
             ),
           ),
           OrderBottomSheet(
@@ -531,11 +636,13 @@ class _TrackingHeader extends StatelessWidget {
   final String shortId;
   final String? status;
   final VoidCallback onBack;
+  final VoidCallback onReport;
 
   const _TrackingHeader({
     required this.shortId,
     required this.status,
     required this.onBack,
+    required this.onReport,
   });
 
   @override
@@ -584,6 +691,19 @@ class _TrackingHeader extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          Material(
+            color: Colors.white.withValues(alpha: 0.06),
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: onReport,
+              child: const SizedBox(
+                width: 40,
+                height: 40,
+                child: Icon(Icons.flag_outlined, color: Colors.white70, size: 18),
+              ),
             ),
           ),
         ],

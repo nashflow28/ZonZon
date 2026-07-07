@@ -14,6 +14,7 @@ import '../screens/merchant/create_delivery_screen.dart';
 import '../screens/merchant/merchant_drivers_screen.dart';
 import '../screens/merchant/merchant_orders_screen.dart';
 import '../screens/merchant_home_screen.dart';
+import '../screens/notifications_screen.dart';
 import '../screens/order_history_screen.dart';
 import '../screens/order_tracking_screen.dart';
 import '../screens/register_screen.dart';
@@ -46,6 +47,7 @@ class AppRoutes {
   static const String favorites = '/favorites';
   static const String history = '/history';
   static const String driverProfile = '/driver/profile';
+  static const String notifications = '/notifications';
 
   // Merchant sub-screens (Priorité 2 — livraisons pour un client)
   static const String merchantCreateDelivery = '/home/merchant/create-delivery';
@@ -226,6 +228,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.driverProfile,
       builder: (context, state) => const DriverProfileScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.notifications,
+      builder: (context, state) => const NotificationsScreen(),
     ),
   ],
 

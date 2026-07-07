@@ -40,6 +40,7 @@ export class MainLayoutComponent implements OnInit, OnDestroy {
     { path: 'archives', label: 'Archives', icon: 'archive' },
     { path: 'pricing', label: 'Tarifs', icon: 'banknote' },
     { path: 'zones', label: 'Zones', icon: 'map-pin' },
+    { path: 'signalements', label: 'Signalements', icon: 'flag' },
     { path: 'audit-logs', label: 'Journal d\'audit', icon: 'clipboard-list' }
   ];
 

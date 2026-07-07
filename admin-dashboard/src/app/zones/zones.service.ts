@@ -7,6 +7,9 @@ export interface Zone {
   id: string;
   name: string;
   active: boolean;
+  description?: string | null;
+  basePrice?: number | null;
+  pricePerKmOverride?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -14,6 +17,16 @@ export interface Zone {
 export interface UpdateZoneDto {
   name?: string;
   active?: boolean;
+  description?: string;
+  basePrice?: number;
+  pricePerKmOverride?: number;
+}
+
+export interface CreateZoneDto {
+  name: string;
+  description?: string;
+  basePrice?: number;
+  pricePerKmOverride?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -31,8 +44,9 @@ export class ZonesService {
     return this.http.get<Zone[]>(this.base);
   }
 
-  createZone(name: string): Observable<Zone> {
-    return this.http.post<Zone>(this.base, { name });
+  createZone(name: string, extra?: Omit<CreateZoneDto, 'name'>): Observable<Zone> {
+    const dto: CreateZoneDto = { name, ...extra };
+    return this.http.post<Zone>(this.base, dto);
   }
 
   updateZone(id: string, dto: UpdateZoneDto): Observable<Zone> {

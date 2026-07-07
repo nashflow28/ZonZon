@@ -56,6 +56,41 @@ class DriverService {
     await _authService.saveUser(updated);
   }
 
+  /// Bascule la visibilité du livreur connecté auprès du backend
+  /// (`PATCH /users/me/visibility`), puis met à jour l'utilisateur stocké
+  /// localement pour rester cohérent après un redémarrage de l'app.
+  ///
+  /// Un livreur privé (`isPublic == false`) ne reçoit plus les courses du
+  /// broadcast général — il ne travaille que sur assignation manuelle d'un
+  /// commerçant.
+  ///
+  /// Retourne la valeur `isPublic` effective côté serveur.
+  /// Lève une [Exception] avec un message clair en cas d'échec.
+  Future<bool> setVisibility(bool isPublic) async {
+    final res = await _api.patch(
+      '/users/me/visibility',
+      body: {'isPublic': isPublic},
+    );
+
+    if (res.statusCode == 200 || res.statusCode == 201) {
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final effective = data['isPublic'] as bool? ?? isPublic;
+      await _syncStoredVisibility(effective);
+      return effective;
+    }
+
+    throw Exception(_extractError(res));
+  }
+
+  /// Met à jour uniquement `isPublic` sur l'utilisateur persisté, sans
+  /// toucher aux autres champs.
+  Future<void> _syncStoredVisibility(bool isPublic) async {
+    final user = await _authService.getCurrentUser();
+    if (user == null) return;
+    final updated = user.copyWith(isPublic: isPublic);
+    await _authService.saveUser(updated);
+  }
+
   String _extractError(dynamic res) {
     try {
       final data = jsonDecode(res.body);

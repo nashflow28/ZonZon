@@ -42,7 +42,8 @@ import {
   IdCard,
   UserPlus,
   Navigation,
-  Loader
+  Loader,
+  Flag
 } from 'lucide-angular';
 
 export const appIcons = {
@@ -86,7 +87,8 @@ export const appIcons = {
   IdCard,
   UserPlus,
   Navigation,
-  Loader
+  Loader,
+  Flag
 };
 
 export const provideLucideIcons = (): Provider => ({

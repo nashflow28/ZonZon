@@ -28,6 +28,14 @@ class User {
   /// Motif de refus renseigné par l'admin si `driverApprovalStatus == REJECTED`.
   final String? driverRejectionReason;
 
+  /// Visibilité du livreur pour le broadcast général des courses
+  /// (`PATCH /users/me/visibility`). Un livreur privé (`isPublic == false`)
+  /// ne reçoit plus les courses du broadcast général : il ne travaille que
+  /// sur assignation manuelle d'un commerçant.
+  /// Absent des anciennes réponses backend → défaut à `true`.
+  @JsonKey(defaultValue: true)
+  final bool isPublic;
+
   User({
     required this.id,
     required this.firstName,
@@ -39,6 +47,7 @@ class User {
     this.driverApprovalStatus,
     this.isAvailable = false,
     this.driverRejectionReason,
+    this.isPublic = true,
   });
 
   factory User.fromJson(Map<String, dynamic> json) => _$UserFromJson(json);
@@ -60,6 +69,7 @@ class User {
     String? driverApprovalStatus,
     bool? isAvailable,
     String? driverRejectionReason,
+    bool? isPublic,
   }) {
     return User(
       id: id,
@@ -73,6 +83,7 @@ class User {
       isAvailable: isAvailable ?? this.isAvailable,
       driverRejectionReason:
           driverRejectionReason ?? this.driverRejectionReason,
+      isPublic: isPublic ?? this.isPublic,
     );
   }
 }

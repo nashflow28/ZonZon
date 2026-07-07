@@ -17,6 +17,7 @@ User _$UserFromJson(Map<String, dynamic> json) => User(
   driverApprovalStatus: json['driverApprovalStatus'] as String?,
   isAvailable: json['isAvailable'] as bool? ?? false,
   driverRejectionReason: json['driverRejectionReason'] as String?,
+  isPublic: json['isPublic'] as bool? ?? true,
 );
 
 Map<String, dynamic> _$UserToJson(User instance) => <String, dynamic>{
@@ -30,6 +31,7 @@ Map<String, dynamic> _$UserToJson(User instance) => <String, dynamic>{
   'driverApprovalStatus': instance.driverApprovalStatus,
   'isAvailable': instance.isAvailable,
   'driverRejectionReason': instance.driverRejectionReason,
+  'isPublic': instance.isPublic,
 };
 
 AuthResult _$AuthResultFromJson(Map<String, dynamic> json) => AuthResult(

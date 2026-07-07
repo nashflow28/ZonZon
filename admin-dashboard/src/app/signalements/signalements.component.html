@@ -1,0 +1,170 @@
+<div class="p-4 md:p-8">
+  <div class="max-w-7xl mx-auto">
+    <!-- Filters -->
+    <div class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+      <div>
+        <label class="flex items-center gap-1 text-xs text-slate-400 mb-1">
+          <lucide-icon name="filter" class="w-3 h-3"></lucide-icon>
+          Statut
+        </label>
+        <select
+          class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+          [ngModel]="statusFilter()" (ngModelChange)="onStatusFilterChange($event)">
+          <option *ngFor="let opt of statusOptions" [value]="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+      </div>
+      <div>
+        <label class="flex items-center gap-1 text-xs text-slate-400 mb-1">
+          <lucide-icon name="flag" class="w-3 h-3"></lucide-icon>
+          Type de cible
+        </label>
+        <select
+          class="w-full bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-sky-500"
+          [ngModel]="targetTypeFilter()" (ngModelChange)="onTargetTypeFilterChange($event)">
+          <option *ngFor="let opt of targetTypeOptions" [value]="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
+      </div>
+      <div>
+        <button (click)="resetFilters()"
+                class="w-full bg-slate-800 hover:bg-slate-700 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 transition-all flex items-center justify-center gap-2">
+          <lucide-icon name="x" class="w-4 h-4"></lucide-icon>
+          Réinitialiser
+        </button>
+      </div>
+    </div>
+
+    <!-- Skeleton -->
+    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="6"></app-skeleton-row>
+
+    <!-- Error -->
+    <div *ngIf="!isLoading() && errored()"
+         class="bg-slate-800/40 p-10 rounded-2xl border border-slate-700/50 text-center text-slate-400 flex flex-col items-center gap-3">
+      <lucide-icon name="alert-triangle" class="w-8 h-8 text-red-400"></lucide-icon>
+      Impossible de charger les signalements.
+      <button (click)="fetch()"
+              class="mt-2 bg-slate-800 hover:bg-slate-700 text-white text-sm rounded-lg px-4 py-2 border border-slate-600 transition-all">
+        Réessayer
+      </button>
+    </div>
+
+    <!-- Table -->
+    <div *ngIf="!isLoading() && !errored()"
+         class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 overflow-hidden shadow-zz-lg">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-900/50 text-slate-400 text-xs uppercase tracking-wider">
+              <th class="p-5 border-b border-slate-700/50">Cible</th>
+              <th class="p-5 border-b border-slate-700/50">Motif</th>
+              <th class="p-5 border-b border-slate-700/50">Statut</th>
+              <th class="p-5 border-b border-slate-700/50">Date</th>
+              <th class="p-5 border-b border-slate-700/50">Auteur</th>
+              <th class="p-5 border-b border-slate-700/50">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-700/50 text-slate-300">
+            <tr *ngIf="items().length === 0">
+              <td colspan="6" class="p-0">
+                <app-empty-state
+                  icon="flag"
+                  title="Aucun signalement"
+                  description="Aucun signalement ne correspond à ces filtres. Ajustez le statut ou le type de cible.">
+                </app-empty-state>
+              </td>
+            </tr>
+            <tr *ngFor="let item of items()"
+                class="hover:bg-slate-700/20 transition-colors align-top">
+              <td class="p-5">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border whitespace-nowrap"
+                      [ngClass]="targetTypeBadge(item.targetType)">
+                  {{ targetTypeLabel(item.targetType) }}
+                </span>
+                <div class="text-[11px] text-slate-500 font-mono mt-1">
+                  {{ shortId(item.targetId) }}
+                </div>
+              </td>
+              <td class="p-5 max-w-xs">
+                <div class="text-sm text-slate-200 break-words">{{ item.reason }}</div>
+              </td>
+              <td class="p-5">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border whitespace-nowrap"
+                      [ngClass]="statusBadge(item.status)">
+                  {{ statusLabel(item.status) }}
+                </span>
+              </td>
+              <td class="p-5 text-sm text-slate-400 whitespace-nowrap">
+                {{ item.createdAt | date:'dd MMM y HH:mm':'':'fr' }}
+              </td>
+              <td class="p-5">
+                <div class="text-[11px] text-slate-500 font-mono">
+                  {{ shortId(item.reporterId) }}
+                </div>
+              </td>
+              <td class="p-5">
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    *ngIf="item.status !== 'REVIEWED'"
+                    (click)="changeStatus(item, 'REVIEWED')"
+                    [disabled]="updatingId() === item.id"
+                    title="Marquer comme examiné"
+                    class="px-2.5 py-1.5 rounded-lg border border-blue-500/40 bg-blue-600/10 hover:bg-blue-600/20 text-blue-300 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+                    <lucide-icon name="eye" class="w-3.5 h-3.5"></lucide-icon>
+                    Examiné
+                  </button>
+                  <button
+                    *ngIf="item.status !== 'RESOLVED'"
+                    (click)="changeStatus(item, 'RESOLVED')"
+                    [disabled]="updatingId() === item.id"
+                    title="Marquer comme résolu"
+                    class="px-2.5 py-1.5 rounded-lg border border-emerald-500/40 bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-300 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+                    <lucide-icon name="check-circle" class="w-3.5 h-3.5"></lucide-icon>
+                    Résolu
+                  </button>
+                  <button
+                    *ngIf="item.status !== 'DISMISSED'"
+                    (click)="changeStatus(item, 'DISMISSED')"
+                    [disabled]="updatingId() === item.id"
+                    title="Rejeter le signalement"
+                    class="px-2.5 py-1.5 rounded-lg border border-slate-500/40 bg-slate-700/30 hover:bg-slate-700/50 text-slate-300 text-xs font-bold transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1">
+                    <lucide-icon name="x-circle" class="w-3.5 h-3.5"></lucide-icon>
+                    Rejeter
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div *ngIf="total() > 0"
+           class="flex items-center justify-between gap-3 p-4 border-t border-slate-700/50 bg-slate-900/30 text-sm text-slate-400">
+        <div>
+          Page <span class="text-sky-400 font-semibold">{{ page() }}</span>
+          sur <span class="text-sky-400 font-semibold">{{ totalPages() }}</span>
+          <span class="hidden sm:inline">— {{ total() }} signalement(s)</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            (click)="prevPage()"
+            [disabled]="!canPrev()"
+            class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+            <lucide-icon name="chevron-left" class="w-4 h-4"></lucide-icon>
+            Précédent
+          </button>
+          <button
+            (click)="nextPage()"
+            [disabled]="!canNext()"
+            class="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-600 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+            Suivant
+            <lucide-icon name="chevron-right" class="w-4 h-4"></lucide-icon>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

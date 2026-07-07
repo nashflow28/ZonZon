@@ -10,7 +10,9 @@ import '../router/app_router.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/client_services.dart';
+import '../services/notifications_service.dart';
 import '../screens/order_history_screen.dart';
+import '../screens/notifications_screen.dart';
 import '../utils/platform_adapter.dart';
 
 class ClientProfileScreen extends StatefulWidget {
@@ -24,9 +26,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   final _api = ApiClient();
   final _auth = AuthService();
   final _picker = ImagePicker();
+  final _notificationsService = NotificationsService();
 
   User? _user;
   bool _loading = true;
+  int _unreadNotificationsCount = 0;
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -35,6 +39,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadUnreadNotificationsCount();
   }
 
   @override
@@ -56,6 +61,23 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// Charge le nombre de notifications non lues pour afficher le badge sur
+  /// l'icône cloche. Non bloquant : échec silencieux (badge à 0).
+  Future<void> _loadUnreadNotificationsCount() async {
+    try {
+      final page = await _notificationsService.list();
+      if (!mounted) return;
+      setState(() {
+        _unreadNotificationsCount = page.items.where((n) => n.isUnread).length;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _openNotifications() async {
+    await pushAdaptive<void>(context, const NotificationsScreen());
+    if (mounted) _loadUnreadNotificationsCount();
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -143,6 +165,41 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         elevation: 0,
+        actions: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: _openNotifications,
+              ),
+              if (_unreadNotificationsCount > 0)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF1E293B), width: 1.5),
+                    ),
+                    child: Text(
+                      _unreadNotificationsCount > 99 ? '99+' : '$_unreadNotificationsCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
       body: _loading
           ? Center(child: adaptiveLoader(color: const Color(0xFF0EA5E9)))
