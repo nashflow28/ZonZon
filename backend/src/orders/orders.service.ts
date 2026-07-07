@@ -26,6 +26,9 @@ import {
   OrderStatus,
   PaymentStatus,
 } from '../entities/delivery-order.entity';
+import { DeliveryStatusHistory } from '../entities/delivery-status-history.entity';
+import { PriceChange } from '../entities/price-change.entity';
+import { PaymentStatusHistory } from '../entities/payment-status-history.entity';
 import { UsersService } from '../users/users.service';
 import { OrdersGateway } from './orders.gateway';
 import { PositionsService } from './positions.service';
@@ -123,6 +126,12 @@ export class OrdersService {
   constructor(
     @InjectRepository(DeliveryOrder)
     private ordersRepository: Repository<DeliveryOrder>,
+    @InjectRepository(DeliveryStatusHistory)
+    private statusHistoryRepository: Repository<DeliveryStatusHistory>,
+    @InjectRepository(PriceChange)
+    private priceChangeRepository: Repository<PriceChange>,
+    @InjectRepository(PaymentStatusHistory)
+    private paymentHistoryRepository: Repository<PaymentStatusHistory>,
     private usersService: UsersService,
     private ordersGateway: OrdersGateway,
     private notifications: NotificationsService,
@@ -130,6 +139,84 @@ export class OrdersService {
     private pricing: PricingService,
     @Optional() private merchantDriversService?: MerchantDriversService,
   ) {}
+
+  /**
+   * Journalise un changement de statut de livraison. Fire-and-forget robuste
+   * (try/catch + Logger.warn) : ne doit JAMAIS bloquer ni faire échouer
+   * l'action métier appelante si l'insertion échoue (Priorité 1, CDC V1 —
+   * traçabilité, sans risque de régression sur le flux existant).
+   */
+  private async logStatusChange(entry: {
+    deliveryId: string;
+    oldStatus: OrderStatus | null;
+    newStatus: OrderStatus;
+    changedBy?: string | null;
+    reason?: string | null;
+  }): Promise<void> {
+    try {
+      await this.statusHistoryRepository.save(
+        this.statusHistoryRepository.create({
+          deliveryId: entry.deliveryId,
+          oldStatus: entry.oldStatus,
+          newStatus: entry.newStatus,
+          changedBy: entry.changedBy ?? null,
+          reason: entry.reason ?? null,
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Échec journalisation historique statut (delivery=${entry.deliveryId}): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** Même principe fire-and-forget que `logStatusChange`, pour le prix. */
+  private async logPriceChange(entry: {
+    deliveryId: string;
+    oldPrice: number | null;
+    newPrice: number;
+    changedBy: string;
+    reason?: string | null;
+  }): Promise<void> {
+    try {
+      await this.priceChangeRepository.save(
+        this.priceChangeRepository.create({
+          deliveryId: entry.deliveryId,
+          oldPrice: entry.oldPrice,
+          newPrice: entry.newPrice,
+          changedBy: entry.changedBy,
+          reason: entry.reason ?? null,
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Échec journalisation historique prix (delivery=${entry.deliveryId}): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** Même principe fire-and-forget que `logStatusChange`, pour le paiement. */
+  private async logPaymentStatusChange(entry: {
+    deliveryId: string;
+    oldStatus: PaymentStatus | null;
+    newStatus: PaymentStatus;
+    changedBy?: string | null;
+  }): Promise<void> {
+    try {
+      await this.paymentHistoryRepository.save(
+        this.paymentHistoryRepository.create({
+          deliveryId: entry.deliveryId,
+          oldStatus: entry.oldStatus,
+          newStatus: entry.newStatus,
+          changedBy: entry.changedBy ?? null,
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Échec journalisation historique paiement (delivery=${entry.deliveryId}): ${(err as Error).message}`,
+      );
+    }
+  }
 
   /** Tarif au km courant, avec fallback sur la constante si la config DB échoue. */
   private async getPricePerKm(): Promise<number> {
@@ -467,11 +554,21 @@ export class OrdersService {
       description: dto.description,
       distanceKm,
       priceFcfa,
+      estimatedPrice: priceFcfa,
+      priceWasManuallyAdjusted: false,
       status: OrderStatus.PENDING,
+      paymentStatus: PaymentStatus.UNPAID,
       preferredLivreur,
     });
 
     const saved = await this.ordersRepository.save(order);
+
+    void this.logStatusChange({
+      deliveryId: saved.id,
+      oldStatus: null,
+      newStatus: OrderStatus.PENDING,
+      changedBy: null,
+    });
 
     await this.dispatchNewOrder(saved, preferredLivreur?.id);
 
@@ -552,10 +649,15 @@ export class OrdersService {
     // Le commerçant peut ajuster manuellement le prix à la création. On
     // calcule quand même `distanceKm` (utile pour les stats/ETA), mais le
     // prix final est celui fourni par le commerçant s'il est présent.
+    // Traçabilité du prix (CDC V1 §6.3) : `estimatedPrice` conserve toujours
+    // le calcul automatique, `priceFcfa` est le prix effectif.
     const computed = await this.buildOrderPricing(dto);
     const distanceKm = computed.distanceKm;
+    const estimatedPrice = computed.priceFcfa;
+    const manuallyAdjusted =
+      dto.priceFcfa !== undefined && dto.priceFcfa !== estimatedPrice;
     const priceFcfa =
-      dto.priceFcfa !== undefined ? dto.priceFcfa : computed.priceFcfa;
+      dto.priceFcfa !== undefined ? dto.priceFcfa : estimatedPrice;
 
     const order = this.ordersRepository.create({
       merchant,
@@ -571,11 +673,31 @@ export class OrdersService {
       description: dto.description,
       distanceKm,
       priceFcfa,
+      estimatedPrice,
+      priceWasManuallyAdjusted: manuallyAdjusted,
       status: OrderStatus.PENDING,
+      paymentStatus: PaymentStatus.UNPAID,
       preferredLivreur,
     });
 
     const saved = await this.ordersRepository.save(order);
+
+    void this.logStatusChange({
+      deliveryId: saved.id,
+      oldStatus: null,
+      newStatus: OrderStatus.PENDING,
+      changedBy: null,
+    });
+
+    if (manuallyAdjusted) {
+      void this.logPriceChange({
+        deliveryId: saved.id,
+        oldPrice: estimatedPrice,
+        newPrice: priceFcfa,
+        changedBy: merchantId,
+        reason: dto.priceReason ?? null,
+      });
+    }
 
     await this.dispatchNewOrder(saved, preferredLivreur?.id);
 
@@ -900,6 +1022,13 @@ export class OrdersService {
       );
     }
 
+    void this.logStatusChange({
+      deliveryId: orderId,
+      oldStatus: OrderStatus.PENDING,
+      newStatus: OrderStatus.ACCEPTED,
+      changedBy: livreurId,
+    });
+
     // 3) Recharger l'order avec ses relations pour le broadcast et la push
     const updated = await this.ordersRepository.findOne({
       where: { id: orderId },
@@ -942,6 +1071,8 @@ export class OrdersService {
       relations: ['client', 'livreur'],
     });
     if (!order) throw new NotFoundException('Commande introuvable');
+
+    const previousStatus = order.status;
 
     const actorId = actor.id ?? actor.sub;
     const isClient = order.client?.id === actorId;
@@ -987,6 +1118,18 @@ export class OrdersService {
       }
     }
     const saved = await this.ordersRepository.save(order);
+
+    void this.logStatusChange({
+      deliveryId: order.id,
+      oldStatus: previousStatus,
+      newStatus: status,
+      changedBy: actorId ?? null,
+      reason:
+        status === OrderStatus.CANCELLED
+          ? (dto?.cancellationReason ?? null)
+          : null,
+    });
+
     this.ordersGateway.broadcastStatusUpdate(
       order.id,
       status,
@@ -1212,8 +1355,138 @@ export class OrdersService {
       );
     }
 
+    const previousPaymentStatus = order.paymentStatus;
     order.paymentStatus = paymentStatus;
-    return this.ordersRepository.save(order);
+    const saved = await this.ordersRepository.save(order);
+
+    void this.logPaymentStatusChange({
+      deliveryId: order.id,
+      oldStatus: previousPaymentStatus,
+      newStatus: paymentStatus,
+      changedBy: actorId ?? null,
+    });
+
+    return saved;
+  }
+
+  /**
+   * Historique des changements de statut de livraison (Priorité 1, CDC V1 —
+   * traçabilité) : `GET /orders/:id/history`. Mêmes autorisations que
+   * `updatePaymentStatus` : client/livreur/commerçant de la course, ou admin.
+   */
+  async getStatusHistory(
+    orderId: string,
+    actor: any,
+  ): Promise<DeliveryStatusHistory[]> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client', 'livreur', 'merchant'],
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+
+    const actorId = actor.id ?? actor.sub;
+    const isClient = order.client?.id === actorId;
+    const isLivreur = order.livreur?.id === actorId;
+    const isMerchant = order.merchant?.id === actorId;
+    const isAdmin = actor.role === UserRole.ADMIN;
+
+    if (!isClient && !isLivreur && !isMerchant && !isAdmin) {
+      throw new ForbiddenException(
+        "Vous ne pouvez pas consulter l'historique de cette course",
+      );
+    }
+
+    return this.statusHistoryRepository.find({
+      where: { deliveryId: orderId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  /**
+   * Historique des changements de statut de paiement (Priorité 1, CDC V1
+   * §5.2, §18.13) : `GET /orders/:id/payment-history`. Mêmes autorisations
+   * que `getStatusHistory`.
+   */
+  async getPaymentHistory(
+    orderId: string,
+    actor: any,
+  ): Promise<PaymentStatusHistory[]> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client', 'livreur', 'merchant'],
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+
+    const actorId = actor.id ?? actor.sub;
+    const isClient = order.client?.id === actorId;
+    const isLivreur = order.livreur?.id === actorId;
+    const isMerchant = order.merchant?.id === actorId;
+    const isAdmin = actor.role === UserRole.ADMIN;
+
+    if (!isClient && !isLivreur && !isMerchant && !isAdmin) {
+      throw new ForbiddenException(
+        "Vous ne pouvez pas consulter l'historique de paiement de cette course",
+      );
+    }
+
+    return this.paymentHistoryRepository.find({
+      where: { deliveryId: orderId },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
+  /**
+   * Ajustement manuel du prix d'une course (Priorité 1, CDC V1 §6.3) :
+   * `PATCH /orders/:id/price`. Autorisé au commerçant créateur ou à un
+   * admin, uniquement si la course n'est pas dans un statut terminal.
+   */
+  async updatePrice(
+    orderId: string,
+    newPrice: number,
+    actor: any,
+    reason?: string,
+  ): Promise<DeliveryOrder> {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['merchant'],
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+
+    const actorId = actor.id ?? actor.sub;
+    const isMerchant = order.merchant?.id === actorId;
+    const isAdmin = actor.role === UserRole.ADMIN;
+
+    if (!isMerchant && !isAdmin) {
+      throw new ForbiddenException(
+        'Seul le commerçant créateur ou un admin peut ajuster le prix de cette course',
+      );
+    }
+
+    const terminalStatuses: ReadonlySet<OrderStatus> = new Set([
+      OrderStatus.COMPLETED,
+      OrderStatus.CANCELLED,
+      OrderStatus.FAILED,
+    ]);
+    if (terminalStatuses.has(order.status)) {
+      throw new BadRequestException(
+        'Impossible de modifier le prix d’une course terminée, annulée ou échouée',
+      );
+    }
+
+    const oldPrice = order.priceFcfa ?? null;
+    order.priceFcfa = newPrice;
+    order.priceWasManuallyAdjusted = true;
+    const saved = await this.ordersRepository.save(order);
+
+    void this.logPriceChange({
+      deliveryId: order.id,
+      oldPrice,
+      newPrice,
+      changedBy: actorId,
+      reason: reason ?? null,
+    });
+
+    return saved;
   }
 
   /**

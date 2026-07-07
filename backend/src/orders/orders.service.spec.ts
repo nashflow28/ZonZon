@@ -20,6 +20,9 @@ import {
   OrderStatus,
   PaymentStatus,
 } from '../entities/delivery-order.entity';
+import { DeliveryStatusHistory } from '../entities/delivery-status-history.entity';
+import { PriceChange } from '../entities/price-change.entity';
+import { PaymentStatusHistory } from '../entities/payment-status-history.entity';
 import { UserRole, UserStatus } from '../entities/user.entity';
 
 jest.mock('axios');
@@ -46,6 +49,18 @@ const mockRepo = () => {
     __updateExecute: updateExecute,
   };
 };
+
+/**
+ * Mock minimal pour les repos d'historique (DeliveryStatusHistory,
+ * PriceChange, PaymentStatusHistory) : `create` + `save` (fire-and-forget),
+ * `find` pour les endpoints de lecture d'historique.
+ */
+const mockHistoryRepo = () => ({
+  find: jest.fn().mockResolvedValue([]),
+  findOne: jest.fn(),
+  save: jest.fn(async (entity: any) => entity),
+  create: jest.fn((data: any) => ({ ...data })),
+});
 
 const clientUser = {
   id: 'client-1',
@@ -85,6 +100,9 @@ const merchantUser = {
 describe('OrdersService', () => {
   let service: OrdersService;
   let ordersRepository: ReturnType<typeof mockRepo>;
+  let statusHistoryRepository: ReturnType<typeof mockHistoryRepo>;
+  let priceChangeRepository: ReturnType<typeof mockHistoryRepo>;
+  let paymentHistoryRepository: ReturnType<typeof mockHistoryRepo>;
   let usersService: {
     findOne: jest.Mock;
     findByPhone: jest.Mock;
@@ -141,6 +159,9 @@ describe('OrdersService', () => {
     }) as any);
 
     ordersRepository = mockRepo();
+    statusHistoryRepository = mockHistoryRepo();
+    priceChangeRepository = mockHistoryRepo();
+    paymentHistoryRepository = mockHistoryRepo();
     usersService = {
       findOne: jest.fn(),
       findByPhone: jest.fn(),
@@ -183,6 +204,18 @@ describe('OrdersService', () => {
         {
           provide: getRepositoryToken(DeliveryOrder),
           useValue: ordersRepository,
+        },
+        {
+          provide: getRepositoryToken(DeliveryStatusHistory),
+          useValue: statusHistoryRepository,
+        },
+        {
+          provide: getRepositoryToken(PriceChange),
+          useValue: priceChangeRepository,
+        },
+        {
+          provide: getRepositoryToken(PaymentStatusHistory),
+          useValue: paymentHistoryRepository,
         },
         { provide: UsersService, useValue: usersService },
         { provide: OrdersGateway, useValue: gateway },
@@ -1769,6 +1802,537 @@ describe('OrdersService', () => {
 
       expect(merchantDriversService.listDriversForMerchant).not.toHaveBeenCalled();
       expect(result[0].isAffiliated).toBe(false);
+    });
+  });
+
+  // ── Priorité 1 (CDC V1) : historique des statuts de livraison ────────────
+
+  describe('historisation — DeliveryStatusHistory', () => {
+    const dto = {
+      pickupAddress: 'A',
+      pickupLat: 6.1319,
+      pickupLng: 1.2228,
+      deliveryAddress: 'B',
+      deliveryLat: 6.1725,
+      deliveryLng: 1.2314,
+      description: 'colis',
+    };
+
+    beforeEach(() => {
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+    });
+
+    it('createOrder : journalise oldStatus=null → newStatus=PENDING, changedBy=null', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-hist-1',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, dto);
+      await new Promise((r) => setImmediate(r));
+
+      expect(statusHistoryRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId: 'ord-hist-1',
+          oldStatus: null,
+          newStatus: OrderStatus.PENDING,
+          changedBy: null,
+        }),
+      );
+      expect(statusHistoryRepository.save).toHaveBeenCalled();
+    });
+
+    it('createMerchantOrder : journalise oldStatus=null → newStatus=PENDING', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(null);
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-hist-merch',
+        ...o,
+      }));
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+      } as any);
+      await new Promise((r) => setImmediate(r));
+
+      expect(statusHistoryRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId: 'ord-hist-merch',
+          oldStatus: null,
+          newStatus: OrderStatus.PENDING,
+        }),
+      );
+    });
+
+    it('acceptOrder : journalise PENDING → ACCEPTED avec changedBy=livreurId', async () => {
+      ordersRepository.findOne.mockImplementation(async (query: any) => {
+        if (query?.where?.livreur) return null; // pas de course active
+        return {
+          id: 'ord-accept-hist',
+          status: OrderStatus.PENDING,
+          client: { id: clientUser.id },
+        };
+      });
+      ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
+      usersService.findOne.mockResolvedValue(livreurUser);
+
+      await service.acceptOrder('ord-accept-hist', livreurUser.id);
+      await new Promise((r) => setImmediate(r));
+
+      expect(statusHistoryRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId: 'ord-accept-hist',
+          oldStatus: OrderStatus.PENDING,
+          newStatus: OrderStatus.ACCEPTED,
+          changedBy: livreurUser.id,
+        }),
+      );
+    });
+
+    it('updateStatus : journalise oldStatus → newStatus avec changedBy=actor.id', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        id: 'ord-status-hist',
+        status: OrderStatus.ACCEPTED,
+        client: { id: clientUser.id },
+        livreur: { id: livreurUser.id },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      await service.updateStatus(
+        'ord-status-hist',
+        OrderStatus.IN_PROGRESS,
+        livreurUser,
+      );
+      await new Promise((r) => setImmediate(r));
+
+      expect(statusHistoryRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId: 'ord-status-hist',
+          oldStatus: OrderStatus.ACCEPTED,
+          newStatus: OrderStatus.IN_PROGRESS,
+          changedBy: livreurUser.id,
+        }),
+      );
+    });
+
+    it('updateStatus : journalise la cancellationReason quand CANCELLED', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        id: 'ord-cancel-hist',
+        status: OrderStatus.PENDING,
+        client: { id: clientUser.id },
+        livreur: null,
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      await service.updateStatus(
+        'ord-cancel-hist',
+        OrderStatus.CANCELLED,
+        clientUser,
+        { status: OrderStatus.CANCELLED, cancellationReason: 'Changement de plan' },
+      );
+      await new Promise((r) => setImmediate(r));
+
+      expect(statusHistoryRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          oldStatus: OrderStatus.PENDING,
+          newStatus: OrderStatus.CANCELLED,
+          reason: 'Changement de plan',
+        }),
+      );
+    });
+
+    it('ne bloque pas updateStatus si l’insertion de l’historique échoue (fire-and-forget robuste)', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        id: 'ord-fail-hist',
+        status: OrderStatus.ACCEPTED,
+        client: { id: clientUser.id },
+        livreur: { id: livreurUser.id },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      statusHistoryRepository.save.mockRejectedValue(new Error('DB down'));
+
+      const result = await service.updateStatus(
+        'ord-fail-hist',
+        OrderStatus.IN_PROGRESS,
+        livreurUser,
+      );
+      await new Promise((r) => setImmediate(r));
+
+      expect(result.status).toBe(OrderStatus.IN_PROGRESS);
+    });
+  });
+
+  describe('getStatusHistory', () => {
+    const buildOrder = () => ({
+      id: 'o',
+      client: { id: clientUser.id },
+      livreur: { id: livreurUser.id },
+      merchant: { id: merchantUser.id },
+    });
+
+    it('renvoie l’historique trié ASC pour le client de la course', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder());
+      const rows = [{ id: 'h1' }, { id: 'h2' }];
+      statusHistoryRepository.find.mockResolvedValue(rows);
+
+      const result = await service.getStatusHistory('o', clientUser);
+
+      expect(result).toBe(rows);
+      expect(statusHistoryRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deliveryId: 'o' },
+          order: { createdAt: 'ASC' },
+        }),
+      );
+    });
+
+    it('autorisé pour le livreur assigné', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder());
+      statusHistoryRepository.find.mockResolvedValue([]);
+      await expect(
+        service.getStatusHistory('o', livreurUser),
+      ).resolves.toEqual([]);
+    });
+
+    it('autorisé pour le commerçant créateur', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder());
+      statusHistoryRepository.find.mockResolvedValue([]);
+      await expect(
+        service.getStatusHistory('o', merchantUser),
+      ).resolves.toEqual([]);
+    });
+
+    it('autorisé pour un admin', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder());
+      statusHistoryRepository.find.mockResolvedValue([]);
+      await expect(service.getStatusHistory('o', adminUser)).resolves.toEqual(
+        [],
+      );
+    });
+
+    it('refuse un tiers non lié à la course', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder());
+      const stranger = { id: 'stranger-1', role: UserRole.CLIENT };
+      await expect(
+        service.getStatusHistory('o', stranger),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('throw NotFoundException si la commande est introuvable', async () => {
+      ordersRepository.findOne.mockResolvedValue(null);
+      await expect(
+        service.getStatusHistory('missing', adminUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  // ── Priorité 1 (CDC V1 §6.3) : traçabilité du prix ────────────────────────
+
+  describe('traçabilité du prix — estimatedPrice / priceWasManuallyAdjusted / PriceChange', () => {
+    const dto = {
+      pickupAddress: 'Boutique A',
+      pickupLat: 6.1319,
+      pickupLng: 1.2228,
+      deliveryAddress: 'Domicile client',
+      deliveryLat: 6.1725,
+      deliveryLng: 1.2314,
+      description: 'colis',
+    };
+
+    beforeEach(() => {
+      mockedAxios.get.mockResolvedValue({
+        data: {
+          features: [{ properties: { summary: { distance: 3000 } } }],
+        },
+      });
+    });
+
+    it('createOrder (client) : estimatedPrice = priceFcfa = calcul auto, priceWasManuallyAdjusted=false', async () => {
+      usersService.findOne.mockResolvedValue(clientUser);
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-price-1',
+        ...o,
+      }));
+
+      await service.createOrder(clientUser.id, dto);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          priceFcfa: 600,
+          estimatedPrice: 600,
+          priceWasManuallyAdjusted: false,
+        }),
+      );
+    });
+
+    it('createMerchantOrder sans priceFcfa manuel : estimatedPrice = priceFcfa, priceWasManuallyAdjusted=false', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(null);
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-price-2',
+        ...o,
+      }));
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          priceFcfa: 600,
+          estimatedPrice: 600,
+          priceWasManuallyAdjusted: false,
+        }),
+      );
+      expect(priceChangeRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('createMerchantOrder avec priceFcfa manuel différent : estimatedPrice≠priceFcfa, priceWasManuallyAdjusted=true, PriceChange créé', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(null);
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-price-3',
+        ...o,
+      }));
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+        priceFcfa: 999,
+        priceReason: 'Négociation client',
+      } as any);
+      await new Promise((r) => setImmediate(r));
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          priceFcfa: 999,
+          estimatedPrice: 600,
+          priceWasManuallyAdjusted: true,
+        }),
+      );
+      expect(priceChangeRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId: 'ord-price-3',
+          oldPrice: 600,
+          newPrice: 999,
+          changedBy: merchantUser.id,
+          reason: 'Négociation client',
+        }),
+      );
+    });
+
+    it('createMerchantOrder avec priceFcfa manuel EGAL au calcul auto : pas d’ajustement, pas de PriceChange', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      usersService.findByPhone.mockResolvedValue(null);
+      ordersRepository.save.mockImplementation(async (o: any) => ({
+        id: 'ord-price-4',
+        ...o,
+      }));
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+        priceFcfa: 600, // égal au calcul auto
+      } as any);
+      await new Promise((r) => setImmediate(r));
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          priceFcfa: 600,
+          estimatedPrice: 600,
+          priceWasManuallyAdjusted: false,
+        }),
+      );
+      expect(priceChangeRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updatePrice (PATCH /orders/:id/price)', () => {
+    const buildOrder = (status: OrderStatus, overrides: any = {}) => ({
+      id: 'o',
+      status,
+      priceFcfa: 600,
+      merchant: { id: merchantUser.id },
+      ...overrides,
+    });
+
+    it('autorisé pour le commerçant créateur : met à jour priceFcfa + priceWasManuallyAdjusted + journalise', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      const result = await service.updatePrice(
+        'o',
+        800,
+        merchantUser,
+        'Ajustement demandé',
+      );
+
+      expect(result.priceFcfa).toBe(800);
+      expect(result.priceWasManuallyAdjusted).toBe(true);
+      expect(priceChangeRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId: 'o',
+          oldPrice: 600,
+          newPrice: 800,
+          changedBy: merchantUser.id,
+          reason: 'Ajustement demandé',
+        }),
+      );
+    });
+
+    it('autorisé pour un admin', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.PENDING),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      const result = await service.updatePrice('o', 700, adminUser);
+      expect(result.priceFcfa).toBe(700);
+    });
+
+    it('refuse un tiers non lié (ni commerçant créateur, ni admin)', async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.PENDING),
+      );
+      await expect(
+        service.updatePrice('o', 700, clientUser),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(ordersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it.each([OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.FAILED])(
+      'refuse si la course est terminale (%s)',
+      async (status) => {
+        ordersRepository.findOne.mockResolvedValue(buildOrder(status));
+        await expect(
+          service.updatePrice('o', 700, merchantUser),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(ordersRepository.save).not.toHaveBeenCalled();
+      },
+    );
+
+    it('throw NotFoundException si la commande est introuvable', async () => {
+      ordersRepository.findOne.mockResolvedValue(null);
+      await expect(
+        service.updatePrice('missing', 700, adminUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  // ── Priorité 1 (CDC V1 §5.2, §18.13) : historique de paiement ─────────────
+
+  describe('historisation — PaymentStatusHistory', () => {
+    const buildPaymentOrder = () => ({
+      id: 'o',
+      status: OrderStatus.ACCEPTED,
+      paymentStatus: PaymentStatus.UNPAID,
+      client: { id: clientUser.id },
+      livreur: { id: livreurUser.id },
+      merchant: { id: merchantUser.id },
+    });
+
+    it('updatePaymentStatus : journalise oldStatus → newStatus avec changedBy', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      await service.updatePaymentStatus('o', PaymentStatus.PAID, clientUser);
+      await new Promise((r) => setImmediate(r));
+
+      expect(paymentHistoryRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deliveryId: 'o',
+          oldStatus: PaymentStatus.UNPAID,
+          newStatus: PaymentStatus.PAID,
+          changedBy: clientUser.id,
+        }),
+      );
+    });
+
+    it('accepte les nouvelles valeurs CASH_ON_DELIVERY et REFUNDED', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      const result = await service.updatePaymentStatus(
+        'o',
+        PaymentStatus.CASH_ON_DELIVERY,
+        livreurUser,
+      );
+      expect(result.paymentStatus).toBe(PaymentStatus.CASH_ON_DELIVERY);
+
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildPaymentOrder(),
+        paymentStatus: PaymentStatus.PAID,
+      });
+      const refunded = await service.updatePaymentStatus(
+        'o',
+        PaymentStatus.REFUNDED,
+        adminUser,
+      );
+      expect(refunded.paymentStatus).toBe(PaymentStatus.REFUNDED);
+    });
+
+    it('ne bloque pas updatePaymentStatus si l’insertion de l’historique échoue', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+      paymentHistoryRepository.save.mockRejectedValue(new Error('DB down'));
+
+      const result = await service.updatePaymentStatus(
+        'o',
+        PaymentStatus.PAID,
+        clientUser,
+      );
+      await new Promise((r) => setImmediate(r));
+
+      expect(result.paymentStatus).toBe(PaymentStatus.PAID);
+    });
+  });
+
+  describe('getPaymentHistory', () => {
+    const buildOrder = () => ({
+      id: 'o',
+      client: { id: clientUser.id },
+      livreur: { id: livreurUser.id },
+      merchant: { id: merchantUser.id },
+    });
+
+    it('renvoie l’historique trié ASC pour le livreur assigné', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder());
+      const rows = [{ id: 'p1' }];
+      paymentHistoryRepository.find.mockResolvedValue(rows);
+
+      const result = await service.getPaymentHistory('o', livreurUser);
+
+      expect(result).toBe(rows);
+      expect(paymentHistoryRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { deliveryId: 'o' },
+          order: { createdAt: 'ASC' },
+        }),
+      );
+    });
+
+    it('refuse un tiers non lié à la course', async () => {
+      ordersRepository.findOne.mockResolvedValue(buildOrder());
+      const stranger = { id: 'stranger-1', role: UserRole.CLIENT };
+      await expect(
+        service.getPaymentHistory('o', stranger),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('throw NotFoundException si la commande est introuvable', async () => {
+      ordersRepository.findOne.mockResolvedValue(null);
+      await expect(
+        service.getPaymentHistory('missing', adminUser),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 });

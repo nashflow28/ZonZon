@@ -51,6 +51,9 @@ import { MerchantDriver } from '../src/entities/merchant-driver.entity';
 import { DriverPosition } from '../src/entities/driver-position.entity';
 import { PricingConfig } from '../src/entities/pricing-config.entity';
 import { DeliveryOrder } from '../src/entities/delivery-order.entity';
+import { DeliveryStatusHistory } from '../src/entities/delivery-status-history.entity';
+import { PriceChange } from '../src/entities/price-change.entity';
+import { PaymentStatusHistory } from '../src/entities/payment-status-history.entity';
 
 jest.mock('axios');
 export const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -288,6 +291,9 @@ export interface TestAppBundle {
   vehiclesRepo: ReturnType<typeof makeInMemoryRepo<Vehicle>>;
   ordersRepo: ReturnType<typeof makeInMemoryRepo<DeliveryOrder>>;
   merchantDriversRepo: ReturnType<typeof makeInMemoryRepo<MerchantDriver>>;
+  statusHistoryRepo: ReturnType<typeof makeInMemoryRepo<DeliveryStatusHistory>>;
+  priceChangeRepo: ReturnType<typeof makeInMemoryRepo<PriceChange>>;
+  paymentHistoryRepo: ReturnType<typeof makeInMemoryRepo<PaymentStatusHistory>>;
   fakeGateway: {
     broadcastNewOrder: jest.Mock;
     broadcastOrderAccepted: jest.Mock;
@@ -335,6 +341,9 @@ export async function buildTestApp(): Promise<TestAppBundle> {
   const merchantDriversRepo = makeInMemoryRepo<MerchantDriver>();
   const driverPositionsRepo = makeInMemoryRepo<DriverPosition>();
   const pricingConfigRepo = makeInMemoryRepo<PricingConfig>();
+  const statusHistoryRepo = makeInMemoryRepo<DeliveryStatusHistory>();
+  const priceChangeRepo = makeInMemoryRepo<PriceChange>();
+  const paymentHistoryRepo = makeInMemoryRepo<PaymentStatusHistory>();
 
   // Stub gateway so we do not need socket.io infrastructure
   const fakeGateway = {
@@ -406,6 +415,18 @@ export async function buildTestApp(): Promise<TestAppBundle> {
         provide: getRepositoryToken(PricingConfig),
         useValue: pricingConfigRepo,
       },
+      {
+        provide: getRepositoryToken(DeliveryStatusHistory),
+        useValue: statusHistoryRepo,
+      },
+      {
+        provide: getRepositoryToken(PriceChange),
+        useValue: priceChangeRepo,
+      },
+      {
+        provide: getRepositoryToken(PaymentStatusHistory),
+        useValue: paymentHistoryRepo,
+      },
     ],
   }).compile();
 
@@ -419,7 +440,17 @@ export async function buildTestApp(): Promise<TestAppBundle> {
   );
   await app.init();
 
-  return { app, usersRepo, vehiclesRepo, ordersRepo, merchantDriversRepo, fakeGateway };
+  return {
+    app,
+    usersRepo,
+    vehiclesRepo,
+    ordersRepo,
+    merchantDriversRepo,
+    statusHistoryRepo,
+    priceChangeRepo,
+    paymentHistoryRepo,
+    fakeGateway,
+  };
 }
 
 /**

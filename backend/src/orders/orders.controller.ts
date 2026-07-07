@@ -15,6 +15,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateMerchantOrderDto } from './dto/create-merchant-order.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { UpdatePaymentStatusDto } from './dto/update-payment-status.dto';
+import { UpdatePriceDto } from './dto/update-price.dto';
 import { EstimateOrderDto } from './dto/estimate-order.dto';
 import { ListOrdersDto } from './dto/list-orders.dto';
 import { AvailableDriversQueryDto } from './dto/available-drivers-query.dto';
@@ -116,6 +117,50 @@ export class OrdersController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.ordersService.updatePaymentStatus(id, dto.paymentStatus, user);
+  }
+
+  /**
+   * Historique des changements de statut de livraison (Priorité 1, CDC V1 —
+   * traçabilité).
+   */
+  @Get(':id/history')
+  getHistory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.getStatusHistory(id, user);
+  }
+
+  /**
+   * Historique des changements de statut de paiement (Priorité 1, CDC V1
+   * §5.2, §18.13).
+   */
+  @Get(':id/payment-history')
+  getPaymentHistory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.getPaymentHistory(id, user);
+  }
+
+  /**
+   * Ajustement manuel du prix (Priorité 1, CDC V1 §6.3) : autorisé au
+   * commerçant créateur ou à un admin, tant que la course n'est pas
+   * terminale.
+   */
+  @Roles(UserRole.COMMERCANT, UserRole.ADMIN)
+  @Patch(':id/price')
+  updatePrice(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePriceDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.updatePrice(
+      id,
+      dto.priceFcfa,
+      user,
+      dto.reason,
+    );
   }
 
   /**

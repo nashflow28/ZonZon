@@ -7,6 +7,7 @@ import { User, UserExtendedStats, UsersService } from './users.service';
 import { LucideAngularModule } from 'lucide-angular';
 import { SkeletonRowComponent } from '../shared/skeleton/skeleton-row.component';
 import { PageActionsService } from '../shared/page-actions.service';
+import { AuthService } from '../auth/auth.service';
 
 type RoleFilter = 'ALL' | 'CLIENT' | 'LIVREUR' | 'ADMIN';
 
@@ -20,6 +21,7 @@ type RoleFilter = 'ALL' | 'CLIENT' | 'LIVREUR' | 'ADMIN';
 export class UsersComponent implements OnInit, OnDestroy {
   private usersService = inject(UsersService);
   private pageActions = inject(PageActionsService);
+  private authService = inject(AuthService);
   private refreshSub?: Subscription;
 
   readonly users = signal<User[]>([]);
@@ -28,6 +30,14 @@ export class UsersComponent implements OnInit, OnDestroy {
 
   readonly roleFilter = signal<RoleFilter>('ALL');
   readonly search = signal<string>('');
+
+  /// Ids en cours de traitement (suspension/réactivation) pour désactiver
+  /// les boutons pendant l'appel réseau.
+  readonly pendingActionIds = signal<Set<string>>(new Set());
+
+  /// Utilisateur dont le panneau "motif de suspension" est ouvert (null = aucun).
+  readonly suspendingId = signal<string | null>(null);
+  readonly suspensionReason = signal<string>('');
 
   /// Cache des stats étendues par userId (chargées à la volée pour les livreurs).
   /// Pour les autres rôles on ne stocke que rating average/count via le même format.
@@ -244,5 +254,93 @@ export class UsersComponent implements OnInit, OnDestroy {
 
   onSearch(value: string): void {
     this.search.set(value);
+  }
+
+  /// `true` si le compte est suspendu. Par défaut (champ absent → anciennes
+  /// réponses backend) on considère le compte actif.
+  isSuspended(u: User): boolean {
+    return u.status === 'SUSPENDED';
+  }
+
+  /// Classes du badge de statut de compte.
+  statusBadge(u: User): string {
+    return this.isSuspended(u)
+      ? 'bg-red-500/20 text-red-300 border-red-500/40'
+      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+  }
+
+  statusLabel(u: User): string {
+    return this.isSuspended(u) ? 'Suspendu' : 'Actif';
+  }
+
+  /// Empêche un admin de se suspendre lui-même.
+  isSelf(u: User): boolean {
+    const current = this.authService.getCurrentUser();
+    return !!current && current.id === u.id;
+  }
+
+  isBusy(id: string): boolean {
+    return this.pendingActionIds().has(id);
+  }
+
+  private setBusy(id: string, busy: boolean): void {
+    this.pendingActionIds.update((set) => {
+      const next = new Set(set);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  private replaceLocal(updated: User): void {
+    this.users.set(
+      this.users().map((u) => (u.id === updated.id ? { ...u, ...updated } : u))
+    );
+  }
+
+  openSuspend(u: User): void {
+    this.suspendingId.set(u.id);
+    this.suspensionReason.set('');
+  }
+
+  closeSuspend(): void {
+    this.suspendingId.set(null);
+    this.suspensionReason.set('');
+  }
+
+  confirmSuspend(u: User): void {
+    if (this.isBusy(u.id)) return;
+    if (!confirm(`Suspendre le compte de ${u.firstName} ${u.lastName} ?`)) return;
+    const reason = this.suspensionReason().trim();
+    this.setBusy(u.id, true);
+    this.usersService.suspendUser(u.id, reason || undefined).subscribe({
+      next: (updated) => {
+        this.setBusy(u.id, false);
+        this.closeSuspend();
+        this.replaceLocal({ ...u, ...updated, status: 'SUSPENDED' });
+      },
+      error: (err) => {
+        console.error('Erreur suspension utilisateur', err);
+        this.setBusy(u.id, false);
+        alert("Impossible de suspendre ce compte. Réessayez.");
+      }
+    });
+  }
+
+  reactivate(u: User): void {
+    if (this.isBusy(u.id)) return;
+    if (!confirm(`Réactiver le compte de ${u.firstName} ${u.lastName} ?`)) return;
+    this.setBusy(u.id, true);
+    this.usersService.reactivateUser(u.id).subscribe({
+      next: (updated) => {
+        this.setBusy(u.id, false);
+        this.replaceLocal({ ...u, ...updated, status: 'ACTIVE' });
+      },
+      error: (err) => {
+        console.error('Erreur réactivation utilisateur', err);
+        this.setBusy(u.id, false);
+        alert("Impossible de réactiver ce compte. Réessayez.");
+      }
+    });
   }
 }

@@ -40,10 +40,29 @@ class _LoginScreenState extends State<LoginScreen> {
       context.go(AppRoutes.homeForRole(result.user.role));
     } catch (e) {
       if (!mounted) return;
-      showAdaptiveSnack(context, 'Échec de la connexion : $e', isError: true);
+      showAdaptiveSnack(context, _loginErrorMessage(e), isError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  /// Construit le message affiché à l'utilisateur à partir de l'erreur
+  /// remontée par [AuthService.login]. Le service propage déjà le message
+  /// backend (champ `message` du corps de réponse) via `Exception(...)`,
+  /// mais `Exception.toString()` préfixe le texte par "Exception: ". On
+  /// nettoie ce préfixe pour afficher le message backend tel quel — en
+  /// particulier "Compte suspendu. Contactez le support." (401) — et on
+  /// garde un message générique de secours si l'erreur n'est pas exploitable.
+  String _loginErrorMessage(Object error) {
+    var message = error.toString();
+    const prefix = 'Exception: ';
+    if (message.startsWith(prefix)) {
+      message = message.substring(prefix.length);
+    }
+    if (message.trim().isEmpty) {
+      return 'Identifiants incorrects. Veuillez réessayer.';
+    }
+    return message;
   }
 
   @override

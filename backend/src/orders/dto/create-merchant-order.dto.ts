@@ -66,6 +66,15 @@ export class CreateMerchantOrderDto {
   priceFcfa?: number;
 
   /**
+   * Raison optionnelle de l'ajustement manuel du prix (traçabilité, CDC V1
+   * §6.3), enregistrée dans `price_changes` si `priceFcfa` est fourni.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  priceReason?: string;
+
+  /**
    * Livreur choisi manuellement par le commerçant (réservation) —
    * Priorité 3, Lot 3, item 1. Optionnel : si absent, comportement de
    * broadcast normal (tous les livreurs éligibles).

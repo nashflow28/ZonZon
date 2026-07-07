@@ -35,6 +35,10 @@ export enum PaymentStatus {
   PAY_ON_DELIVERY = 'PAY_ON_DELIVERY',
   RECEIVED_BY_MERCHANT = 'RECEIVED_BY_MERCHANT',
   RECEIVED_BY_LIVREUR = 'RECEIVED_BY_LIVREUR',
+  /** Paiement cash confirmé à la livraison (nouveau — CDC V1 §5.2/§18.13). */
+  CASH_ON_DELIVERY = 'CASH_ON_DELIVERY',
+  /** Paiement remboursé (nouveau — CDC V1 §5.2/§18.13). */
+  REFUNDED = 'REFUNDED',
 }
 
 @Entity('delivery_orders')
@@ -106,6 +110,19 @@ export class DeliveryOrder {
 
   @Column({ type: 'int', nullable: true })
   priceFcfa: number;
+
+  /**
+   * Prix calculé automatiquement (distance × tarif/km), avant tout
+   * ajustement manuel (CDC V1 §6.3 — traçabilité du prix). `priceFcfa`
+   * reste le prix effectif/final utilisé partout ailleurs (mobile/admin) ;
+   * ce champ ne sert qu'à comparer/tracer.
+   */
+  @Column({ type: 'int', nullable: true })
+  estimatedPrice: number | null;
+
+  /** `true` si `priceFcfa` a été ajusté manuellement (commerçant ou admin). */
+  @Column({ type: 'boolean', default: false })
+  priceWasManuallyAdjusted: boolean;
 
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.PENDING })
   status: OrderStatus;

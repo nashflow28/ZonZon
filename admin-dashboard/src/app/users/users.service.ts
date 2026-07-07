@@ -17,6 +17,11 @@ export interface User {
   profilePhotoUrl?: string;
   vehicle?: UserVehicle;
   createdAt: string;
+  /// Statut du compte. `ACTIVE` par défaut ; `SUSPENDED` si un admin a
+  /// suspendu le compte (`PATCH /users/:id/suspend`). Optionnel pour
+  /// rétro-compatibilité avec d'anciennes réponses backend qui ne
+  /// renvoyaient pas encore ce champ.
+  status?: 'ACTIVE' | 'SUSPENDED';
 }
 
 export interface RatingStats {
@@ -62,5 +67,17 @@ export class UsersService {
   /// inclut le nombre de courses, le temps moyen et le taux d'annulation.
   getUserExtendedStats(userId: string): Observable<UserExtendedStats> {
     return this.http.get<UserExtendedStats>(`${this.baseUrl}/${userId}/stats`);
+  }
+
+  /// Suspend le compte d'un utilisateur (ADMIN uniquement).
+  /// À la prochaine tentative de connexion, le backend renverra 401 avec
+  /// le message "Compte suspendu. Contactez le support."
+  suspendUser(id: string, reason?: string): Observable<User> {
+    return this.http.patch<User>(`${this.baseUrl}/${id}/suspend`, { reason });
+  }
+
+  /// Réactive un compte préalablement suspendu (ADMIN uniquement).
+  reactivateUser(id: string): Observable<User> {
+    return this.http.patch<User>(`${this.baseUrl}/${id}/reactivate`, {});
   }
 }

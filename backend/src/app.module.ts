@@ -25,6 +25,9 @@ import { DeviceToken } from './entities/device-token.entity';
 import { PricingConfig } from './entities/pricing-config.entity';
 import { Zone } from './entities/zone.entity';
 import { MerchantDriver } from './entities/merchant-driver.entity';
+import { DeliveryStatusHistory } from './entities/delivery-status-history.entity';
+import { PriceChange } from './entities/price-change.entity';
+import { PaymentStatusHistory } from './entities/payment-status-history.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -100,6 +103,9 @@ import { MerchantDriversModule } from './merchant-drivers/merchant-drivers.modul
         PricingConfig,
         Zone,
         MerchantDriver,
+        DeliveryStatusHistory,
+        PriceChange,
+        PaymentStatusHistory,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',

@@ -30,7 +30,7 @@
     </div>
 
     <!-- Skeleton -->
-    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="9"></app-skeleton-row>
+    <app-skeleton-row *ngIf="isLoading()" [rows]="6" [cols]="11"></app-skeleton-row>
 
     <!-- Error -->
     <div *ngIf="!isLoading() && errored()"
@@ -55,11 +55,13 @@
               <th class="p-5 border-b border-slate-700/50">Temps moyen</th>
               <th class="p-5 border-b border-slate-700/50">Taux d'annulation</th>
               <th class="p-5 border-b border-slate-700/50">Inscrit le</th>
+              <th class="p-5 border-b border-slate-700/50">Statut</th>
+              <th class="p-5 border-b border-slate-700/50">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-700/50 text-slate-300">
             <tr *ngIf="filteredUsers().length === 0">
-              <td colspan="9" class="p-8 text-center text-slate-500">Aucun utilisateur trouvé.</td>
+              <td colspan="11" class="p-8 text-center text-slate-500">Aucun utilisateur trouvé.</td>
             </tr>
             <tr *ngFor="let u of filteredUsers()" class="hover:bg-slate-700/20 transition-colors">
               <td class="p-5">
@@ -140,6 +142,55 @@
               </td>
               <td class="p-5 text-sm text-slate-400">
                 {{ u.createdAt | date:'dd/MM/yyyy' }}
+              </td>
+              <td class="p-5">
+                <span class="px-3 py-1 rounded-full text-xs font-bold border" [ngClass]="statusBadge(u)">
+                  {{ statusLabel(u) }}
+                </span>
+              </td>
+              <td class="p-5 min-w-[220px]">
+                <ng-container *ngIf="isSelf(u); else actionButtons">
+                  <span class="text-xs text-slate-600 italic">Compte courant</span>
+                </ng-container>
+                <ng-template #actionButtons>
+                  <!-- Panneau motif de suspension -->
+                  <div *ngIf="suspendingId() === u.id; else defaultActions" class="space-y-2 max-w-xs">
+                    <textarea
+                      [ngModel]="suspensionReason()"
+                      (ngModelChange)="suspensionReason.set($event)"
+                      placeholder="Motif de suspension (optionnel)…"
+                      maxlength="255"
+                      rows="2"
+                      class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-500"></textarea>
+                    <div class="grid grid-cols-2 gap-2">
+                      <button type="button" (click)="closeSuspend()"
+                              [disabled]="isBusy(u.id)"
+                              class="bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/50 text-slate-200 px-2 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50">
+                        Annuler
+                      </button>
+                      <button type="button" (click)="confirmSuspend(u)"
+                              [disabled]="isBusy(u.id)"
+                              class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-2 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
+                        <lucide-icon name="user-x" class="w-3.5 h-3.5"></lucide-icon>
+                        Confirmer
+                      </button>
+                    </div>
+                  </div>
+                  <ng-template #defaultActions>
+                    <button *ngIf="!isSuspended(u)" type="button" (click)="openSuspend(u)"
+                            [disabled]="isBusy(u.id)"
+                            class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
+                      <lucide-icon name="user-x" class="w-3.5 h-3.5"></lucide-icon>
+                      Suspendre
+                    </button>
+                    <button *ngIf="isSuspended(u)" type="button" (click)="reactivate(u)"
+                            [disabled]="isBusy(u.id)"
+                            class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
+                      <lucide-icon name="user-check" class="w-3.5 h-3.5"></lucide-icon>
+                      Réactiver
+                    </button>
+                  </ng-template>
+                </ng-template>
               </td>
             </tr>
           </tbody>
