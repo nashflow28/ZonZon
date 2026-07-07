@@ -6,12 +6,14 @@ import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
 import { OrdersModule } from '../orders/orders.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ConversationsModule } from '../conversations/conversations.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Message, DeliveryOrder]),
     forwardRef(() => OrdersModule),
     NotificationsModule,
+    ConversationsModule,
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

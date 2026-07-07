@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
   forwardRef,
   Inject,
@@ -14,6 +15,8 @@ import { OrdersGateway } from '../orders/orders.gateway';
 import { SendMessageDto } from './dto/send-message.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../entities/user.entity';
+import { ConversationsService } from '../conversations/conversations.service';
+import type { ConversationParticipantRole } from '../entities/conversation-participant.entity';
 
 interface ActorPayload {
   id?: string;
@@ -23,6 +26,8 @@ interface ActorPayload {
 
 @Injectable()
 export class MessagesService {
+  private readonly logger = new Logger(MessagesService.name);
+
   constructor(
     @InjectRepository(Message)
     private messagesRepo: Repository<Message>,
@@ -31,27 +36,47 @@ export class MessagesService {
     @Inject(forwardRef(() => OrdersGateway))
     private ordersGateway: OrdersGateway,
     private notifications: NotificationsService,
+    private conversationsService: ConversationsService,
   ) {}
 
   private actorId(actor: ActorPayload): string {
     return (actor.id ?? actor.sub) as string;
   }
 
+  /** Mappe le rôle backend (`UserRole`) vers le rôle CDC §18.10 de la conversation. */
+  private conversationRole(role: UserRole): ConversationParticipantRole {
+    switch (role) {
+      case UserRole.ADMIN:
+        return 'ADMIN';
+      case UserRole.LIVREUR:
+        return 'LIVREUR';
+      case UserRole.COMMERCANT:
+        return 'MERCHANT';
+      case UserRole.CLIENT:
+      default:
+        return 'CLIENT';
+    }
+  }
+
   private async loadOrderAndAuthorize(orderId: string, actor: ActorPayload) {
     const order = await this.ordersRepo.findOne({
       where: { id: orderId },
-      relations: ['client', 'livreur'],
+      relations: ['client', 'livreur', 'merchant'],
     });
     if (!order) throw new NotFoundException('Commande introuvable');
 
     const userId = this.actorId(actor);
     const isClient = order.client?.id === userId;
     const isLivreur = order.livreur?.id === userId;
+    // Le commerçant créateur d'une livraison (Type 1) participe à la
+    // conversation de SES livraisons (CDC §13.2) — cohérent avec la room chat
+    // du gateway qui l'autorise déjà (isUserPartyToOrder).
+    const isMerchant = order.merchant?.id === userId;
     const isAdmin = actor.role === UserRole.ADMIN;
-    if (!isClient && !isLivreur && !isAdmin) {
+    if (!isClient && !isLivreur && !isMerchant && !isAdmin) {
       throw new ForbiddenException('Accès interdit à cette conversation');
     }
-    return { order, isClient, isLivreur, isAdmin };
+    return { order, isClient, isLivreur, isMerchant, isAdmin };
   }
 
   async listForOrder(orderId: string, actor: ActorPayload) {
@@ -86,6 +111,30 @@ export class MessagesService {
       content: dto.content.trim(),
     });
     const saved = await this.messagesRepo.save(message);
+
+    // Hook additif (CDC V1 §13, §18.9-18.11) : peuple la conversation
+    // structurée en fire-and-forget. Ne DOIT jamais bloquer/altérer l'envoi
+    // du message existant — erreurs avalées et journalisées uniquement.
+    // `.catch()` est indispensable ici (et pas seulement un try/catch
+    // synchrone) : `trackMessageSender` est async, un rejet non intercepté
+    // deviendrait une unhandledRejection qui plante le process.
+    try {
+      void this.conversationsService
+        .trackMessageSender(orderId, senderId, this.conversationRole(actor.role))
+        .catch((err) => {
+          this.logger.warn(
+            `Échec du hook de suivi de conversation pour la commande ${orderId} : ${
+              (err as Error)?.message ?? err
+            }`,
+          );
+        });
+    } catch (err) {
+      this.logger.warn(
+        `Échec du hook de suivi de conversation pour la commande ${orderId} : ${
+          (err as Error)?.message ?? err
+        }`,
+      );
+    }
 
     const full = await this.messagesRepo.findOne({
       where: { id: saved.id },

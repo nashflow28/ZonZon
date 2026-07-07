@@ -255,6 +255,16 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
   - Vérifs : admin build prod OK ; mobile `flutter analyze` 10 (préexistantes) / `flutter test` 10/10.
 - **Priorité 3 : COMPLÈTE** (backend + tous les fronts). Reste hors-V1 : fallback auto livreur public si affiliés indisponibles (attribution auto avancée), tarification géographique par zone.
 
+### Session 29 (2026-07-07) — Reste hors-V1 (affiliation, notifs, tarif zone, conversations) + APK
+- **APK release** construit : `mobile_app/build/app/outputs/flutter-apk/app-release.apk` (57.3 MB).
+- **Déploiement backend/admin bloqué ici** : `flyctl` non authentifié + `wrangler` absent (auth OAuth interactive impossible en session non-interactive). Commandes fournies au user (backend d'abord → migrations auto, puis admin, puis APK). ⚠️ **17 migrations** (`1778100000000`→`1779900000000`) s'appliqueront au `flyctl deploy` — recommandé : backup TiDB avant.
+- **Affiliation invite/accept** (§9.2) : `MerchantDriver.status` (PENDING/ACTIVE/REJECTED/REMOVED, soft-remove), invitation en PENDING, `GET/PATCH /drivers/me/affiliations` (accept/reject). `isAffiliated`=ACTIVE only. Migration `1779800000000`.
+- **Notifs validation/refus livreur** (§14.1) : `setDriverApproval` notifie le livreur (cycle DI résolu via `forwardRef` + `@Optional`).
+- **Tarif effectif par zone** (§7.3) : `buildOrderPricing` applique `pickupZone.basePrice` + `pricePerKmOverride` si définis, fallback global sinon.
+- **Conversation multi-participants** (§13/§18.9-18.11, additif) : entités `Conversation`/`ConversationParticipant`, hook fire-and-forget au message (peuple la conversation sans toucher au flux d'envoi), `GET/POST/DELETE /orders/:id/conversation/...` (commerçant s'ajoute, admin litige). Migration `1779900000000`. Fix : le endpoint HTTP des messages autorise désormais aussi le **commerçant créateur** (cohérence avec la room chat). Le chat par room existant reste intact.
+- **Vérifs finales indépendantes** : backend build + jest **333/333** (17→19 suites) + e2e **56/56**. Commits `1c518de` (affiliation/notifs/tarif) + final (conversations).
+- **Bilan** : CDC V1 (P0/P1/P2) + les 4 items « après V1 » listés = **tous implémentés backend**. Restent : UI fronts pour ces derniers (affiliation invite/accept, participants conversation) et le déploiement prod (auth requise côté user).
+
 ### Session 28 (2026-07-07) — CDC V1 : P0 restant + P1 + P2 complets (backend + fronts)
 - Suite de la Session 27 (audit `AUDIT_CDC_ZONZON_V1.md`). Orchestration en rounds séquentiels sous supervision (agents sonnet, périmètres disjoints, vérif + commit + push après chaque round).
 - **Round A** — P0 fronts (admin suspension/réactivation dans `/users` ; mobile message « compte suspendu » au login) + **P1 backend** : `DeliveryStatusHistory` (`GET /orders/:id/history`), traçabilité prix (`estimatedPrice`/`priceWasManuallyAdjusted`/`price_changes`/`PATCH /orders/:id/price`), historique paiement (`payment_status_history`/`GET /orders/:id/payment-history`, enum + `CASH_ON_DELIVERY`/`REFUNDED`). Migrations `1779100000000`→`1779300000000`. jest **261/261**, e2e **49/49**. Commit `7b7ab6a`.

@@ -32,7 +32,11 @@
 - [x] **P2 — Zones enrichies** (`description`/`basePrice`/`pricePerKmOverride`, `pickupZoneId`/`destinationZoneId`, +6 quartiers) + admin. *(2026-07-07)*
 - [x] **P2 — Livreur privé/public** (`User.isPublic`, exclusion du broadcast si privé, `PATCH /users/me/visibility` + toggle mobile). *(2026-07-07)*
 - [x] **P2 — Notifications persistées** (table `notifications`, persistance dans `sendToUser`, `GET /notifications` + read/read-all + écran mobile). *(2026-07-07)*
-- [ ] **Reste (après V1)** : conversation multi-participants complète (entités dédiées) ; statut d'affiliation `MerchantDriver` (PENDING/ACTIVE/REJECTED/REMOVED) + flux invite/accept ; notifs in-app validation/refus livreur ; tarification géographique effective par zone.
+- [x] **Post-V1 — Affiliation invite/accept** (`MerchantDriver.status`, endpoints livreur `GET/PATCH /drivers/me/affiliations`). *(2026-07-07)*
+- [x] **Post-V1 — Notifs validation/refus livreur** (à l'approbation admin). *(2026-07-07)*
+- [x] **Post-V1 — Tarif effectif par zone** (`basePrice`/`pricePerKmOverride` branchés dans `buildOrderPricing`). *(2026-07-07)*
+- [x] **Post-V1 — Conversation multi-participants** (`Conversation`/`ConversationParticipant`, hook additif au message, endpoints `GET/POST/DELETE /orders/:id/conversation/...`, commerçant autorisé aussi sur les messages HTTP). *(2026-07-07)*
+- [ ] **Reste (front, plus tard)** : UI mobile/admin pour affiliation invite/accept, participants de conversation, notifs validation in-app. Déploiement prod (auth Fly/Cloudflare interactive requise).
 
 ### 🔴 Priorité 1 — Validation & disponibilité des livreurs
 - [x] **Backend — Validation admin obligatoire des livreurs** *(2026-07-05)*

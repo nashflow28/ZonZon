@@ -30,6 +30,8 @@ import { PriceChange } from './entities/price-change.entity';
 import { PaymentStatusHistory } from './entities/payment-status-history.entity';
 import { Signalement } from './entities/signalement.entity';
 import { Notification } from './entities/notification.entity';
+import { Conversation } from './entities/conversation.entity';
+import { ConversationParticipant } from './entities/conversation-participant.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -45,6 +47,7 @@ import { PricingModule } from './pricing/pricing.module';
 import { ZonesModule } from './zones/zones.module';
 import { MerchantDriversModule } from './merchant-drivers/merchant-drivers.module';
 import { SignalementsModule } from './signalements/signalements.module';
+import { ConversationsModule } from './conversations/conversations.module';
 
 @Module({
   imports: [
@@ -111,6 +114,8 @@ import { SignalementsModule } from './signalements/signalements.module';
         PaymentStatusHistory,
         Signalement,
         Notification,
+        Conversation,
+        ConversationParticipant,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',
@@ -135,6 +140,7 @@ import { SignalementsModule } from './signalements/signalements.module';
     ZonesModule,
     MerchantDriversModule,
     SignalementsModule,
+    ConversationsModule,
   ],
   controllers: [AppController],
   providers: [
