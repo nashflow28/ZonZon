@@ -27,7 +27,7 @@ Future<DriverPickerResult?> showDriverPickerSheet(
 }) {
   return showModalBottomSheet<DriverPickerResult>(
     context: context,
-    backgroundColor: const Color(0xFF1E293B),
+    backgroundColor: const Color(0xFF122530),
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -185,7 +185,7 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
       children: [
         _optionTile(
           icon: Icons.shuffle,
-          iconColor: const Color(0xFF0EA5E9),
+          iconColor: const Color(0xFF2E90FA),
           title: 'Laisser la plateforme choisir',
           subtitle: 'La course sera proposée à tous les livreurs disponibles.',
           selected: widget.initialSelected == null,
@@ -280,7 +280,7 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
 
     return Material(
       color: selected
-          ? const Color(0xFF10B981).withValues(alpha: 0.12)
+          ? const Color(0xFF0FB271).withValues(alpha: 0.12)
           : Colors.white.withValues(alpha: 0.05),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
@@ -293,7 +293,7 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: selected
-                  ? const Color(0xFF10B981).withValues(alpha: 0.6)
+                  ? const Color(0xFF0FB271).withValues(alpha: 0.6)
                   : Colors.white.withValues(alpha: 0.08),
             ),
           ),
@@ -325,13 +325,13 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
                                 horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
                               color:
-                                  const Color(0xFF10B981).withValues(alpha: 0.2),
+                                  const Color(0xFF0FB271).withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(
                               'Affilié',
                               style: TextStyle(
-                                color: Color(0xFF10B981),
+                                color: Color(0xFF0FB271),
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -349,7 +349,7 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
                 ),
               ),
               if (selected)
-                const Icon(Icons.check_circle, color: Color(0xFF10B981)),
+                const Icon(Icons.check_circle, color: Color(0xFF0FB271)),
             ],
           ),
         ),

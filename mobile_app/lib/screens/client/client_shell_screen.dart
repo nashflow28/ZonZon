@@ -48,7 +48,7 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       body: widget.navigationShell,
       bottomNavigationBar: AnimatedBuilder(
         animation: ClientServices.activeOrders,
@@ -81,8 +81,8 @@ class _ClientBottomNav extends StatelessWidget {
       type: BottomNavigationBarType.fixed,
       currentIndex: currentIndex,
       onTap: onTap,
-      backgroundColor: const Color(0xFF1E293B),
-      selectedItemColor: const Color(0xFF0EA5E9),
+      backgroundColor: const Color(0xFF122530),
+      selectedItemColor: const Color(0xFF2E90FA),
       unselectedItemColor: Colors.white60,
       selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
       items: [
@@ -145,11 +145,11 @@ class _BadgedIcon extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
             decoration: BoxDecoration(
               color: isAtLimit
-                  ? const Color(0xFFEF4444)
-                  : const Color(0xFF0EA5E9),
+                  ? const Color(0xFFF0453D)
+                  : const Color(0xFF2E90FA),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFF122530),
                 width: 1.5,
               ),
             ),

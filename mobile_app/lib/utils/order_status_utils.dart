@@ -78,9 +78,9 @@ class OrderStatusUtils {
       case 'PENDING':
         return const Color(0xFFEAB308);
       case 'ACCEPTED':
-        return const Color(0xFF3B82F6);
+        return const Color(0xFF2E90FA);
       case 'EN_ROUTE_PICKUP':
-        return const Color(0xFF0EA5E9);
+        return const Color(0xFF2E90FA);
       case 'AT_PICKUP':
         return const Color(0xFF6366F1);
       case 'IN_PROGRESS':
@@ -88,9 +88,9 @@ class OrderStatusUtils {
       case 'NEAR_CLIENT':
         return const Color(0xFFF97316);
       case 'COMPLETED':
-        return const Color(0xFF10B981);
+        return const Color(0xFF0FB271);
       case 'CANCELLED':
-        return const Color(0xFFEF4444);
+        return const Color(0xFFF0453D);
       case 'FAILED':
         return const Color(0xFFDC2626);
       default:
@@ -125,15 +125,15 @@ class PaymentStatusUtils {
   static Color color(String? status) {
     switch (status) {
       case 'UNPAID':
-        return const Color(0xFFEF4444);
+        return const Color(0xFFF0453D);
       case 'PAID':
-        return const Color(0xFF10B981);
+        return const Color(0xFF0FB271);
       case 'PAY_ON_DELIVERY':
         return const Color(0xFFEAB308);
       case 'RECEIVED_BY_MERCHANT':
-        return const Color(0xFF0EA5E9);
+        return const Color(0xFF2E90FA);
       case 'RECEIVED_BY_LIVREUR':
-        return const Color(0xFF10B981);
+        return const Color(0xFF0FB271);
       default:
         return Colors.white54;
     }

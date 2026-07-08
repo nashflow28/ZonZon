@@ -8,13 +8,13 @@
 
   <!-- Sidebar (fixe desktop, drawer mobile) -->
   <aside
-    class="fixed md:sticky top-0 z-40 h-screen w-64 shrink-0 border-r border-slate-700/50 bg-slate-900/95 md:bg-slate-900/60 backdrop-blur-xl flex flex-col transition-transform duration-300 ease-out"
+    class="fixed md:sticky top-0 z-40 h-screen w-64 shrink-0 border-r border-zline bg-zbg/95 md:bg-zbg/80 backdrop-blur-xl flex flex-col transition-transform duration-300 ease-out"
     [class.-translate-x-full]="!sidebarOpen()"
     [class.translate-x-0]="sidebarOpen()"
     [ngClass]="{ 'md:translate-x-0': true }">
-    <div class="px-6 py-5 border-b border-slate-700/50 flex items-center justify-between">
+    <div class="px-6 py-5 border-b border-zline flex items-center justify-between">
       <div>
-        <h1 class="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+        <h1 class="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-go to-emerald-400">
           ZonZon Admin
         </h1>
         <p class="text-[11px] text-slate-500 mt-1">Centre de contrôle</p>
@@ -32,7 +32,7 @@
       <a
         *ngFor="let link of navLinks"
         [routerLink]="link.path"
-        routerLinkActive="bg-blue-600/20 border-l-4 border-blue-500 text-white"
+        routerLinkActive="bg-mango/15 border-l-4 border-mango text-white"
         [routerLinkActiveOptions]="{ exact: false }"
         class="flex items-center gap-3 px-6 py-3 text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/50 border-l-4 border-transparent transition-all">
         <lucide-icon [name]="link.icon" class="w-4 h-4"></lucide-icon>
@@ -68,7 +68,7 @@
   <!-- Main area -->
   <div class="flex-1 min-w-0 flex flex-col min-h-screen">
     <!-- Header partage fixe -->
-    <header class="sticky top-0 z-20 bg-slate-900/80 backdrop-blur-xl border-b border-slate-700/50">
+    <header class="sticky top-0 z-20 bg-zbg/90 backdrop-blur-xl border-b border-zline">
       <div class="flex items-center gap-3 px-4 md:px-8 h-16">
         <!-- Hamburger (mobile) -->
         <button
@@ -135,7 +135,7 @@
 
           <div
             *ngIf="userMenuOpen()"
-            class="absolute right-0 mt-2 w-56 rounded-xl border border-slate-700/60 bg-slate-900/95 backdrop-blur-xl shadow-zz-lg overflow-hidden">
+            class="absolute right-0 mt-2 w-56 rounded-xl border border-zline bg-zbg/95 backdrop-blur-xl shadow-zz-lg overflow-hidden">
             <div class="px-4 py-3 border-b border-slate-700/50">
               <div class="text-sm font-semibold text-white truncate">
                 {{ u.firstName }} {{ u.lastName }}

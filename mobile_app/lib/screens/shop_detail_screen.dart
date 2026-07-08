@@ -95,15 +95,15 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
   Widget build(BuildContext context) {
     final s = _shop;
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       body: s == null
-          ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF0FB271)))
           : CustomScrollView(
               slivers: [
                 SliverAppBar(
                   expandedHeight: 220,
                   pinned: true,
-                  backgroundColor: const Color(0xFF1E293B),
+                  backgroundColor: const Color(0xFF122530),
                   iconTheme: const IconThemeData(color: Colors.white),
                   actions: [
                     IconButton(
@@ -115,7 +115,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                             ? Icons.favorite
                             : Icons.favorite_border,
                         color: _isFavorite
-                            ? const Color(0xFFEF4444)
+                            ? const Color(0xFFF0453D)
                             : Colors.white,
                       ),
                       onPressed: _favoriteLoaded ? _toggleFavorite : null,
@@ -139,7 +139,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                               gradient: LinearGradient(
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
-                                colors: [Color(0xFF10B981), Color(0xFF0EA5E9)],
+                                colors: [Color(0xFF0FB271), Color(0xFF2E90FA)],
                               ),
                             ),
                             child: const Center(
@@ -226,7 +226,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF10B981), size: 16),
+          Icon(icon, color: const Color(0xFF0FB271), size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(text,
@@ -250,7 +250,7 @@ class _ProductCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -300,7 +300,7 @@ class _ProductCard extends StatelessWidget {
                 Text(
                   '${product.priceFcfa} FCFA',
                   style: const TextStyle(
-                    color: Color(0xFF10B981),
+                    color: Color(0xFF0FB271),
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
@@ -311,7 +311,7 @@ class _ProductCard extends StatelessWidget {
           ElevatedButton(
             onPressed: onOrder,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
+              backgroundColor: const Color(0xFF0FB271),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

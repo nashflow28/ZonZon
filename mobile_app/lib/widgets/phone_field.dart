@@ -82,7 +82,7 @@ class _PhoneFieldState extends State<PhoneField> {
   Future<void> _pickCountry() async {
     final selected = await showModalBottomSheet<CountryCode>(
       context: context,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: const Color(0xFF122530),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -131,7 +131,7 @@ class _PhoneFieldState extends State<PhoneField> {
                       subtitle: Text(c.code,
                           style: const TextStyle(color: Colors.white54, fontSize: 12)),
                       trailing: selected
-                          ? const Icon(Icons.check, color: Color(0xFF0EA5E9))
+                          ? const Icon(Icons.check, color: Color(0xFF2E90FA))
                           : null,
                     );
                   },

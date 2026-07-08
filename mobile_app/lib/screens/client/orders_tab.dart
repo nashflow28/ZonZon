@@ -46,9 +46,9 @@ class _OrdersTabState extends State<OrdersTab>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text(
@@ -60,8 +60,8 @@ class _OrdersTabState extends State<OrdersTab>
         animation: _store,
         builder: (context, _) {
           return RefreshIndicator(
-            color: const Color(0xFF0EA5E9),
-            backgroundColor: const Color(0xFF1E293B),
+            color: const Color(0xFF2E90FA),
+            backgroundColor: const Color(0xFF122530),
             onRefresh: _onRefresh,
             child: _buildBody(),
           );
@@ -75,7 +75,7 @@ class _OrdersTabState extends State<OrdersTab>
 
     if (_store.isLoading && orders.isEmpty) {
       return const Center(
-        child: CircularProgressIndicator(color: Color(0xFF0EA5E9)),
+        child: CircularProgressIndicator(color: Color(0xFF2E90FA)),
       );
     }
 
@@ -136,7 +136,7 @@ class _OrdersTabState extends State<OrdersTab>
                   '${orders.length}/${ActiveOrdersStore.maxActiveOrders}',
                   style: TextStyle(
                     color: _store.isAtLimit
-                        ? const Color(0xFFEF4444)
+                        ? const Color(0xFFF0453D)
                         : Colors.white54,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -180,7 +180,7 @@ class _ActiveOrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = _statusPalette(order.status);
     return Card(
-      color: const Color(0xFF1E293B),
+      color: const Color(0xFF122530),
       margin: const EdgeInsets.symmetric(vertical: 6),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
@@ -224,7 +224,7 @@ class _ActiveOrderCard extends StatelessWidget {
                     Text(
                       '${order.priceFcfa} FCFA',
                       style: const TextStyle(
-                        color: Color(0xFF10B981),
+                        color: Color(0xFF0FB271),
                         fontSize: 16,
                         fontWeight: FontWeight.w800,
                       ),
@@ -234,13 +234,13 @@ class _ActiveOrderCard extends StatelessWidget {
               const SizedBox(height: 12),
               _AddressLine(
                 icon: Icons.my_location,
-                color: const Color(0xFF0EA5E9),
+                color: const Color(0xFF2E90FA),
                 text: order.pickupAddress,
               ),
               const SizedBox(height: 6),
               _AddressLine(
                 icon: Icons.location_on,
-                color: const Color(0xFF10B981),
+                color: const Color(0xFF0FB271),
                 text: order.deliveryAddress,
               ),
               if (order.livreur != null) ...[
@@ -294,33 +294,33 @@ class _ActiveOrderCard extends StatelessWidget {
         return const _StatusPalette(
           label: 'EN ATTENTE',
           icon: Icons.hourglass_top,
-          fg: Color(0xFFF59E0B),
-          bg: Color(0x33F59E0B),
-          border: Color(0x66F59E0B),
+          fg: Color(0xFFFF9E1B),
+          bg: Color(0x33FF9E1B),
+          border: Color(0x66FF9E1B),
         );
       case 'ACCEPTED':
         return const _StatusPalette(
           label: 'ACCEPTÉE',
           icon: Icons.directions_bike,
-          fg: Color(0xFF0EA5E9),
-          bg: Color(0x330EA5E9),
-          border: Color(0x660EA5E9),
+          fg: Color(0xFF2E90FA),
+          bg: Color(0x332E90FA),
+          border: Color(0x662E90FA),
         );
       case 'IN_PROGRESS':
         return const _StatusPalette(
           label: 'EN COURS',
           icon: Icons.local_shipping,
-          fg: Color(0xFF10B981),
-          bg: Color(0x3310B981),
-          border: Color(0x6610B981),
+          fg: Color(0xFF0FB271),
+          bg: Color(0x330FB271),
+          border: Color(0x660FB271),
         );
       default:
         return const _StatusPalette(
           label: 'EN COURS',
           icon: Icons.local_shipping,
-          fg: Color(0xFF10B981),
-          bg: Color(0x3310B981),
-          border: Color(0x6610B981),
+          fg: Color(0xFF0FB271),
+          bg: Color(0x330FB271),
+          border: Color(0x660FB271),
         );
     }
   }

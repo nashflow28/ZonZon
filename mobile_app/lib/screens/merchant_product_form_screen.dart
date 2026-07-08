@@ -110,9 +110,9 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: Text(
@@ -149,10 +149,10 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.add_a_photo,
-                              color: Color(0xFF10B981), size: 40),
+                              color: Color(0xFF0FB271), size: 40),
                           SizedBox(height: 8),
                           Text('Ajouter une photo',
-                              style: TextStyle(color: Color(0xFF10B981))),
+                              style: TextStyle(color: Color(0xFF0FB271))),
                         ],
                       ),
                     )
@@ -202,7 +202,7 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
                 'Décocher pour cacher le produit du catalogue',
                 style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
-              activeThumbColor: const Color(0xFF10B981),
+              activeThumbColor: const Color(0xFF0FB271),
               contentPadding: EdgeInsets.zero,
             ),
           ),
@@ -216,7 +216,7 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
                   style: const TextStyle(
                       fontSize: 16, fontWeight: FontWeight.bold)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
+                backgroundColor: const Color(0xFF0FB271),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
@@ -251,7 +251,7 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
         decoration: InputDecoration(
           hintText: label,
           hintStyle: const TextStyle(color: Colors.white60),
-          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF10B981)) : null,
+          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF0FB271)) : null,
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

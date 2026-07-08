@@ -20,6 +20,7 @@ import '../utils/order_status_utils.dart';
 import '../utils/platform_adapter.dart';
 import '../widgets/order_map_widget.dart';
 import '../widgets/order_screen_widgets.dart';
+import '../widgets/status_timeline.dart';
 import 'chat_screen.dart';
 import 'rating_screen.dart';
 
@@ -343,7 +344,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         title: const Text(
           'Annuler la commande ?',
           style: TextStyle(color: Colors.white),
@@ -383,7 +384,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(
-                    color: Color(0xFF0EA5E9),
+                    color: Color(0xFF2E90FA),
                   ),
                 ),
               ),
@@ -397,7 +398,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: const Color(0xFFF0453D),
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Annuler la commande'),
@@ -453,7 +454,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         title: const Text(
           'Signaler un problème',
           style: TextStyle(color: Colors.white),
@@ -486,7 +487,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFF0EA5E9)),
+                borderSide: const BorderSide(color: Color(0xFF2E90FA)),
               ),
             ),
             validator: (value) {
@@ -508,7 +509,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
+              backgroundColor: const Color(0xFFF0453D),
             ),
             onPressed: () {
               if (formKey.currentState?.validate() != true) return;
@@ -588,7 +589,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       body: Stack(
         children: [
           OrderMapWidget(
@@ -613,17 +614,27 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             ),
           ),
           OrderBottomSheet(
-            child: OrderAcceptedSection(
-              assignedLivreur: _assignedLivreur,
-              activeOrderStatus: _activeOrderStatus,
-              driverPosition: _driverPosition,
-              driverPositionAt: _driverPositionAt,
-              distanceKm: _distanceDriverToPickup(),
-              unreadChatCount: _unreadChatCount,
-              eta: _eta,
-              onOpenChat: _openChat,
-              onOpenWhatsapp: _openWhatsappToLivreur,
-              onCancelOrder: _confirmCancelOrder,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_activeOrderStatus != null) ...[
+                  StatusTimeline(status: _activeOrderStatus),
+                  const SizedBox(height: 18),
+                ],
+                OrderAcceptedSection(
+                  assignedLivreur: _assignedLivreur,
+                  activeOrderStatus: _activeOrderStatus,
+                  driverPosition: _driverPosition,
+                  driverPositionAt: _driverPositionAt,
+                  distanceKm: _distanceDriverToPickup(),
+                  unreadChatCount: _unreadChatCount,
+                  eta: _eta,
+                  onOpenChat: _openChat,
+                  onOpenWhatsapp: _openWhatsappToLivreur,
+                  onCancelOrder: _confirmCancelOrder,
+                ),
+              ],
             ),
           ),
         ],
@@ -650,7 +661,7 @@ class _TrackingHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withValues(alpha: 0.85),
+        color: const Color(0xFF122530).withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
@@ -685,7 +696,7 @@ class _TrackingHeader extends StatelessWidget {
                 Text(
                   OrderStatusUtils.longLabel(status),
                   style: const TextStyle(
-                    color: Color(0xFF0EA5E9),
+                    color: Color(0xFF2E90FA),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                   ),

@@ -16,6 +16,16 @@ module.exports = {
           text: 'var(--zz-text)',
           muted: 'var(--zz-text-muted)',
         },
+        // Direction A — couleurs de marque nommées, réutilisables (ex: bg-zbg,
+        // text-go, border-zline…). Ajoutées SANS écraser le ramp `slate`
+        // existant, pour rester conservateur et ne rien casser ailleurs.
+        zbg: 'var(--zz-bg)',
+        zcard: 'var(--zz-card)',
+        zline: 'var(--zz-line)',
+        go: 'var(--zz-go)',
+        mango: 'var(--zz-mango)',
+        zsky: 'var(--zz-sky)',
+        coral: 'var(--zz-coral)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

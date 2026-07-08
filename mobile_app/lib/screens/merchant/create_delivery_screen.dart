@@ -215,9 +215,9 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
@@ -249,7 +249,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
             label: 'Point de retrait',
             address: _pickup?.displayName,
             icon: Icons.my_location,
-            color: const Color(0xFF0EA5E9),
+            color: const Color(0xFF2E90FA),
             onTap: _pickPickup,
           ),
           const SizedBox(height: 24),
@@ -259,7 +259,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
             label: 'Point de livraison',
             address: _delivery?.displayName,
             icon: Icons.location_on,
-            color: const Color(0xFF10B981),
+            color: const Color(0xFF0FB271),
             onTap: _pickDelivery,
           ),
           const SizedBox(height: 24),
@@ -290,7 +290,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
+                backgroundColor: const Color(0xFF0FB271),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
@@ -322,7 +322,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
       child: _estimateLoading
           ? Row(
               children: [
-                adaptiveLoader(color: const Color(0xFF10B981)),
+                adaptiveLoader(color: const Color(0xFF0FB271)),
                 const SizedBox(width: 12),
                 const Text('Estimation en cours…',
                     style: TextStyle(color: Colors.white70)),
@@ -334,7 +334,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.route, color: Color(0xFF0EA5E9), size: 20),
+                        const Icon(Icons.route, color: Color(0xFF2E90FA), size: 20),
                         const SizedBox(width: 8),
                         Text(
                           '${_estimateKm!.toStringAsFixed(1)} km',
@@ -346,7 +346,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
                     Text(
                       '$_estimatePrice FCFA',
                       style: const TextStyle(
-                        color: Color(0xFF10B981),
+                        color: Color(0xFF0FB271),
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -408,13 +408,13 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
                                 horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
                               color:
-                                  const Color(0xFF10B981).withValues(alpha: 0.2),
+                                  const Color(0xFF0FB271).withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(
                               'Affilié',
                               style: TextStyle(
-                                color: Color(0xFF10B981),
+                                color: Color(0xFF0FB271),
                                 fontSize: 9,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -531,7 +531,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         decoration: InputDecoration(
           hintText: label,
           hintStyle: const TextStyle(color: Colors.white60),
-          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF10B981)) : null,
+          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF0FB271)) : null,
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

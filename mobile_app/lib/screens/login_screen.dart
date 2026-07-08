@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       body: Stack(
         children: [
           Positioned(
@@ -81,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+                    const Color(0xFF2E90FA).withValues(alpha: 0.35),
                     Colors.transparent,
                   ],
                 ),
@@ -99,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(28),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1E293B).withValues(alpha: 0.7),
+                        color: const Color(0xFF122530).withValues(alpha: 0.7),
                         borderRadius: BorderRadius.circular(28),
                         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                       ),
@@ -107,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          const Icon(Icons.delivery_dining, size: 70, color: Color(0xFF0EA5E9)),
+                          const Icon(Icons.delivery_dining, size: 70, color: Color(0xFF2E90FA)),
                           const SizedBox(height: 12),
                           const Text(
                             'ZonZon',
@@ -144,9 +144,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 58,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(18),
-                              gradient: const LinearGradient(colors: [Color(0xFF0EA5E9), Color(0xFF3B82F6)]),
+                              gradient: const LinearGradient(colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)]),
                               boxShadow: [
-                                BoxShadow(color: const Color(0xFF0EA5E9).withValues(alpha: 0.45), blurRadius: 20, offset: const Offset(0, 6)),
+                                BoxShadow(color: const Color(0xFF2E90FA).withValues(alpha: 0.45), blurRadius: 20, offset: const Offset(0, 6)),
                               ],
                             ),
                             child: ElevatedButton(
@@ -176,7 +176,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   TextSpan(text: 'Pas encore de compte ? '),
                                   TextSpan(
                                     text: 'Créer un compte',
-                                    style: TextStyle(color: Color(0xFF0EA5E9), fontWeight: FontWeight.bold),
+                                    style: TextStyle(color: Color(0xFF2E90FA), fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
@@ -217,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-          prefixIcon: Icon(icon, color: const Color(0xFF0EA5E9)),
+          prefixIcon: Icon(icon, color: const Color(0xFF2E90FA)),
           suffixIcon: suffix,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),

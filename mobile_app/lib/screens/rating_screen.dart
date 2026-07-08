@@ -121,7 +121,7 @@ class _RatingScreenState extends State<RatingScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -129,7 +129,7 @@ class _RatingScreenState extends State<RatingScreen> {
         children: [
           Row(
             children: [
-              Icon(icon, color: const Color(0xFF0EA5E9), size: 20),
+              Icon(icon, color: const Color(0xFF2E90FA), size: 20),
               const SizedBox(width: 8),
               Text(
                 title,
@@ -167,13 +167,13 @@ class _RatingScreenState extends State<RatingScreen> {
     final displayName =
         widget.otherPartyName.isEmpty ? _roleLabel : widget.otherPartyName;
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
         title: const Text(
           'Noter la course',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         iconTheme: const IconThemeData(color: Colors.white),
         automaticallyImplyLeading: false,
       ),
@@ -259,7 +259,7 @@ class _RatingScreenState extends State<RatingScreen> {
                   labelText: 'Commentaire (optionnel)',
                   labelStyle: const TextStyle(color: Colors.white70),
                   filled: true,
-                  fillColor: const Color(0xFF1E293B),
+                  fillColor: const Color(0xFF122530),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
@@ -273,7 +273,7 @@ class _RatingScreenState extends State<RatingScreen> {
                 child: ElevatedButton(
                   onPressed: _submitting ? null : _submit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0EA5E9),
+                    backgroundColor: const Color(0xFF2E90FA),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

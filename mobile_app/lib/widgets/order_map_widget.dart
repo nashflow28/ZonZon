@@ -83,9 +83,9 @@ class _OrderMapWidgetState extends State<OrderMapWidget> {
             polylines: [
               Polyline(
                 points: widget.polyline,
-                color: const Color(0xFF0EA5E9),
+                color: const Color(0xFF2E90FA),
                 strokeWidth: 4,
-                borderColor: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+                borderColor: const Color(0xFF2E90FA).withValues(alpha: 0.35),
                 borderStrokeWidth: 8,
               ),
             ],
@@ -99,7 +99,7 @@ class _OrderMapWidgetState extends State<OrderMapWidget> {
                 height: 60,
                 child: _GlowingMarker(
                   icon: Icons.my_location,
-                  color: const Color(0xFF0EA5E9),
+                  color: const Color(0xFF2E90FA),
                 ),
               ),
             if (widget.delivery != null)
@@ -109,7 +109,7 @@ class _OrderMapWidgetState extends State<OrderMapWidget> {
                 height: 50,
                 child: _GlowingMarker(
                   icon: Icons.location_on,
-                  color: const Color(0xFF10B981),
+                  color: const Color(0xFF0FB271),
                 ),
               ),
             if (widget.driverPosition != null)
@@ -190,7 +190,7 @@ class _DriverPulseMarkerState extends State<DriverPulseMarker>
               height: 56 * (0.5 + t * 0.5),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF10B981)
+                color: const Color(0xFF0FB271)
                     .withValues(alpha: (1 - t) * 0.45),
               ),
             ),
@@ -199,11 +199,11 @@ class _DriverPulseMarkerState extends State<DriverPulseMarker>
               height: 28,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF10B981),
+                color: const Color(0xFF0FB271),
                 border: Border.all(color: Colors.white, width: 2),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.6),
+                    color: const Color(0xFF0FB271).withValues(alpha: 0.6),
                     blurRadius: 12,
                   ),
                 ],

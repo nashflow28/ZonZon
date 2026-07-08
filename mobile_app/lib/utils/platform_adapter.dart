@@ -70,7 +70,7 @@ Future<bool?> showAdaptiveConfirmDialog(
   return showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: const Color(0xFF122530),
       title: Text(title, style: const TextStyle(color: Colors.white)),
       content: Text(message, style: const TextStyle(color: Colors.white70)),
       actions: [
@@ -100,7 +100,7 @@ Widget adaptiveLoader({Color? color}) {
     height: 24,
     child: CircularProgressIndicator(
       strokeWidth: 2.5,
-      color: color ?? const Color(0xFF0EA5E9),
+      color: color ?? const Color(0xFF2E90FA),
     ),
   );
 }
@@ -183,7 +183,7 @@ class _IosTopToastState extends State<_IosTopToast>
                 decoration: BoxDecoration(
                   color: widget.isError
                       ? const Color(0xFFB00020).withValues(alpha: 0.95)
-                      : const Color(0xFF1E293B).withValues(alpha: 0.95),
+                      : const Color(0xFF122530).withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(14),
                   boxShadow: [
                     BoxShadow(

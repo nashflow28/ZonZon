@@ -31,7 +31,7 @@ class OrderHeader extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
             decoration: BoxDecoration(
-              color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+              color: const Color(0xFF122530).withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             ),
@@ -66,7 +66,7 @@ class OrderHeader extends StatelessWidget {
                             letterSpacing: 1.5)),
                     Text('Express',
                         style: TextStyle(
-                            color: Color(0xFF0EA5E9),
+                            color: Color(0xFF2E90FA),
                             fontSize: 24,
                             fontWeight: FontWeight.w300)),
                   ],
@@ -115,14 +115,14 @@ class ShopOriginBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withValues(alpha: 0.12),
+        color: const Color(0xFF0FB271).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+            color: const Color(0xFF0FB271).withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.shopping_bag, color: Color(0xFF10B981), size: 18),
+          const Icon(Icons.shopping_bag, color: Color(0xFF0FB271), size: 18),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -263,7 +263,7 @@ class SwapButton extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Material(
-              color: const Color(0xFF1E293B),
+              color: const Color(0xFF122530),
               shape: const CircleBorder(),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -272,7 +272,7 @@ class SwapButton extends StatelessWidget {
                   width: 44,
                   height: 44,
                   child: Icon(Icons.swap_vert,
-                      color: Color(0xFF0EA5E9), size: 20),
+                      color: Color(0xFF2E90FA), size: 20),
                 ),
               ),
             ),
@@ -327,13 +327,13 @@ class EstimatePreview extends StatelessWidget {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              const Color(0xFF0EA5E9).withValues(alpha: 0.18),
-              const Color(0xFF10B981).withValues(alpha: 0.10),
+              const Color(0xFF2E90FA).withValues(alpha: 0.18),
+              const Color(0xFF0FB271).withValues(alpha: 0.10),
             ],
           ),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: const Color(0xFF0EA5E9).withValues(alpha: 0.3),
+            color: const Color(0xFF2E90FA).withValues(alpha: 0.3),
           ),
         ),
         child: Row(
@@ -342,11 +342,11 @@ class EstimatePreview extends StatelessWidget {
               width: 38,
               height: 38,
               decoration: BoxDecoration(
-                color: const Color(0xFF0EA5E9).withValues(alpha: 0.25),
+                color: const Color(0xFF2E90FA).withValues(alpha: 0.25),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Icon(Icons.alt_route,
-                  color: Color(0xFF0EA5E9), size: 20),
+                  color: Color(0xFF2E90FA), size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -360,7 +360,7 @@ class EstimatePreview extends StatelessWidget {
                           width: 14,
                           height: 14,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Color(0xFF0EA5E9)),
+                              strokeWidth: 2, color: Color(0xFF2E90FA)),
                         ),
                         SizedBox(width: 8),
                         Text('Calcul du trajet…',
@@ -395,7 +395,7 @@ class EstimatePreview extends StatelessWidget {
                   Text(
                     '${_formatThousands(priceFcfa!)} FCFA',
                     style: const TextStyle(
-                      color: Color(0xFF10B981),
+                      color: Color(0xFF0FB271),
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
                     ),
@@ -433,7 +433,7 @@ class DescriptionField extends StatelessWidget {
           hintText: 'Que transportez-vous ?',
           hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
           prefixIcon:
-              const Icon(Icons.inventory_2_outlined, color: Color(0xFF0EA5E9)),
+              const Icon(Icons.inventory_2_outlined, color: Color(0xFF2E90FA)),
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
@@ -463,10 +463,10 @@ class PrimaryGradientButton extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: const LinearGradient(
-            colors: [Color(0xFF0EA5E9), Color(0xFF3B82F6)]),
+            colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)]),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFF0EA5E9).withValues(alpha: 0.5),
+              color: const Color(0xFF2E90FA).withValues(alpha: 0.5),
               blurRadius: 25,
               offset: const Offset(0, 8)),
         ],
@@ -512,8 +512,8 @@ class OrderBottomSheet extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  const Color(0xFF1E293B).withValues(alpha: 0.85),
-                  const Color(0xFF0F172A).withValues(alpha: 0.95),
+                  const Color(0xFF122530).withValues(alpha: 0.85),
+                  const Color(0xFF0C1A22).withValues(alpha: 0.95),
                 ],
               ),
               borderRadius:
@@ -614,7 +614,7 @@ class OrderFormSection extends StatelessWidget {
               ),
             ),
             Material(
-              color: const Color(0xFF10B981).withValues(alpha: 0.15),
+              color: const Color(0xFF0FB271).withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(14),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -624,12 +624,12 @@ class OrderFormSection extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.storefront, color: Color(0xFF10B981)),
+                      Icon(Icons.storefront, color: Color(0xFF0FB271)),
                       SizedBox(height: 4),
                       Text(
                         'Commerces',
                         style: TextStyle(
-                          color: Color(0xFF10B981),
+                          color: Color(0xFF0FB271),
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
                         ),
@@ -651,7 +651,7 @@ class OrderFormSection extends StatelessWidget {
         const SizedBox(height: 18),
         AddressCard(
           icon: Icons.my_location,
-          color: const Color(0xFF0EA5E9),
+          color: const Color(0xFF2E90FA),
           label: 'Départ',
           place: pickup,
           emptyHint: 'Choisir le point de départ',
@@ -660,7 +660,7 @@ class OrderFormSection extends StatelessWidget {
         SwapButton(onTap: onSwap),
         AddressCard(
           icon: Icons.location_on,
-          color: const Color(0xFF10B981),
+          color: const Color(0xFF0FB271),
           label: 'Arrivée',
           place: delivery,
           emptyHint: 'Choisir le point d’arrivée',
@@ -739,15 +739,15 @@ class OrderAcceptedSection extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                  color: const Color(0xFF0FB271).withValues(alpha: 0.1),
                   boxShadow: [
                     BoxShadow(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.2),
+                        color: const Color(0xFF0FB271).withValues(alpha: 0.2),
                         blurRadius: 30)
                   ],
                 ),
                 child: const Icon(Icons.check_circle,
-                    color: Color(0xFF10B981), size: 60),
+                    color: Color(0xFF0FB271), size: 60),
               ),
             );
           },
@@ -787,7 +787,7 @@ class OrderAcceptedSection extends StatelessWidget {
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Color(0xFF0EA5E9)),
+                              strokeWidth: 2, color: Color(0xFF2E90FA)),
                         ),
                         SizedBox(width: 12),
                         Text('Recherche d’un livreur…',
@@ -803,11 +803,11 @@ class OrderAcceptedSection extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     gradient: const LinearGradient(
-                        colors: [Color(0xFF0EA5E9), Color(0xFF3B82F6)]),
+                        colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)]),
                     boxShadow: [
                       BoxShadow(
                           color:
-                              const Color(0xFF0EA5E9).withValues(alpha: 0.4),
+                              const Color(0xFF2E90FA).withValues(alpha: 0.4),
                           blurRadius: 25,
                           offset: const Offset(0, 8))
                     ],
@@ -897,19 +897,19 @@ class OrderAcceptedSection extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: onCancelOrder,
               icon: const Icon(Icons.cancel_outlined,
-                  color: Color(0xFFEF4444), size: 20),
+                  color: Color(0xFFF0453D), size: 20),
               label: const Text(
                 'Annuler la commande',
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFEF4444),
+                  color: Color(0xFFF0453D),
                 ),
               ),
               style: OutlinedButton.styleFrom(
                 backgroundColor:
-                    const Color(0xFFEF4444).withValues(alpha: 0.08),
-                side: const BorderSide(color: Color(0xFFEF4444), width: 1.2),
+                    const Color(0xFFF0453D).withValues(alpha: 0.08),
+                side: const BorderSide(color: Color(0xFFF0453D), width: 1.2),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
                 ),
@@ -980,10 +980,10 @@ class LiveTrackingBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0EA5E9).withValues(alpha: 0.12),
+        color: const Color(0xFF2E90FA).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: const Color(0xFF0EA5E9).withValues(alpha: 0.35),
+          color: const Color(0xFF2E90FA).withValues(alpha: 0.35),
         ),
       ),
       child: Row(
@@ -996,7 +996,7 @@ class LiveTrackingBanner extends StatelessWidget {
                   width: 26,
                   height: 26,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.25),
+                    color: const Color(0xFF0FB271).withValues(alpha: 0.25),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1005,7 +1005,7 @@ class LiveTrackingBanner extends StatelessWidget {
                 height: 12,
                 decoration: BoxDecoration(
                   color: hasPosition
-                      ? const Color(0xFF10B981)
+                      ? const Color(0xFF0FB271)
                       : const Color(0xFF94A3B8),
                   shape: BoxShape.circle,
                 ),
@@ -1068,7 +1068,7 @@ class _EtaBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isFallback ? const Color(0xFF94A3B8) : const Color(0xFF0EA5E9);
+    final color = isFallback ? const Color(0xFF94A3B8) : const Color(0xFF2E90FA);
     final icon = isFallback ? Icons.warning_amber_rounded : Icons.access_time;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

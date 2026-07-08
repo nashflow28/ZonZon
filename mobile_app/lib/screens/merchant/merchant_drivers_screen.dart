@@ -65,7 +65,7 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
     final phone = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         title: const Text('Ajouter un livreur',
             style: TextStyle(color: Colors.white)),
         content: TextField(
@@ -88,7 +88,7 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
+              backgroundColor: const Color(0xFF0FB271),
             ),
             onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
             child: const Text('Ajouter'),
@@ -149,9 +149,9 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
@@ -168,7 +168,7 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddDialog,
-        backgroundColor: const Color(0xFF10B981),
+        backgroundColor: const Color(0xFF0FB271),
         icon: const Icon(Icons.person_add),
         label: const Text('Ajouter un livreur'),
       ),
@@ -178,7 +178,7 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
 
   Widget _body() {
     if (_loading) {
-      return Center(child: adaptiveLoader(color: const Color(0xFF10B981)));
+      return Center(child: adaptiveLoader(color: const Color(0xFF0FB271)));
     }
 
     if (_hasError) {
@@ -205,7 +205,7 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
 
     if (_drivers.isEmpty) {
       return RefreshIndicator(
-        color: const Color(0xFF10B981),
+        color: const Color(0xFF0FB271),
         onRefresh: _load,
         child: ListView(
           padding: const EdgeInsets.all(24),
@@ -235,7 +235,7 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
     }
 
     return RefreshIndicator(
-      color: const Color(0xFF10B981),
+      color: const Color(0xFF0FB271),
       onRefresh: _load,
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
@@ -265,7 +265,7 @@ class _DriverTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -273,8 +273,8 @@ class _DriverTile extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 24,
-            backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.15),
-            child: const Icon(Icons.two_wheeler, color: Color(0xFF10B981)),
+            backgroundColor: const Color(0xFF0FB271).withValues(alpha: 0.15),
+            child: const Icon(Icons.two_wheeler, color: Color(0xFF0FB271)),
           ),
           const SizedBox(width: 14),
           Expanded(

@@ -106,13 +106,13 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         title: const Row(
           children: [
-            Icon(Icons.storefront, color: Color(0xFF10B981)),
+            Icon(Icons.storefront, color: Color(0xFF0FB271)),
             SizedBox(width: 10),
             Text('Espace commerçant',
                 style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -132,7 +132,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
         ],
       ),
       body: _loading
-          ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF0FB271)))
           : _shop == null
               ? ListView(
                   padding: const EdgeInsets.all(16),
@@ -147,7 +147,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                   ],
                 )
               : RefreshIndicator(
-                  color: const Color(0xFF10B981),
+                  color: const Color(0xFF0FB271),
                   onRefresh: _refresh,
                   child: ListView(
                     padding: const EdgeInsets.all(16),
@@ -177,10 +177,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                           ),
                           TextButton.icon(
                             onPressed: () => _openProductForm(),
-                            icon: const Icon(Icons.add, color: Color(0xFF10B981)),
+                            icon: const Icon(Icons.add, color: Color(0xFF0FB271)),
                             label: const Text(
                               'Ajouter',
-                              style: TextStyle(color: Color(0xFF10B981)),
+                              style: TextStyle(color: Color(0xFF0FB271)),
                             ),
                           ),
                         ],
@@ -235,10 +235,10 @@ class _OnboardingState extends StatelessWidget {
               height: 110,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                color: const Color(0xFF0FB271).withValues(alpha: 0.15),
               ),
               child: const Icon(Icons.add_business,
-                  color: Color(0xFF10B981), size: 56),
+                  color: Color(0xFF0FB271), size: 56),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -268,7 +268,7 @@ class _OnboardingState extends StatelessWidget {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
+                  backgroundColor: const Color(0xFF0FB271),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
@@ -297,7 +297,7 @@ class _DeliveriesQuickActions extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -306,7 +306,7 @@ class _DeliveriesQuickActions extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(Icons.local_shipping_outlined, color: Color(0xFF0EA5E9)),
+              Icon(Icons.local_shipping_outlined, color: Color(0xFF2E90FA)),
               SizedBox(width: 10),
               Text(
                 'Livraisons clients',
@@ -327,7 +327,7 @@ class _DeliveriesQuickActions extends StatelessWidget {
                   icon: const Icon(Icons.add_road, size: 18),
                   label: const Text('Créer une livraison'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: const Color(0xFF0FB271),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
@@ -339,13 +339,13 @@ class _DeliveriesQuickActions extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: onViewOrders,
-                  icon: const Icon(Icons.receipt_long, size: 18, color: Color(0xFF0EA5E9)),
+                  icon: const Icon(Icons.receipt_long, size: 18, color: Color(0xFF2E90FA)),
                   label: const Text(
                     'Mes livraisons',
-                    style: TextStyle(color: Color(0xFF0EA5E9)),
+                    style: TextStyle(color: Color(0xFF2E90FA)),
                   ),
                   style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Color(0xFF0EA5E9)),
+                    side: const BorderSide(color: Color(0xFF2E90FA)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -393,7 +393,7 @@ class _ShopHeaderCard extends StatelessWidget {
     final logoUrl = shop.logoUrl;
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -413,7 +413,7 @@ class _ShopHeaderCard extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: Colors.white.withValues(alpha: 0.05),
                       border: Border.all(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                          color: const Color(0xFF0FB271).withValues(alpha: 0.4)),
                       image: logoUrl != null
                           ? DecorationImage(
                               image: NetworkImage('$apiUrl$logoUrl'),
@@ -423,7 +423,7 @@ class _ShopHeaderCard extends StatelessWidget {
                     ),
                     child: logoUrl == null
                         ? const Icon(Icons.add_a_photo,
-                            color: Color(0xFF10B981), size: 28)
+                            color: Color(0xFF0FB271), size: 28)
                         : null,
                   ),
                 ),
@@ -497,7 +497,7 @@ class _StatusBadge extends StatelessWidget {
     IconData icon;
     switch (status) {
       case ShopStatus.approved:
-        color = const Color(0xFF10B981);
+        color = const Color(0xFF0FB271);
         label = 'Approuvée';
         icon = Icons.check_circle;
         break;
@@ -579,11 +579,11 @@ class _EmptyProducts extends StatelessWidget {
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: onAdd,
-            icon: const Icon(Icons.add, color: Color(0xFF10B981)),
+            icon: const Icon(Icons.add, color: Color(0xFF0FB271)),
             label: const Text('Ajouter un produit',
-                style: TextStyle(color: Color(0xFF10B981))),
+                style: TextStyle(color: Color(0xFF0FB271))),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFF10B981)),
+              side: const BorderSide(color: Color(0xFF0FB271)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
@@ -612,7 +612,7 @@ class _ProductTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: product.available
@@ -656,7 +656,7 @@ class _ProductTile extends StatelessWidget {
                 Text(
                   '${product.priceFcfa} FCFA',
                   style: const TextStyle(
-                    color: Color(0xFF10B981),
+                    color: Color(0xFF0FB271),
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
@@ -674,7 +674,7 @@ class _ProductTile extends StatelessWidget {
           ),
           PopupMenuButton<String>(
             iconColor: Colors.white60,
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFF122530),
             onSelected: (v) {
               if (v == 'edit') onEdit();
               if (v == 'toggle') onToggle();

@@ -128,9 +128,9 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         title: Text(
           widget.initial == null ? 'Nouvelle boutique' : 'Modifier ma boutique',
@@ -139,7 +139,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: _loadingCats
-          ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF0FB271)))
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -170,7 +170,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
                             style: TextStyle(
                                 fontSize: 16, fontWeight: FontWeight.bold)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
+                      backgroundColor: const Color(0xFF0FB271),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
@@ -199,7 +199,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.category, color: Color(0xFF10B981)),
+          const Icon(Icons.category, color: Color(0xFF0FB271)),
           const SizedBox(width: 12),
           Expanded(
             child: DropdownButton<String>(
@@ -208,8 +208,8 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
                   : _categories.first.value,
               isExpanded: true,
               underline: const SizedBox(),
-              dropdownColor: const Color(0xFF1E293B),
-              iconEnabledColor: const Color(0xFF10B981),
+              dropdownColor: const Color(0xFF122530),
+              iconEnabledColor: const Color(0xFF0FB271),
               style: const TextStyle(color: Colors.white, fontSize: 16),
               items: _categories
                   .map((c) =>
@@ -238,13 +238,13 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: _location == null
-                  ? const Color(0xFF10B981).withValues(alpha: 0.5)
+                  ? const Color(0xFF0FB271).withValues(alpha: 0.5)
                   : Colors.white.withValues(alpha: 0.08),
             ),
           ),
           child: Row(
             children: [
-              const Icon(Icons.place, color: Color(0xFF10B981)),
+              const Icon(Icons.place, color: Color(0xFF0FB271)),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -253,7 +253,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
                     const Text(
                       'Adresse de la boutique',
                       style: TextStyle(
-                        color: Color(0xFF10B981),
+                        color: Color(0xFF0FB271),
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 0.8,
@@ -302,7 +302,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
         decoration: InputDecoration(
           hintText: label,
           hintStyle: const TextStyle(color: Colors.white60),
-          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF10B981)) : null,
+          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF0FB271)) : null,
           border: InputBorder.none,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

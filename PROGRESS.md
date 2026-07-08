@@ -242,6 +242,15 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 30 (2026-07-08) — Direction A « Évolution » (design, vague 1+2) + APK
+- Suite au choix de la **Direction A** (thème sombre conservé mais élevé — cf. proposition design). Deux agents lancés (Flutter/Angular) coupés par une limite de session → volet Flutter terminé à la main, volet Angular conservé (avait abouti).
+- **Design tokens partagés** : `mobile_app/lib/theme/app_colors.dart` (`AppColors`) ↔ `admin-dashboard/src/styles.css` (`--zz-*`). Palette évoluée : bg `#0C1A22`, card `#122530`, line `#24404C`, go `#0FB271`, mango `#FF9E1B`, sky `#2E90FA`, coral `#F0453D`, textHi `#EAF2F0`, textMut `#8FA6AE`.
+- **Re-skin Flutter (1:1)** : remap mécanique de 8 hexs de marque sur tout `lib/` (399 occ.) — `0F172A→0C1A22`, `1E293B→122530`, `10B981→0FB271`, `F59E0B→FF9E1B`, `0EA5E9/3B82F6→2E90FA`, `EF4444→F0453D`, `334155→22414D`. 0 ancienne valeur restante.
+- **Composant signature** : `mobile_app/lib/widgets/status_timeline.dart` (`StatusTimeline`) — frise de progression (fait=vert / en cours=mangue / à venir=gris, terminal=corail), branchée sur `OrderStatusUtils`. Appliquée à l'écran de suivi client (`order_tracking_screen`, en tête du bottom sheet) et au dialog de course active livreur (`driver_screen`).
+- **Angular** : `shared/status-colors.ts` (mapping unifié statut→variante `go/mango/sky/coral/mut`, partagé avec le mobile), tokens `--zz-*` dans `styles.css`, couleurs de marque nommées dans `tailwind.config.js`, badges de statut/paiement unifiés (archives, order-detail), fond d'app réchauffé.
+- **Vérifs** : Flutter `analyze` 10 (préexistantes) / `test` 10/10 ; Admin `build --configuration production` OK. ⚠️ **Rendu visuel à confirmer sur device/navigateur** (non vérifiable ici).
+- Reste vagues 3-4 (au besoin) : appliquer la nouvelle grammaire aux autres écrans une fois le rendu validé.
+
 ### Session 25 (2026-07-05) — Backend Priorité 3 complet (3 lots) + commits/push
 - **Commits/push** : branche `feat/v1-priorities-1-2` poussée (audit + P1/P2). Nouvelle branche `feat/v1-priority-3` pour la P3.
 - **Lot 1 — Tarif configurable + Zones** : entité `PricingConfig` (singleton, défaut **200 FCFA/km**, `minPriceFcfa` optionnel), `GET/PATCH /admin/pricing` (ADMIN), intégration dans `buildOrderPricing`/`estimateRoute` (cache 60s + fallback). Prix manuel commerçant (`priceFcfa?` sur create-merchant-order). Entité `Zone` + `GET /zones` (auth) + `POST/PATCH/DELETE /zones` (ADMIN) + seed des 16 quartiers de Lomé. Migrations 1778300000000, 1778400000000.

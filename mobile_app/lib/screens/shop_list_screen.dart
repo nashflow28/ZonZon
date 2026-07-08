@@ -165,9 +165,9 @@ class _ShopListScreenState extends State<ShopListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         automaticallyImplyLeading: !widget.hideBackButton,
@@ -175,7 +175,7 @@ class _ShopListScreenState extends State<ShopListScreen> {
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.favorite, color: Color(0xFFEF4444)),
+            icon: const Icon(Icons.favorite, color: Color(0xFFF0453D)),
             tooltip: 'Mes favoris',
             onPressed: _openFavorites,
           ),
@@ -216,11 +216,11 @@ class _ShopListScreenState extends State<ShopListScreen> {
             ),
           Expanded(
             child: _loading
-                ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
+                ? Center(child: adaptiveLoader(color: const Color(0xFF0FB271)))
                 : _shops.isEmpty
                     ? _empty()
                     : RefreshIndicator(
-                        color: const Color(0xFF10B981),
+                        color: const Color(0xFF0FB271),
                         onRefresh: _refresh,
                         child: ListView.builder(
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
@@ -256,9 +256,9 @@ class _ShopListScreenState extends State<ShopListScreen> {
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: _refresh,
-              icon: const Icon(Icons.refresh, color: Color(0xFF10B981)),
+              icon: const Icon(Icons.refresh, color: Color(0xFF0FB271)),
               label: const Text('Rafraîchir',
-                  style: TextStyle(color: Color(0xFF10B981))),
+                  style: TextStyle(color: Color(0xFF0FB271))),
             ),
           ],
         ),
@@ -281,12 +281,12 @@ class _CategoryChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: selected
-          ? const Color(0xFF10B981).withValues(alpha: 0.25)
+          ? const Color(0xFF0FB271).withValues(alpha: 0.25)
           : Colors.white.withValues(alpha: 0.05),
       shape: StadiumBorder(
         side: BorderSide(
           color: selected
-              ? const Color(0xFF10B981)
+              ? const Color(0xFF0FB271)
               : Colors.white.withValues(alpha: 0.1),
         ),
       ),
@@ -298,7 +298,7 @@ class _CategoryChip extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? const Color(0xFF10B981) : Colors.white70,
+              color: selected ? const Color(0xFF0FB271) : Colors.white70,
               fontWeight: FontWeight.w600,
               fontSize: 13,
             ),
@@ -327,7 +327,7 @@ class _ShopCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -357,7 +357,7 @@ class _ShopCard extends StatelessWidget {
                       ),
                       child: logo == null
                           ? const Icon(Icons.storefront,
-                              color: Color(0xFF10B981), size: 28)
+                              color: Color(0xFF0FB271), size: 28)
                           : null,
                     ),
                     const SizedBox(width: 14),
@@ -390,12 +390,12 @@ class _ShopCard extends StatelessWidget {
                             Row(
                               children: [
                                 const Icon(Icons.near_me,
-                                    size: 12, color: Color(0xFF0EA5E9)),
+                                    size: 12, color: Color(0xFF2E90FA)),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${shop.distanceKm!.toStringAsFixed(1)} km',
                                   style: const TextStyle(
-                                    color: Color(0xFF0EA5E9),
+                                    color: Color(0xFF2E90FA),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -427,7 +427,7 @@ class _ShopCard extends StatelessWidget {
                   child: Icon(
                     isFavorite ? Icons.favorite : Icons.favorite_border,
                     color: isFavorite
-                        ? const Color(0xFFEF4444)
+                        ? const Color(0xFFF0453D)
                         : Colors.white70,
                     size: 22,
                   ),

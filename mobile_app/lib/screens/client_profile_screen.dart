@@ -156,9 +156,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         foregroundColor: Colors.white,
         title: const Text(
           'Mon profil',
@@ -181,9 +181,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444),
+                      color: const Color(0xFFF0453D),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF1E293B), width: 1.5),
+                      border: Border.all(color: const Color(0xFF122530), width: 1.5),
                     ),
                     child: Text(
                       _unreadNotificationsCount > 99 ? '99+' : '$_unreadNotificationsCount',
@@ -202,7 +202,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         ],
       ),
       body: _loading
-          ? Center(child: adaptiveLoader(color: const Color(0xFF0EA5E9)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF2E90FA)))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
@@ -246,7 +246,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         children: [
           CircleAvatar(
             radius: 56,
-            backgroundColor: const Color(0xFF334155),
+            backgroundColor: const Color(0xFF22414D),
             backgroundImage: photoUrl != null
                 ? NetworkImage('$apiUrl$photoUrl')
                 : null,
@@ -270,7 +270,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               onTap: _pickAndUploadPhoto,
               child: Container(
                 decoration: const BoxDecoration(
-                  color: Color(0xFF0EA5E9),
+                  color: Color(0xFF2E90FA),
                   shape: BoxShape.circle,
                 ),
                 padding: const EdgeInsets.all(8),
@@ -285,7 +285,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   Widget _buildHistoryTile() {
     return Material(
-      color: const Color(0xFF1E293B),
+      color: const Color(0xFF122530),
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -297,7 +297,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           padding: EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.history, color: Color(0xFF0EA5E9), size: 24),
+              Icon(Icons.history, color: Color(0xFF2E90FA), size: 24),
               SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -344,7 +344,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFF122530),
             borderRadius: BorderRadius.circular(16),
           ),
           child: content,
@@ -372,7 +372,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           child: ElevatedButton(
             onPressed: _saveProfile,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0EA5E9),
+              backgroundColor: const Color(0xFF2E90FA),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -408,14 +408,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       labelStyle: const TextStyle(color: Colors.white54),
       prefixIcon: Icon(icon, color: Colors.white60),
       filled: true,
-      fillColor: const Color(0xFF0F172A),
+      fillColor: const Color(0xFF0C1A22),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF0EA5E9)),
+        borderSide: const BorderSide(color: Color(0xFF2E90FA)),
       ),
     );
   }

@@ -368,7 +368,7 @@ class _HomeTabState extends State<HomeTab>
   Widget build(BuildContext context) {
     super.build(context);
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       body: Stack(
         children: [
           OrderMapWidget(
@@ -380,7 +380,7 @@ class _HomeTabState extends State<HomeTab>
           ),
           if (isLocationLoading)
             Container(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.8),
+              color: const Color(0xFF0C1A22).withValues(alpha: 0.8),
               child: Center(child: adaptiveLoader()),
             ),
           // Header simple — pas d'icônes profil/historique (c'est dans la
@@ -424,7 +424,7 @@ class _HomeHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withValues(alpha: 0.6),
+        color: const Color(0xFF122530).withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
@@ -443,7 +443,7 @@ class _HomeHeader extends StatelessWidget {
           Text(
             'Express',
             style: TextStyle(
-              color: Color(0xFF0EA5E9),
+              color: Color(0xFF2E90FA),
               fontSize: 24,
               fontWeight: FontWeight.w300,
             ),

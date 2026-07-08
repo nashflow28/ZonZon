@@ -145,12 +145,12 @@
               </td>
               <td class="p-5 font-bold text-white">{{ o.priceFcfa | number:'1.0-0' }} FCFA</td>
               <td class="p-5">
-                <span class="px-3 py-1 rounded-full text-xs font-bold border" [ngClass]="statusBadge(o.status)">
+                <span [ngClass]="statusBadge(o.status)">
                   {{ statusLabel(o.status) }}
                 </span>
               </td>
               <td class="p-5">
-                <span class="px-3 py-1 rounded-full text-xs font-bold border" [ngClass]="paymentBadge(o.paymentStatus)">
+                <span [ngClass]="paymentBadge(o.paymentStatus)">
                   {{ paymentLabel(o.paymentStatus) }}
                 </span>
               </td>

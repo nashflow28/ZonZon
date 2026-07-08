@@ -5,6 +5,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { AvailableDriver, Order, OrdersService, PaymentStatus } from '../../orders.service';
 import { ChatMessage, MessagesService } from '../messages.service';
 import { LiveStatusService } from '../live-status.service';
+import { orderStatusPillClass } from '../status-colors';
 
 interface TimelineStep {
   key: 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED';
@@ -196,22 +197,10 @@ export class OrderDetailComponent implements OnDestroy {
     });
   });
 
+  /// Classe de badge unifiée (« Direction A ») — voir shared/status-colors.ts
+  /// pour le mapping statut → couleur, partagé avec la sémantique mobile.
   readonly statusBadgeClass = computed(() => {
-    const s = this._order()?.status;
-    switch (s) {
-      case 'PENDING':
-        return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50';
-      case 'ACCEPTED':
-        return 'bg-blue-500/20 text-blue-300 border-blue-500/50';
-      case 'IN_PROGRESS':
-        return 'bg-purple-500/20 text-purple-300 border-purple-500/50';
-      case 'COMPLETED':
-        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50';
-      case 'CANCELLED':
-        return 'bg-red-500/20 text-red-300 border-red-500/50';
-      default:
-        return 'bg-slate-500/20 text-slate-300 border-slate-500/50';
-    }
+    return orderStatusPillClass(this._order()?.status);
   });
 
   onClose(): void {

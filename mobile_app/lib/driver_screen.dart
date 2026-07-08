@@ -14,6 +14,7 @@ import 'screens/driver_profile_screen.dart';
 import 'screens/order_history_screen.dart';
 import 'utils/order_status_utils.dart';
 import 'utils/platform_adapter.dart';
+import 'widgets/status_timeline.dart';
 
 class DriverScreen extends StatefulWidget {
   const DriverScreen({super.key});
@@ -54,7 +55,7 @@ _NextStepAction? _nextStepFor(String status) {
         targetStatus: 'EN_ROUTE_PICKUP',
         label: 'En route vers le retrait',
         icon: Icons.directions_bike,
-        color: Color(0xFF0EA5E9),
+        color: Color(0xFF2E90FA),
       );
     case 'EN_ROUTE_PICKUP':
       return const _NextStepAction(
@@ -68,7 +69,7 @@ _NextStepAction? _nextStepFor(String status) {
         targetStatus: 'IN_PROGRESS',
         label: 'Colis récupéré / Démarrer la livraison',
         icon: Icons.local_shipping,
-        color: Color(0xFF3B82F6),
+        color: Color(0xFF2E90FA),
       );
     case 'IN_PROGRESS':
       return const _NextStepAction(
@@ -82,7 +83,7 @@ _NextStepAction? _nextStepFor(String status) {
         targetStatus: 'COMPLETED',
         label: 'Livré',
         icon: Icons.check_circle,
-        color: Color(0xFF10B981),
+        color: Color(0xFF0FB271),
       );
     default:
       return null;
@@ -396,12 +397,12 @@ class _DriverScreenState extends State<DriverScreen> {
     messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: Color(0xFF10B981), width: 1),
+          side: const BorderSide(color: Color(0xFF0FB271), width: 1),
         ),
         content: const Text(
           '✅ Vous êtes arrivé(e) au point de retrait. '
@@ -410,7 +411,7 @@ class _DriverScreenState extends State<DriverScreen> {
         ),
         action: SnackBarAction(
           label: 'Démarrer',
-          textColor: const Color(0xFF10B981),
+          textColor: const Color(0xFF0FB271),
           onPressed: () => _confirmArrival(orderId),
         ),
       ),
@@ -658,7 +659,7 @@ class _DriverScreenState extends State<DriverScreen> {
           final paymentStatus = orderData['paymentStatus']?.toString();
 
           return AlertDialog(
-            backgroundColor: const Color(0xFF1E293B),
+            backgroundColor: const Color(0xFF122530),
             title: const Text('Course Acceptée ! 🎉',
                 style: TextStyle(color: Colors.white)),
             content: Column(
@@ -685,6 +686,8 @@ class _DriverScreenState extends State<DriverScreen> {
                       ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                StatusTimeline(status: dialogStatus),
               ],
             ),
             actionsAlignment: MainAxisAlignment.center,
@@ -715,7 +718,7 @@ class _DriverScreenState extends State<DriverScreen> {
                       label: const Text('Discuter avec le client',
                           style: TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0EA5E9)),
+                          backgroundColor: const Color(0xFF2E90FA)),
                     ),
                   ),
                   // ── WhatsApp ───────────────────────────────────────────
@@ -744,7 +747,7 @@ class _DriverScreenState extends State<DriverScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
                       child: CircularProgressIndicator(
-                          color: Color(0xFF10B981)),
+                          color: Color(0xFF0FB271)),
                     )
                   else ...[
                     // ── Progression granulaire : bouton "étape suivante"
@@ -779,12 +782,12 @@ class _DriverScreenState extends State<DriverScreen> {
                         child: OutlinedButton.icon(
                           onPressed: () => doTransition('COMPLETED'),
                           icon: const Icon(Icons.done_all,
-                              color: Color(0xFF10B981)),
+                              color: Color(0xFF0FB271)),
                           label: const Text('Livré directement',
-                              style: TextStyle(color: Color(0xFF10B981))),
+                              style: TextStyle(color: Color(0xFF0FB271))),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(
-                                color: Color(0xFF10B981), width: 1.2),
+                                color: Color(0xFF0FB271), width: 1.2),
                           ),
                         ),
                       ),
@@ -862,7 +865,7 @@ class _DriverScreenState extends State<DriverScreen> {
       // quand un AlertDialog modal est ouvert par-dessus.
       key: _messengerKey,
       child: Scaffold(
-        backgroundColor: const Color(0xFF0F172A),
+        backgroundColor: const Color(0xFF0C1A22),
         appBar: AppBar(
           title: Text(
             _currentTabTitle(),
@@ -871,7 +874,7 @@ class _DriverScreenState extends State<DriverScreen> {
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: const Color(0xFF1E293B),
+          backgroundColor: const Color(0xFF122530),
           iconTheme: const IconThemeData(color: Colors.white),
           automaticallyImplyLeading: false,
         ),
@@ -887,8 +890,8 @@ class _DriverScreenState extends State<DriverScreen> {
           type: BottomNavigationBarType.fixed,
           currentIndex: _currentTab,
           onTap: (i) => setState(() => _currentTab = i),
-          backgroundColor: const Color(0xFF1E293B),
-          selectedItemColor: const Color(0xFF10B981),
+          backgroundColor: const Color(0xFF122530),
+          selectedItemColor: const Color(0xFF0FB271),
           unselectedItemColor: Colors.white60,
           items: const [
             BottomNavigationBarItem(
@@ -913,7 +916,7 @@ class _DriverScreenState extends State<DriverScreen> {
 
   Widget _buildRadar() {
     if (_statusLoading) {
-      return Center(child: adaptiveLoader(color: const Color(0xFF10B981)));
+      return Center(child: adaptiveLoader(color: const Color(0xFF0FB271)));
     }
 
     return Column(
@@ -936,7 +939,7 @@ class _DriverScreenState extends State<DriverScreen> {
   /// Bandeau affiché tant que le compte livreur n'est pas `APPROVED`.
   Widget _buildApprovalBanner() {
     final isRejected = _driverApprovalStatus == 'REJECTED';
-    final color = isRejected ? const Color(0xFFEF4444) : const Color(0xFFF59E0B);
+    final color = isRejected ? const Color(0xFFF0453D) : const Color(0xFFFF9E1B);
     final title = isRejected
         ? 'Votre compte livreur a été refusé'
         : 'Compte en attente de validation';
@@ -982,14 +985,14 @@ class _DriverScreenState extends State<DriverScreen> {
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           Icon(
             _isAvailable ? Icons.wifi_tethering : Icons.wifi_tethering_off,
-            color: _isAvailable ? const Color(0xFF10B981) : Colors.white38,
+            color: _isAvailable ? const Color(0xFF0FB271) : Colors.white38,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1002,12 +1005,12 @@ class _DriverScreenState extends State<DriverScreen> {
             SizedBox(
               width: 24,
               height: 24,
-              child: adaptiveLoader(color: const Color(0xFF10B981)),
+              child: adaptiveLoader(color: const Color(0xFF0FB271)),
             )
           else
             Switch(
               value: _isAvailable,
-              activeThumbColor: const Color(0xFF10B981),
+              activeThumbColor: const Color(0xFF0FB271),
               onChanged: _toggleAvailability,
             ),
         ],
@@ -1052,7 +1055,7 @@ class _DriverScreenState extends State<DriverScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                adaptiveLoader(color: const Color(0xFF10B981)),
+                adaptiveLoader(color: const Color(0xFF0FB271)),
                 const SizedBox(height: 20),
                 const Text('En attente de nouvelles courses...', style: TextStyle(color: Colors.white70, fontSize: 16)),
               ],
@@ -1064,7 +1067,7 @@ class _DriverScreenState extends State<DriverScreen> {
             itemBuilder: (context, index) {
               final order = availableOrders[index];
               return Card(
-                color: const Color(0xFF1E293B),
+                color: const Color(0xFF122530),
                 margin: const EdgeInsets.only(bottom: 16),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 child: Padding(
@@ -1075,7 +1078,7 @@ class _DriverScreenState extends State<DriverScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('${order['priceFcfa']} FCFA', style: const TextStyle(color: Color(0xFF10B981), fontSize: 22, fontWeight: FontWeight.bold)),
+                          Text('${order['priceFcfa']} FCFA', style: const TextStyle(color: Color(0xFF0FB271), fontSize: 22, fontWeight: FontWeight.bold)),
                           Text('${order['distanceKm']} km', style: const TextStyle(color: Colors.white54, fontSize: 14)),
                         ],
                       ),
@@ -1090,7 +1093,7 @@ class _DriverScreenState extends State<DriverScreen> {
                         child: ElevatedButton(
                           onPressed: () => _acceptOrder(order['id'].toString()),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3B82F6),
+                            backgroundColor: const Color(0xFF2E90FA),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           child: const Text('Accepter la course', style: TextStyle(fontSize: 18, color: Colors.white)),

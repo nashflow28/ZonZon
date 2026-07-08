@@ -107,9 +107,9 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
@@ -118,12 +118,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         ),
       ),
       body: _loading
-          ? Center(child: adaptiveLoader(color: const Color(0xFF0EA5E9)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF2E90FA)))
           : _hasError
               ? _errorView()
               : RefreshIndicator(
-                  color: const Color(0xFF0EA5E9),
-                  backgroundColor: const Color(0xFF1E293B),
+                  color: const Color(0xFF2E90FA),
+                  backgroundColor: const Color(0xFF122530),
                   onRefresh: _refresh,
                   child: _shops.isEmpty ? _emptyView() : _listView(),
                 ),
@@ -139,7 +139,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           child: Column(
             children: [
               const Icon(Icons.error_outline,
-                  color: Color(0xFFEF4444), size: 48),
+                  color: Color(0xFFF0453D), size: 48),
               const SizedBox(height: 16),
               const Text(
                 'Impossible de charger les favoris.',
@@ -160,7 +160,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                 icon: const Icon(Icons.refresh, color: Colors.white),
                 label: const Text('Réessayer'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0EA5E9),
+                  backgroundColor: const Color(0xFF2E90FA),
                   foregroundColor: Colors.white,
                 ),
               ),
@@ -237,7 +237,7 @@ class _FavoriteShopCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
@@ -266,7 +266,7 @@ class _FavoriteShopCard extends StatelessWidget {
                   ),
                   child: logo == null
                       ? const Icon(Icons.storefront,
-                          color: Color(0xFF10B981), size: 28)
+                          color: Color(0xFF0FB271), size: 28)
                       : null,
                 ),
                 const SizedBox(width: 14),
@@ -295,12 +295,12 @@ class _FavoriteShopCard extends StatelessWidget {
                         Row(
                           children: [
                             const Icon(Icons.near_me,
-                                size: 12, color: Color(0xFF0EA5E9)),
+                                size: 12, color: Color(0xFF2E90FA)),
                             const SizedBox(width: 4),
                             Text(
                               '${shop.distanceKm!.toStringAsFixed(1)} km',
                               style: const TextStyle(
-                                color: Color(0xFF0EA5E9),
+                                color: Color(0xFF2E90FA),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -317,7 +317,7 @@ class _FavoriteShopCard extends StatelessWidget {
                   clipBehavior: Clip.antiAlias,
                   child: IconButton(
                     icon: const Icon(Icons.favorite,
-                        color: Color(0xFFEF4444), size: 22),
+                        color: Color(0xFFF0453D), size: 22),
                     tooltip: 'Retirer des favoris',
                     onPressed: onRemove,
                   ),

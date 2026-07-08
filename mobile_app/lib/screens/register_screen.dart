@@ -69,7 +69,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -88,7 +88,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    const Color(0xFF10B981).withValues(alpha: 0.3),
+                    const Color(0xFF0FB271).withValues(alpha: 0.3),
                     Colors.transparent,
                   ],
                 ),
@@ -105,7 +105,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B).withValues(alpha: 0.7),
+                      color: const Color(0xFF122530).withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(28),
                       border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                     ),
@@ -158,8 +158,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               value: _vehicleType,
                               isExpanded: true,
                               underline: const SizedBox(),
-                              dropdownColor: const Color(0xFF1E293B),
-                              iconEnabledColor: const Color(0xFF0EA5E9),
+                              dropdownColor: const Color(0xFF122530),
+                              iconEnabledColor: const Color(0xFF2E90FA),
                               style: const TextStyle(color: Colors.white, fontSize: 16),
                               items: const [
                                 DropdownMenuItem(value: 'MOTO', child: Text('Moto')),
@@ -175,9 +175,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           height: 58,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(18),
-                            gradient: const LinearGradient(colors: [Color(0xFF0EA5E9), Color(0xFF3B82F6)]),
+                            gradient: const LinearGradient(colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)]),
                             boxShadow: [
-                              BoxShadow(color: const Color(0xFF0EA5E9).withValues(alpha: 0.45), blurRadius: 20, offset: const Offset(0, 6)),
+                              BoxShadow(color: const Color(0xFF2E90FA).withValues(alpha: 0.45), blurRadius: 20, offset: const Offset(0, 6)),
                             ],
                           ),
                           child: ElevatedButton(
@@ -215,16 +215,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF0EA5E9).withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.04),
+          color: selected ? const Color(0xFF2E90FA).withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? const Color(0xFF0EA5E9) : Colors.white.withValues(alpha: 0.08),
+            color: selected ? const Color(0xFF2E90FA) : Colors.white.withValues(alpha: 0.08),
             width: selected ? 1.5 : 1,
           ),
         ),
         child: Column(
           children: [
-            Icon(icon, color: selected ? const Color(0xFF0EA5E9) : Colors.white60),
+            Icon(icon, color: selected ? const Color(0xFF2E90FA) : Colors.white60),
             const SizedBox(height: 6),
             Text(
               label,
@@ -261,7 +261,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-          prefixIcon: Icon(icon, color: const Color(0xFF0EA5E9)),
+          prefixIcon: Icon(icon, color: const Color(0xFF2E90FA)),
           suffixIcon: suffix,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),

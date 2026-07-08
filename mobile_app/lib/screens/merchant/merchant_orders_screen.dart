@@ -86,9 +86,9 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         title: const Text(
@@ -97,9 +97,9 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
         ),
       ),
       body: _loading
-          ? Center(child: adaptiveLoader(color: const Color(0xFF10B981)))
+          ? Center(child: adaptiveLoader(color: const Color(0xFF0FB271)))
           : RefreshIndicator(
-              color: const Color(0xFF10B981),
+              color: const Color(0xFF0FB271),
               onRefresh: _load,
               child: _buildBody(),
             ),
@@ -115,7 +115,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
             padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
             child: Column(
               children: [
-                const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 48),
+                const Icon(Icons.error_outline, color: Color(0xFFF0453D), size: 48),
                 const SizedBox(height: 16),
                 const Text(
                   'Impossible de charger vos livraisons.',
@@ -136,7 +136,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   label: const Text('Réessayer'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0EA5E9),
+                    backgroundColor: const Color(0xFF2E90FA),
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -197,13 +197,13 @@ class _StatusVisual {
       case 'PENDING':
         return const _StatusVisual('En attente', Color(0xFFEAB308));
       case 'ACCEPTED':
-        return const _StatusVisual('Acceptée', Color(0xFF3B82F6));
+        return const _StatusVisual('Acceptée', Color(0xFF2E90FA));
       case 'IN_PROGRESS':
         return const _StatusVisual('En cours', Color(0xFFA855F7));
       case 'COMPLETED':
-        return const _StatusVisual('Terminée', Color(0xFF10B981));
+        return const _StatusVisual('Terminée', Color(0xFF0FB271));
       case 'CANCELLED':
-        return const _StatusVisual('Annulée', Color(0xFFEF4444));
+        return const _StatusVisual('Annulée', Color(0xFFF0453D));
       default:
         return _StatusVisual(status, Colors.white54);
     }
@@ -264,7 +264,7 @@ class _MerchantOrderCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: const Color(0xFF122530),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
         ),
@@ -288,13 +288,13 @@ class _MerchantOrderCard extends StatelessWidget {
             const SizedBox(height: 12),
             _AddressLine(
               icon: Icons.my_location,
-              color: const Color(0xFF0EA5E9),
+              color: const Color(0xFF2E90FA),
               text: item.pickupAddress.isEmpty ? '—' : item.pickupAddress,
             ),
             const SizedBox(height: 6),
             _AddressLine(
               icon: Icons.location_on,
-              color: const Color(0xFF10B981),
+              color: const Color(0xFF0FB271),
               text: item.deliveryAddress.isEmpty ? '—' : item.deliveryAddress,
             ),
             if (clientLine != null) ...[

@@ -8,6 +8,7 @@ import { OrderDetailComponent } from '../shared/order-detail/order-detail.compon
 import { LucideAngularModule } from 'lucide-angular';
 import { SkeletonRowComponent } from '../shared/skeleton/skeleton-row.component';
 import { PageActionsService } from '../shared/page-actions.service';
+import { orderStatusPillClass, paymentStatusPillClass } from '../shared/status-colors';
 
 type StatusFilter =
   | 'ALL'
@@ -172,19 +173,10 @@ export class ArchivesComponent implements OnInit, OnDestroy {
   canPrev = computed<boolean>(() => this.page() > 1);
   canNext = computed<boolean>(() => this.hasMore() || this.page() < this.totalPages());
 
+  /// Classe de badge unifiée (« Direction A ») — voir shared/status-colors.ts
+  /// pour le mapping statut → couleur, partagé avec la sémantique mobile.
   statusBadge(status: string): string {
-    switch (status) {
-      case 'COMPLETED': return 'bg-green-500/20 text-green-400 border-green-500/50';
-      case 'CANCELLED': return 'bg-red-500/20 text-red-400 border-red-500/50';
-      case 'FAILED': return 'bg-red-500/20 text-red-400 border-red-500/50';
-      case 'PENDING': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50';
-      case 'ACCEPTED': return 'bg-blue-500/20 text-blue-300 border-blue-500/50';
-      case 'IN_PROGRESS': return 'bg-purple-500/20 text-purple-300 border-purple-500/50';
-      case 'EN_ROUTE_PICKUP': return 'bg-sky-500/20 text-sky-300 border-sky-500/50';
-      case 'AT_PICKUP': return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50';
-      case 'NEAR_CLIENT': return 'bg-teal-500/20 text-teal-300 border-teal-500/50';
-      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
-    }
+    return orderStatusPillClass(status);
   }
 
   /// Libellé FR pour les statuts de commande, y compris les 4 nouveaux
@@ -204,16 +196,9 @@ export class ArchivesComponent implements OnInit, OnDestroy {
     }
   }
 
-  /// Classe Tailwind du badge de statut de paiement.
+  /// Classe de badge unifiée (« Direction A ») pour le statut de paiement.
   paymentBadge(paymentStatus: string | undefined): string {
-    switch (paymentStatus) {
-      case 'PAID': return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50';
-      case 'RECEIVED_BY_MERCHANT': return 'bg-teal-500/20 text-teal-300 border-teal-500/50';
-      case 'RECEIVED_BY_LIVREUR': return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50';
-      case 'PAY_ON_DELIVERY': return 'bg-amber-500/20 text-amber-300 border-amber-500/50';
-      case 'UNPAID': return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
-      default: return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
-    }
+    return paymentStatusPillClass(paymentStatus);
   }
 
   /// Libellé FR du statut de paiement.

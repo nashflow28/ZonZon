@@ -3,8 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --zz-bg: #0B1120;
+  /*
+   * Direction A — "ardoise réchauffée au teal".
+   * --zz-bg est réchauffé (était #0B1120, un bleu-nuit pur) vers une ardoise
+   * plus chaude teintée teal. --zz-surface reste inchangé (utilisé largement
+   * en zz-surface/... ailleurs) ; --zz-card/--zz-line sont de NOUVEAUX tokens
+   * pour les futures surfaces/bordures "Direction A" sans risquer de casser
+   * l'existant qui dépend encore de --zz-surface.
+   */
+  --zz-bg: #0C1A22;
   --zz-surface: #1E293B;
+  --zz-card: #122530;
+  --zz-line: #24404C;
   --zz-accent-from: #0EA5E9;
   --zz-accent-to: #10B981;
   --zz-text: #F1F5F9;
@@ -12,6 +22,24 @@
   --zz-border: rgba(148, 163, 184, 0.15);
   --zz-radius: 1rem;
   --zz-shadow-lg: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+
+  /*
+   * Couleurs de marque / statut "Direction A" — source UNIQUE de vérité,
+   * PARTAGÉE avec `AppColors` côté mobile (Flutter, mobile_app/lib/.../app_colors.dart) :
+   * ne pas modifier ces valeurs ici sans répercuter le changement côté mobile,
+   * afin que les deux apps restent visuellement cohérentes.
+   * Sémantique des couleurs de statut (voir aussi shared/status-colors.ts) :
+   *   --zz-go    → terminé / livré / payé / validé
+   *   --zz-mango → en cours / en route / actif
+   *   --zz-sky   → au retrait / info
+   *   --zz-coral → annulé / échoué / refusé
+   *   --zz-mut   → en attente / neutre
+   */
+  --zz-go: #0FB271;
+  --zz-mango: #FF9E1B;
+  --zz-sky: #2E90FA;
+  --zz-coral: #F0453D;
+  --zz-mut: #8FA6AE;
 }
 
 html, body {
@@ -57,4 +85,55 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 .zz-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.3);
+}
+
+/*
+ * ── Pièce signature : badges de statut unifiés ("Direction A") ─────────────
+ * Classes réutilisables pour tous les badges de statut (commande, paiement,
+ * signalement…), afin que les couleurs restent cohérentes entre elles et
+ * avec la sémantique de couleurs du mobile (AppColors). Utiliser en couple :
+ * `zz-pill` + un modificateur (`zz-pill--go`, `--mango`, `--sky`, `--coral`,
+ * `--mut`). Voir `shared/status-colors.ts` pour le mapping statut → variante.
+ */
+.zz-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.zz-pill--go {
+  background: rgba(15, 178, 113, 0.16);
+  color: #4CE0A5;
+  border-color: rgba(15, 178, 113, 0.4);
+}
+
+.zz-pill--mango {
+  background: rgba(255, 158, 27, 0.16);
+  color: #FFC169;
+  border-color: rgba(255, 158, 27, 0.4);
+}
+
+.zz-pill--sky {
+  background: rgba(46, 144, 250, 0.16);
+  color: #7DB8FC;
+  border-color: rgba(46, 144, 250, 0.4);
+}
+
+.zz-pill--coral {
+  background: rgba(240, 69, 61, 0.16);
+  color: #FF8B85;
+  border-color: rgba(240, 69, 61, 0.4);
+}
+
+.zz-pill--mut {
+  background: rgba(143, 166, 174, 0.14);
+  color: var(--zz-mut);
+  border-color: rgba(143, 166, 174, 0.35);
 }

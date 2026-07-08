@@ -48,13 +48,13 @@ class ZonZonApp extends StatelessWidget {
     final isDark = brightness == Brightness.dark;
     return ThemeData(
       brightness: brightness,
-      primaryColor: const Color(0xFF0EA5E9),
+      primaryColor: const Color(0xFF2E90FA),
       scaffoldBackgroundColor:
-          isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+          isDark ? const Color(0xFF0C1A22) : const Color(0xFFF8FAFC),
       fontFamily: _fontFallback,
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF0EA5E9),
+        seedColor: const Color(0xFF2E90FA),
         brightness: brightness,
       ),
     );

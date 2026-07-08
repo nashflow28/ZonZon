@@ -307,7 +307,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return Center(child: adaptiveLoader(color: const Color(0xFF10B981)));
+      return Center(child: adaptiveLoader(color: const Color(0xFF0FB271)));
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -363,7 +363,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         children: [
           CircleAvatar(
             radius: 56,
-            backgroundColor: const Color(0xFF334155),
+            backgroundColor: const Color(0xFF22414D),
             backgroundImage: photoUrl != null
                 ? NetworkImage('$apiUrl$photoUrl')
                 : null,
@@ -381,7 +381,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
               onTap: _pickAndUploadPhoto,
               child: Container(
                 decoration: const BoxDecoration(
-                  color: Color(0xFF3B82F6),
+                  color: Color(0xFF2E90FA),
                   shape: BoxShape.circle,
                 ),
                 padding: const EdgeInsets.all(8),
@@ -408,7 +408,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           child: Container(
             width: double.infinity,
             height: 160,
-            color: const Color(0xFF0F172A),
+            color: const Color(0xFF0C1A22),
             child: idCardUrl != null
                 ? Image.network(
                     '$apiUrl$idCardUrl',
@@ -428,15 +428,15 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                 ? SizedBox(
                     width: 16,
                     height: 16,
-                    child: adaptiveLoader(color: const Color(0xFF3B82F6)),
+                    child: adaptiveLoader(color: const Color(0xFF2E90FA)),
                   )
-                : const Icon(Icons.upload_outlined, color: Color(0xFF3B82F6)),
+                : const Icon(Icons.upload_outlined, color: Color(0xFF2E90FA)),
             label: Text(
               idCardUrl != null ? 'Changer la pièce d\'identité' : 'Ajouter',
-              style: const TextStyle(color: Color(0xFF3B82F6)),
+              style: const TextStyle(color: Color(0xFF2E90FA)),
             ),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Color(0xFF3B82F6)),
+              side: const BorderSide(color: Color(0xFF2E90FA)),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -477,7 +477,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
 
     if (!user.isDriverApproved) {
       final isRejected = user.isDriverRejected;
-      final color = isRejected ? const Color(0xFFEF4444) : const Color(0xFFF59E0B);
+      final color = isRejected ? const Color(0xFFF0453D) : const Color(0xFFFF9E1B);
       final title = isRejected
           ? 'Compte refusé'
           : 'En attente de validation par un administrateur';
@@ -517,14 +517,14 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
         children: [
           Icon(
             user.isAvailable ? Icons.wifi_tethering : Icons.wifi_tethering_off,
-            color: user.isAvailable ? const Color(0xFF10B981) : Colors.white38,
+            color: user.isAvailable ? const Color(0xFF0FB271) : Colors.white38,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -537,12 +537,12 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             SizedBox(
               width: 24,
               height: 24,
-              child: adaptiveLoader(color: const Color(0xFF10B981)),
+              child: adaptiveLoader(color: const Color(0xFF0FB271)),
             )
           else
             Switch(
               value: user.isAvailable,
-              activeThumbColor: const Color(0xFF10B981),
+              activeThumbColor: const Color(0xFF0FB271),
               onChanged: _toggleAvailability,
             ),
         ],
@@ -560,7 +560,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -570,7 +570,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             children: [
               Icon(
                 user.isPublic ? Icons.public : Icons.lock_outline,
-                color: user.isPublic ? const Color(0xFF3B82F6) : Colors.white38,
+                color: user.isPublic ? const Color(0xFF2E90FA) : Colors.white38,
               ),
               const SizedBox(width: 12),
               const Expanded(
@@ -583,12 +583,12 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                 SizedBox(
                   width: 24,
                   height: 24,
-                  child: adaptiveLoader(color: const Color(0xFF3B82F6)),
+                  child: adaptiveLoader(color: const Color(0xFF2E90FA)),
                 )
               else
                 Switch(
                   value: user.isPublic,
-                  activeThumbColor: const Color(0xFF3B82F6),
+                  activeThumbColor: const Color(0xFF2E90FA),
                   onChanged: _toggleVisibility,
                 ),
             ],
@@ -608,9 +608,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     final total = _stats?['total']?.toString() ?? '0';
     return Row(
       children: [
-        _statCard(Icons.star_rounded, avg, 'Note moy.', const Color(0xFFF59E0B)),
+        _statCard(Icons.star_rounded, avg, 'Note moy.', const Color(0xFFFF9E1B)),
         const SizedBox(width: 12),
-        _statCard(Icons.delivery_dining, total, 'Avis reçus', const Color(0xFF3B82F6)),
+        _statCard(Icons.delivery_dining, total, 'Avis reçus', const Color(0xFF2E90FA)),
       ],
     );
   }
@@ -620,7 +620,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: const Color(0xFF122530),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
@@ -642,7 +642,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
 
   Widget _buildHistoryTile() {
     return Material(
-      color: const Color(0xFF1E293B),
+      color: const Color(0xFF122530),
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -654,7 +654,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           padding: EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(Icons.history, color: Color(0xFF0EA5E9), size: 24),
+              Icon(Icons.history, color: Color(0xFF2E90FA), size: 24),
               SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -693,7 +693,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFF122530),
             borderRadius: BorderRadius.circular(16),
           ),
           child: content,
@@ -716,7 +716,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           child: ElevatedButton(
             onPressed: _saveProfile,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3B82F6),
+              backgroundColor: const Color(0xFF2E90FA),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -732,7 +732,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       children: [
         DropdownButtonFormField<String>(
           value: _vehicleType,
-          dropdownColor: const Color(0xFF0F172A),
+          dropdownColor: const Color(0xFF0C1A22),
           decoration: _inputDecoration('Type de véhicule', Icons.two_wheeler),
           style: const TextStyle(color: Colors.white),
           items: const [
@@ -749,7 +749,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         const SizedBox(height: 12),
         DropdownButtonFormField<String?>(
           initialValue: _selectedZoneId,
-          dropdownColor: const Color(0xFF0F172A),
+          dropdownColor: const Color(0xFF0C1A22),
           decoration: _inputDecoration('Zone habituelle', Icons.map_outlined),
           style: const TextStyle(color: Colors.white),
           items: [
@@ -767,7 +767,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           child: ElevatedButton(
             onPressed: _saveVehicle,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
+              backgroundColor: const Color(0xFF0FB271),
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
@@ -793,11 +793,11 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       labelStyle: const TextStyle(color: Colors.white54),
       prefixIcon: Icon(icon, color: Colors.white60),
       filled: true,
-      fillColor: const Color(0xFF0F172A),
+      fillColor: const Color(0xFF0C1A22),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF3B82F6)),
+        borderSide: const BorderSide(color: Color(0xFF2E90FA)),
       ),
     );
   }
@@ -836,9 +836,9 @@ class _NotificationsBellButton extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444),
+                      color: const Color(0xFFF0453D),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF0F172A), width: 1.5),
+                      border: Border.all(color: const Color(0xFF0C1A22), width: 1.5),
                     ),
                     child: Text(
                       unreadCount > 99 ? '99+' : '$unreadCount',

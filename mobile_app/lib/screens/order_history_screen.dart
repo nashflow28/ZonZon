@@ -127,8 +127,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
               _buildFilterChips(),
               Expanded(
                 child: RefreshIndicator(
-                  color: const Color(0xFF0EA5E9),
-                  backgroundColor: const Color(0xFF1E293B),
+                  color: const Color(0xFF2E90FA),
+                  backgroundColor: const Color(0xFF122530),
                   onRefresh: _load,
                   child: _buildBody(),
                 ),
@@ -139,13 +139,13 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     if (widget.embedInTab) return body;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
         title: const Text(
           'Historique des courses',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
       ),
@@ -183,12 +183,12 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             color: selected
-                ? const Color(0xFF0EA5E9).withValues(alpha: 0.18)
+                ? const Color(0xFF2E90FA).withValues(alpha: 0.18)
                 : Colors.white.withValues(alpha: 0.04),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: selected
-                  ? const Color(0xFF0EA5E9)
+                  ? const Color(0xFF2E90FA)
                   : Colors.white.withValues(alpha: 0.08),
               width: selected ? 1.4 : 1,
             ),
@@ -217,7 +217,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             child: Column(
               children: [
                 const Icon(Icons.error_outline,
-                    color: Color(0xFFEF4444), size: 48),
+                    color: Color(0xFFF0453D), size: 48),
                 const SizedBox(height: 16),
                 Text(
                   'Impossible de charger l\'historique.',
@@ -240,7 +240,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   label: const Text('Réessayer'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0EA5E9),
+                    backgroundColor: const Color(0xFF2E90FA),
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -400,7 +400,7 @@ class _OrderHistoryCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Material(
-        color: const Color(0xFF1E293B),
+        color: const Color(0xFF122530),
         borderRadius: BorderRadius.circular(16),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -435,7 +435,7 @@ class _OrderHistoryCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 _AddressLine(
                   icon: Icons.my_location,
-                  color: const Color(0xFF0EA5E9),
+                  color: const Color(0xFF2E90FA),
                   text: item.pickupAddress.isEmpty
                       ? '—'
                       : item.pickupAddress,
@@ -443,7 +443,7 @@ class _OrderHistoryCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 _AddressLine(
                   icon: Icons.location_on,
-                  color: const Color(0xFF10B981),
+                  color: const Color(0xFF0FB271),
                   text: item.deliveryAddress.isEmpty
                       ? '—'
                       : item.deliveryAddress,
@@ -610,10 +610,10 @@ class _OrderDetailsSheet extends StatelessWidget {
       builder: (ctx, scrollController) {
         return Container(
           decoration: const BoxDecoration(
-            color: Color(0xFF1E293B),
+            color: Color(0xFF122530),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             border: Border(
-              top: BorderSide(color: Color(0xFF334155)),
+              top: BorderSide(color: Color(0xFF22414D)),
             ),
           ),
           child: ListView(
@@ -660,7 +660,7 @@ class _OrderDetailsSheet extends StatelessWidget {
                   children: [
                     _AddressLine(
                       icon: Icons.my_location,
-                      color: const Color(0xFF0EA5E9),
+                      color: const Color(0xFF2E90FA),
                       text: item.pickupAddress.isEmpty
                           ? '—'
                           : item.pickupAddress,
@@ -668,7 +668,7 @@ class _OrderDetailsSheet extends StatelessWidget {
                     const SizedBox(height: 8),
                     _AddressLine(
                       icon: Icons.location_on,
-                      color: const Color(0xFF10B981),
+                      color: const Color(0xFF0FB271),
                       text: item.deliveryAddress.isEmpty
                           ? '—'
                           : item.deliveryAddress,
@@ -742,7 +742,7 @@ class _OrderDetailsSheet extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: () => Navigator.of(ctx).pop(),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0EA5E9),
+                    backgroundColor: const Color(0xFF2E90FA),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -766,7 +766,7 @@ class _OrderDetailsSheet extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: const Color(0xFF0C1A22),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
       ),

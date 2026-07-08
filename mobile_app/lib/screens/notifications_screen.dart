@@ -122,13 +122,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Widget build(BuildContext context) {
     final hasUnread = _items.any((n) => n.isUnread);
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
         title: const Text(
           'Notifications',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
         actions: [
@@ -143,7 +143,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     )
                   : const Text(
                       'Tout marquer comme lu',
-                      style: TextStyle(color: Color(0xFF0EA5E9), fontSize: 13),
+                      style: TextStyle(color: Color(0xFF2E90FA), fontSize: 13),
                     ),
             ),
         ],
@@ -165,7 +165,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             padding: const EdgeInsets.fromLTRB(24, 100, 24, 24),
             child: Column(
               children: [
-                const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 48),
+                const Icon(Icons.error_outline, color: Color(0xFFF0453D), size: 48),
                 const SizedBox(height: 16),
                 const Text(
                   'Impossible de charger les notifications.',
@@ -189,7 +189,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   icon: const Icon(Icons.refresh, color: Colors.white),
                   label: const Text('Réessayer'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0EA5E9),
+                    backgroundColor: const Color(0xFF2E90FA),
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -202,8 +202,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (_items.isEmpty) {
       return RefreshIndicator(
-        color: const Color(0xFF0EA5E9),
-        backgroundColor: const Color(0xFF1E293B),
+        color: const Color(0xFF2E90FA),
+        backgroundColor: const Color(0xFF122530),
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -228,8 +228,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     return RefreshIndicator(
-      color: const Color(0xFF0EA5E9),
-      backgroundColor: const Color(0xFF1E293B),
+      color: const Color(0xFF2E90FA),
+      backgroundColor: const Color(0xFF122530),
       onRefresh: _load,
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -240,7 +240,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Material(
-              color: const Color(0xFF1E293B),
+              color: const Color(0xFF122530),
               borderRadius: BorderRadius.circular(14),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
@@ -256,7 +256,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           Icons.circle,
                           size: 8,
                           color: n.isUnread
-                              ? const Color(0xFF0EA5E9)
+                              ? const Color(0xFF2E90FA)
                               : Colors.transparent,
                         ),
                       ),

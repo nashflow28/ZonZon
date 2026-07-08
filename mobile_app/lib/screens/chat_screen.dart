@@ -146,22 +146,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final closed =
         widget.orderStatus == 'COMPLETED' || widget.orderStatus == 'CANCELLED';
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
+        backgroundColor: const Color(0xFF122530),
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
         title: Row(
           children: [
             CircleAvatar(
               radius: 18,
-              backgroundColor: const Color(0xFF0EA5E9).withValues(alpha: 0.2),
+              backgroundColor: const Color(0xFF2E90FA).withValues(alpha: 0.2),
               child: Text(
                 widget.otherPartyName.isNotEmpty
                     ? widget.otherPartyName[0].toUpperCase()
                     : '?',
                 style: const TextStyle(
-                  color: Color(0xFF0EA5E9),
+                  color: Color(0xFF2E90FA),
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -186,7 +186,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       key: ValueKey(_otherTyping),
                       style: TextStyle(
                         color: _otherTyping
-                            ? const Color(0xFF10B981)
+                            ? const Color(0xFF0FB271)
                             : Colors.white60,
                         fontSize: 12,
                       ),
@@ -204,11 +204,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+              color: const Color(0xFFFF9E1B).withValues(alpha: 0.15),
               child: Text(
                 'Conversation fermée — la course est ${widget.orderStatus == 'COMPLETED' ? 'terminée' : 'annulée'}.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 13),
+                style: const TextStyle(color: Color(0xFFFF9E1B), fontSize: 13),
               ),
             ),
           Expanded(
@@ -301,8 +301,8 @@ class _Bubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = mine
-        ? const Color(0xFF0EA5E9)
-        : const Color(0xFF1E293B);
+        ? const Color(0xFF2E90FA)
+        : const Color(0xFF122530);
     final radius = BorderRadius.only(
       topLeft: const Radius.circular(18),
       topRight: const Radius.circular(18),
@@ -444,7 +444,7 @@ class _TypingBubbleState extends State<_TypingBubble>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E293B),
+          color: const Color(0xFF122530),
           borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(18),
             topRight: Radius.circular(18),
@@ -503,10 +503,10 @@ class _QuickReplies extends StatelessWidget {
         itemBuilder: (_, i) {
           final r = replies[i];
           return Material(
-            color: const Color(0xFF1E293B),
+            color: const Color(0xFF122530),
             shape: StadiumBorder(
               side: BorderSide(
-                color: const Color(0xFF0EA5E9).withValues(alpha: 0.3),
+                color: const Color(0xFF2E90FA).withValues(alpha: 0.3),
               ),
             ),
             clipBehavior: Clip.antiAlias,
@@ -518,7 +518,7 @@ class _QuickReplies extends StatelessWidget {
                   child: Text(
                     r,
                     style: const TextStyle(
-                      color: Color(0xFF0EA5E9),
+                      color: Color(0xFF2E90FA),
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -553,8 +553,8 @@ class _Composer extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
         decoration: const BoxDecoration(
-          color: Color(0xFF0F172A),
-          border: Border(top: BorderSide(color: Color(0xFF1E293B), width: 1)),
+          color: Color(0xFF0C1A22),
+          border: Border(top: BorderSide(color: Color(0xFF122530), width: 1)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -562,7 +562,7 @@ class _Composer extends StatelessWidget {
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1E293B),
+                  color: const Color(0xFF122530),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: Colors.white.withValues(alpha: 0.06),
@@ -600,7 +600,7 @@ class _Composer extends StatelessWidget {
                     duration: const Duration(milliseconds: 150),
                     opacity: canSend ? 1 : 0.45,
                     child: Material(
-                      color: const Color(0xFF0EA5E9),
+                      color: const Color(0xFF2E90FA),
                       shape: const CircleBorder(),
                       clipBehavior: Clip.antiAlias,
                       child: InkWell(

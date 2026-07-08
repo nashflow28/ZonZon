@@ -287,14 +287,14 @@ class _SplashRedirector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF0F172A),
+      backgroundColor: Color(0xFF0C1A22),
       body: Center(
         child: SizedBox(
           width: 24,
           height: 24,
           child: CircularProgressIndicator(
             strokeWidth: 2.5,
-            color: Color(0xFF0EA5E9),
+            color: Color(0xFF2E90FA),
           ),
         ),
       ),
