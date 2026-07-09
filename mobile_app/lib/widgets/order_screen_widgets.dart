@@ -67,7 +67,7 @@ class OrderHeader extends StatelessWidget {
                             letterSpacing: 1.5)),
                     Text('Express',
                         style: TextStyle(
-                            color: Color(0xFF2E90FA),
+                            color: Color(0xFFFF9E1B),
                             fontSize: 24,
                             fontWeight: FontWeight.w300)),
                   ],
@@ -463,13 +463,19 @@ class PrimaryGradientButton extends StatelessWidget {
       height: 60,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
+        // Direction A : vert de marque avec profondeur (clair → foncé) plutôt
+        // qu'un aplat bleu générique. Le bouton principal porte la couleur
+        // signature « Go ».
         gradient: const LinearGradient(
-            colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)]),
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF14C784), Color(0xFF0FB271)],
+        ),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFF2E90FA).withValues(alpha: 0.5),
-              blurRadius: 25,
-              offset: const Offset(0, 8)),
+              color: const Color(0xFF0FB271).withValues(alpha: 0.45),
+              blurRadius: 26,
+              offset: const Offset(0, 10)),
         ],
       ),
       child: ElevatedButton(
@@ -480,13 +486,15 @@ class PrimaryGradientButton extends StatelessWidget {
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
         child: loading
-            ? const CircularProgressIndicator(color: Colors.white)
+            ? const CircularProgressIndicator(color: Color(0xFF06140F))
             : Text(label,
                 style: const TextStyle(
                     fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                    letterSpacing: 0.5)),
+                    fontWeight: FontWeight.w900,
+                    // Texte foncé sur fond vert vif → meilleur contraste et
+                    // rendu plus « premium » que le blanc pur.
+                    color: Color(0xFF06140F),
+                    letterSpacing: 0.3)),
       ),
     );
   }

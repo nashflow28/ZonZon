@@ -144,9 +144,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 58,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(18),
-                              gradient: const LinearGradient(colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)]),
+                              // Direction A : CTA principal en vert de marque.
+                              gradient: const LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Color(0xFF14C784), Color(0xFF0FB271)],
+                              ),
                               boxShadow: [
-                                BoxShadow(color: const Color(0xFF2E90FA).withValues(alpha: 0.45), blurRadius: 20, offset: const Offset(0, 6)),
+                                BoxShadow(color: const Color(0xFF0FB271).withValues(alpha: 0.45), blurRadius: 22, offset: const Offset(0, 8)),
                               ],
                             ),
                             child: ElevatedButton(
@@ -157,10 +162,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
                               ),
                               child: _isLoading
-                                  ? adaptiveLoader(color: Colors.white)
+                                  ? adaptiveLoader(color: const Color(0xFF06140F))
                                   : const Text(
                                       'Se connecter',
-                                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.4),
+                                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF06140F), letterSpacing: 0.3),
                                     ),
                             ),
                           ),
