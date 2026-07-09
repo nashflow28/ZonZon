@@ -98,7 +98,12 @@ class _HomeTabState extends State<HomeTab>
     });
     ClientServices.pendingShopSelection.value = null;
     _scheduleEstimate();
-    _mapController.move(pending.shop.location, 15);
+    // Différé d'une frame : cette méthode peut être appelée depuis
+    // initState() (sélection boutique déjà en attente au moment du build),
+    // avant que le widget FlutterMap ne soit monté.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _mapController.move(pending.shop.location, 15);
+    });
     if (_delivery != null) _fitBoundsToBoth();
   }
 
@@ -256,18 +261,25 @@ class _HomeTabState extends State<HomeTab>
   void _fitBoundsToBoth() {
     final a = _pickup?.location;
     final b = _delivery?.location;
-    if (a != null && b != null) {
-      _mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: LatLngBounds(a, b),
-          padding: const EdgeInsets.fromLTRB(60, 120, 60, 380),
-        ),
-      );
-    } else if (a != null) {
-      _mapController.move(a, 15);
-    } else if (b != null) {
-      _mapController.move(b, 15);
-    }
+    if (a == null && b == null) return;
+    // Différé d'une frame : évite d'utiliser le MapController avant que le
+    // widget FlutterMap ne soit réellement monté (ex. initState() qui
+    // consomme une sélection boutique déjà en attente au moment du build).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (a != null && b != null) {
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: LatLngBounds(a, b),
+            padding: const EdgeInsets.fromLTRB(60, 120, 60, 380),
+          ),
+        );
+      } else if (a != null) {
+        _mapController.move(a, 15);
+      } else if (b != null) {
+        _mapController.move(b, 15);
+      }
+    });
   }
 
   void _cancelShopOrigin() {

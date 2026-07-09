@@ -150,16 +150,24 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   void _fitBoundsToBoth() {
     final a = _pickup?.location;
     final b = _delivery?.location;
-    if (a != null && b != null) {
-      _mapController.fitCamera(
-        CameraFit.bounds(
-          bounds: LatLngBounds(a, b),
-          padding: const EdgeInsets.fromLTRB(60, 120, 60, 380),
-        ),
-      );
-    } else if (a != null) {
-      _mapController.move(a, 15);
-    }
+    if (a == null && b == null) return;
+    // Différé d'une frame : évite d'utiliser le MapController avant que le
+    // widget FlutterMap ne soit réellement monté (ex. initState() qui
+    // reçoit des coordonnées déjà en cache dans le store — la carte n'a pas
+    // encore fait son premier build à ce moment-là).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (a != null && b != null) {
+        _mapController.fitCamera(
+          CameraFit.bounds(
+            bounds: LatLngBounds(a, b),
+            padding: const EdgeInsets.fromLTRB(60, 120, 60, 380),
+          ),
+        );
+      } else if (a != null) {
+        _mapController.move(a, 15);
+      }
+    });
   }
 
   void _attachStreams() {
