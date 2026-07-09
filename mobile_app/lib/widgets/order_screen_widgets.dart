@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/place.dart';
 import '../services/eta_service.dart';
+import '../utils/order_status_utils.dart';
 
 /// Header glass + logo + bouton logout pour l'écran de commande.
 class OrderHeader extends StatelessWidget {
@@ -692,6 +693,7 @@ class OrderFormSection extends StatelessWidget {
 class OrderAcceptedSection extends StatelessWidget {
   final Map<String, dynamic>? assignedLivreur;
   final String? activeOrderStatus;
+  final String? paymentStatus;
   final LatLng? driverPosition;
   final DateTime? driverPositionAt;
   final double? distanceKm;
@@ -705,6 +707,7 @@ class OrderAcceptedSection extends StatelessWidget {
     super.key,
     required this.assignedLivreur,
     required this.activeOrderStatus,
+    required this.paymentStatus,
     required this.driverPosition,
     required this.driverPositionAt,
     required this.distanceKm,
@@ -760,6 +763,31 @@ class OrderAcceptedSection extends StatelessWidget {
                 fontWeight: FontWeight.w900,
                 color: Colors.white)),
         const SizedBox(height: 8),
+        if ((paymentStatus ?? '').isNotEmpty) ...[
+          Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: PaymentStatusUtils.color(paymentStatus)
+                    .withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: PaymentStatusUtils.color(paymentStatus)
+                      .withValues(alpha: 0.45),
+                ),
+              ),
+              child: Text(
+                'Paiement : ${PaymentStatusUtils.label(paymentStatus)}',
+                style: TextStyle(
+                  color: PaymentStatusUtils.color(paymentStatus),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
         LiveTrackingBanner(
           driverPosition: driverPosition,
           driverPositionAt: driverPositionAt,

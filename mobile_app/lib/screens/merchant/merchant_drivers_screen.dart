@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../services/merchant_drivers_service.dart';
+import '../../utils/affiliation_status_utils.dart';
 import '../../utils/platform_adapter.dart';
 
 /// Écran « Mes livreurs » pour un COMMERCANT (Priorité 3, Lot 3, item 2).
@@ -100,10 +101,16 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
     if (phone == null || phone.isEmpty || !mounted) return;
 
     try {
-      await _service.addDriverByPhone(phone);
+      final affiliation = await _service.addDriverByPhone(phone);
       if (!mounted) return;
       hapticSuccess();
-      showAdaptiveSnack(context, 'Livreur affilié avec succès.');
+      final statusLabel = AffiliationStatusUtils.label(affiliation.status);
+      showAdaptiveSnack(
+        context,
+        affiliation.status == 'ACTIVE'
+            ? 'Livreur affilié avec succès.'
+            : 'Invitation envoyée : $statusLabel.',
+      );
       _load();
     } on MerchantDriversException catch (e) {
       if (!mounted) return;
@@ -296,6 +303,8 @@ class _DriverTile extends StatelessWidget {
                       : (driver.phone ?? 'Véhicule non renseigné'),
                   style: const TextStyle(color: Colors.white54, fontSize: 12.5),
                 ),
+                const SizedBox(height: 6),
+                _AffiliationBadge(status: driver.status),
               ],
             ),
           ),
@@ -305,6 +314,32 @@ class _DriverTile extends StatelessWidget {
             onPressed: onRemove,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AffiliationBadge extends StatelessWidget {
+  final String status;
+  const _AffiliationBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = AffiliationStatusUtils.color(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Text(
+        AffiliationStatusUtils.label(status),
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

@@ -15,6 +15,10 @@ class ChatMessage {
   @JsonKey(includeToJson: false)
   final String? senderFirstName;
 
+  /// Nom de famille extrait du `sender` imbriqué.
+  @JsonKey(includeToJson: false)
+  final String? senderLastName;
+
   final String type;
   final String content;
   final DateTime createdAt;
@@ -33,6 +37,7 @@ class ChatMessage {
     required this.orderId,
     required this.senderId,
     required this.senderFirstName,
+    required this.senderLastName,
     required this.type,
     required this.content,
     required this.createdAt,
@@ -51,6 +56,7 @@ class ChatMessage {
       orderId: json['orderId']?.toString() ?? '',
       senderId: json['senderId']?.toString(),
       senderFirstName: sender?['firstName'] as String?,
+      senderLastName: sender?['lastName'] as String?,
       type: json['type']?.toString() ?? 'TEXT',
       content: json['content']?.toString() ?? '',
       createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
@@ -74,6 +80,7 @@ class ChatMessage {
       orderId: orderId,
       senderId: senderId,
       senderFirstName: senderFirstName,
+      senderLastName: senderLastName,
       type: type,
       content: content,
       createdAt: createdAt,
@@ -81,5 +88,13 @@ class ChatMessage {
       status: status ?? this.status,
       localId: localId,
     );
+  }
+
+  @JsonKey(includeToJson: false)
+  String? get senderDisplayName {
+    final first = senderFirstName?.trim() ?? '';
+    final last = senderLastName?.trim() ?? '';
+    final full = '$first $last'.trim();
+    return full.isEmpty ? null : full;
   }
 }

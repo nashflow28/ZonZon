@@ -33,6 +33,8 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
   final TextEditingController _clientName = TextEditingController();
   final TextEditingController _description =
       TextEditingController(text: '1 colis');
+  final TextEditingController _manualPrice = TextEditingController();
+  final TextEditingController _priceReason = TextEditingController();
 
   Place? _pickup;
   Place? _delivery;
@@ -52,6 +54,8 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
     _clientPhone.dispose();
     _clientName.dispose();
     _description.dispose();
+    _manualPrice.dispose();
+    _priceReason.dispose();
     super.dispose();
   }
 
@@ -155,6 +159,10 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
     final pickup = _pickup;
     final delivery = _delivery;
     final description = _description.text.trim();
+    final manualPriceText = _manualPrice.text.trim();
+    final manualPrice = manualPriceText.isEmpty
+        ? null
+        : int.tryParse(manualPriceText.replaceAll(' ', ''));
 
     if (phone.isEmpty) {
       showAdaptiveSnack(context, 'Renseignez le téléphone du client', isError: true);
@@ -172,6 +180,10 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
       showAdaptiveSnack(context, 'Décrivez le colis à livrer', isError: true);
       return;
     }
+    if (manualPriceText.isNotEmpty && manualPrice == null) {
+      showAdaptiveSnack(context, 'Le prix manuel doit être un nombre entier', isError: true);
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -187,6 +199,10 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         clientName: _clientName.text.trim().isEmpty
             ? null
             : _clientName.text.trim(),
+        priceFcfa: manualPrice,
+        priceReason: _priceReason.text.trim().isEmpty
+            ? null
+            : _priceReason.text.trim(),
         preferredLivreurId: _selectedDriver?.id,
       );
       if (!mounted) return;
@@ -274,6 +290,22 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
             _description,
             icon: Icons.notes,
             maxLines: 3,
+          ),
+          const SizedBox(height: 24),
+          _SectionTitle('Prix'),
+          const SizedBox(height: 8),
+          _input(
+            'Prix manuel (optionnel, en FCFA)',
+            _manualPrice,
+            icon: Icons.payments_outlined,
+            keyboard: TextInputType.number,
+          ),
+          const SizedBox(height: 12),
+          _input(
+            'Raison de l’ajustement (optionnel)',
+            _priceReason,
+            icon: Icons.edit_note_outlined,
+            maxLines: 2,
           ),
           const SizedBox(height: 20),
           if (_pickup != null && _delivery != null) _estimateCard(),

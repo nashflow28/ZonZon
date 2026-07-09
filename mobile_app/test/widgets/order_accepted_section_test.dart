@@ -25,6 +25,7 @@ void main() {
         OrderAcceptedSection(
           assignedLivreur: null,
           activeOrderStatus: 'PENDING',
+          paymentStatus: null,
           driverPosition: null,
           driverPositionAt: null,
           distanceKm: null,
@@ -55,6 +56,7 @@ void main() {
             'phone': '+22890000000',
           },
           activeOrderStatus: 'ACCEPTED',
+          paymentStatus: null,
           driverPosition: null,
           driverPositionAt: null,
           distanceKm: null,
@@ -77,6 +79,7 @@ void main() {
             'phone': '+22890000000',
           },
           activeOrderStatus: 'IN_PROGRESS',
+          paymentStatus: null,
           driverPosition: null,
           driverPositionAt: null,
           distanceKm: null,
@@ -96,6 +99,7 @@ void main() {
         const OrderAcceptedSection(
           assignedLivreur: null,
           activeOrderStatus: 'PENDING',
+          paymentStatus: null,
           driverPosition: null,
           driverPositionAt: null,
           distanceKm: null,
@@ -106,6 +110,24 @@ void main() {
       ));
 
       expect(find.text('Annuler la commande'), findsNothing);
+    });
+
+    testWidgets('paymentStatus renseigné → badge de paiement visible',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_wrap(
+        const OrderAcceptedSection(
+          assignedLivreur: null,
+          activeOrderStatus: 'ACCEPTED',
+          paymentStatus: 'PAY_ON_DELIVERY',
+          driverPosition: null,
+          driverPositionAt: null,
+          distanceKm: null,
+          onOpenChat: _noop,
+          onOpenWhatsapp: _noop,
+        ),
+      ));
+
+      expect(find.text('Paiement : À la livraison'), findsOneWidget);
     });
   });
 }

@@ -41,6 +41,7 @@ class AffiliatedDriver {
   final String lastName;
   final String? phone;
   final DriverVehicle? vehicle;
+  final String status;
 
   const AffiliatedDriver({
     required this.id,
@@ -48,6 +49,7 @@ class AffiliatedDriver {
     required this.lastName,
     this.phone,
     this.vehicle,
+    this.status = 'ACTIVE',
   });
 
   String get fullName => '$firstName $lastName'.trim();
@@ -62,6 +64,7 @@ class AffiliatedDriver {
       vehicle: vehicleJson is Map
           ? DriverVehicle.fromJson(Map<String, dynamic>.from(vehicleJson))
           : null,
+      status: json['status']?.toString() ?? 'ACTIVE',
     );
   }
 }
@@ -101,6 +104,69 @@ class AvailableDriver {
           ? null
           : (rawDistance as num).toDouble(),
       isAffiliated: json['isAffiliated'] == true,
+    );
+  }
+}
+
+class DriverAffiliationMerchant {
+  final String id;
+  final String firstName;
+  final String lastName;
+  final String? phone;
+
+  const DriverAffiliationMerchant({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    this.phone,
+  });
+
+  String get fullName => '$firstName $lastName'.trim();
+
+  factory DriverAffiliationMerchant.fromJson(Map<String, dynamic> json) {
+    return DriverAffiliationMerchant(
+      id: json['id']?.toString() ?? '',
+      firstName: json['firstName']?.toString() ?? '',
+      lastName: json['lastName']?.toString() ?? '',
+      phone: json['phone']?.toString(),
+    );
+  }
+}
+
+class DriverAffiliationInvite {
+  final String merchantId;
+  final String status;
+  final DateTime? createdAt;
+  final DateTime? acceptedAt;
+  final DateTime? removedAt;
+  final DriverAffiliationMerchant? merchant;
+
+  const DriverAffiliationInvite({
+    required this.merchantId,
+    required this.status,
+    this.createdAt,
+    this.acceptedAt,
+    this.removedAt,
+    this.merchant,
+  });
+
+  bool get isPending => status == 'PENDING';
+
+  factory DriverAffiliationInvite.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic value) =>
+        value == null ? null : DateTime.tryParse(value.toString());
+
+    return DriverAffiliationInvite(
+      merchantId: json['merchantId']?.toString() ?? '',
+      status: json['status']?.toString() ?? 'PENDING',
+      createdAt: parseDate(json['createdAt']),
+      acceptedAt: parseDate(json['acceptedAt']),
+      removedAt: parseDate(json['removedAt']),
+      merchant: json['merchant'] is Map
+          ? DriverAffiliationMerchant.fromJson(
+              Map<String, dynamic>.from(json['merchant'] as Map),
+            )
+          : null,
     );
   }
 }
@@ -156,6 +222,69 @@ class MerchantDriversService {
       throw MerchantDriversException(_extractErrorMessage(
         res.body,
         fallback: "Impossible d'affilier ce livreur.",
+      ));
+    } on MerchantDriversException {
+      rethrow;
+    } catch (e) {
+      throw MerchantDriversException('Erreur réseau : $e');
+    }
+  }
+
+  /// Liste les invitations/affiliations du livreur connecté
+  /// (`GET /drivers/me/affiliations`).
+  Future<List<DriverAffiliationInvite>> getDriverAffiliations() async {
+    try {
+      final res = await _api.get('/drivers/me/affiliations');
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        throw MerchantDriversException('Erreur ${res.statusCode}');
+      }
+      final decoded = jsonDecode(res.body);
+      if (decoded is! List) {
+        throw const MerchantDriversException('Réponse inattendue du serveur.');
+      }
+      return decoded
+          .whereType<Map>()
+          .map((m) => DriverAffiliationInvite.fromJson(
+                Map<String, dynamic>.from(m),
+              ))
+          .toList();
+    } on MerchantDriversException {
+      rethrow;
+    } catch (e) {
+      throw MerchantDriversException('Erreur réseau : $e');
+    }
+  }
+
+  Future<DriverAffiliationInvite> respondToAffiliation({
+    required String merchantId,
+    required String action,
+  }) async {
+    try {
+      final res = await _api.patch(
+        '/drivers/me/affiliations/$merchantId',
+        body: {'action': action},
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final decoded = jsonDecode(res.body);
+        if (decoded is! Map<String, dynamic>) {
+          throw const MerchantDriversException('Réponse serveur invalide.');
+        }
+        return DriverAffiliationInvite(
+          merchantId: merchantId,
+          status: decoded['status']?.toString() ?? action.toUpperCase(),
+          acceptedAt: decoded['acceptedAt'] == null
+              ? null
+              : DateTime.tryParse(decoded['acceptedAt'].toString()),
+          createdAt: null,
+          removedAt: decoded['removedAt'] == null
+              ? null
+              : DateTime.tryParse(decoded['removedAt'].toString()),
+          merchant: null,
+        );
+      }
+      throw MerchantDriversException(_extractErrorMessage(
+        res.body,
+        fallback: "Impossible de répondre à l'invitation.",
       ));
     } on MerchantDriversException {
       rethrow;

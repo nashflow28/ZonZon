@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/env.dart';
+import '../models/order_history_item.dart';
 import '../models/product.dart';
 import '../models/shop.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
+import '../services/merchant_orders_service.dart';
 import '../services/shops_service.dart';
 import 'merchant/create_delivery_screen.dart';
 import 'merchant/merchant_drivers_screen.dart';
 import 'merchant/merchant_orders_screen.dart';
+import 'merchant/merchant_profile_screen.dart';
 import 'merchant_shop_form_screen.dart';
 import 'merchant_product_form_screen.dart';
 import '../utils/platform_adapter.dart';
@@ -23,8 +26,10 @@ class MerchantHomeScreen extends StatefulWidget {
 
 class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   final ShopsService _shops = ShopsService();
+  final MerchantOrdersService _merchantOrders = MerchantOrdersService();
   Shop? _shop;
   List<Product> _products = [];
+  List<OrderHistoryItem> _orders = const [];
   bool _loading = true;
 
   @override
@@ -37,10 +42,15 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     setState(() => _loading = true);
     final shop = await _shops.getMyShop();
     final products = shop != null ? await _shops.myProducts() : <Product>[];
+    List<OrderHistoryItem> orders = const [];
+    try {
+      orders = await _merchantOrders.getMyMerchantOrders();
+    } catch (_) {}
     if (!mounted) return;
     setState(() {
       _shop = shop;
       _products = products;
+      _orders = orders;
       _loading = false;
     });
   }
@@ -77,6 +87,13 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
 
   Future<void> _openMerchantDrivers() async {
     await pushAdaptive<void>(context, const MerchantDriversScreen());
+  }
+
+  Future<void> _openMerchantProfile() async {
+    await pushAdaptive<void>(context, const MerchantProfileScreen());
+    if (mounted) {
+      _refresh();
+    }
   }
 
   Future<void> _pickShopLogo() async {
@@ -120,6 +137,11 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: 'Profil',
+            icon: const Icon(Icons.account_circle_outlined, color: Colors.white70),
+            onPressed: _openMerchantProfile,
+          ),
+          IconButton(
             tooltip: 'Rafraîchir',
             icon: const Icon(Icons.refresh, color: Colors.white70),
             onPressed: _refresh,
@@ -141,6 +163,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                       onCreate: _openCreateDelivery,
                       onViewOrders: _openMerchantOrders,
                       onViewDrivers: _openMerchantDrivers,
+                      stats: _orders,
                     ),
                     const SizedBox(height: 24),
                     _OnboardingState(onCreate: _openShopForm),
@@ -156,6 +179,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
                         onCreate: _openCreateDelivery,
                         onViewOrders: _openMerchantOrders,
                         onViewDrivers: _openMerchantDrivers,
+                        stats: _orders,
                       ),
                       const SizedBox(height: 24),
                       _ShopHeaderCard(
@@ -286,14 +310,27 @@ class _DeliveriesQuickActions extends StatelessWidget {
   final VoidCallback onCreate;
   final VoidCallback onViewOrders;
   final VoidCallback onViewDrivers;
+  final List<OrderHistoryItem> stats;
   const _DeliveriesQuickActions({
     required this.onCreate,
     required this.onViewOrders,
     required this.onViewDrivers,
+    required this.stats,
   });
 
   @override
   Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final deliveriesToday = stats.where((item) {
+      final createdAt = item.createdAt?.toLocal();
+      if (createdAt == null) return false;
+      return createdAt.year == today.year &&
+          createdAt.month == today.month &&
+          createdAt.day == today.day;
+    }).length;
+    final completed = stats.where((item) => item.status == 'COMPLETED').length;
+    final totalAmount = stats.fold<int>(0, (sum, item) => sum + (item.priceFcfa ?? 0));
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -371,6 +408,86 @@ class _DeliveriesQuickActions extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12)),
               ),
             ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _MerchantStatTile(
+                  label: 'Aujourd’hui',
+                  value: '$deliveriesToday',
+                  color: const Color(0xFF2E90FA),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MerchantStatTile(
+                  label: 'Terminées',
+                  value: '$completed',
+                  color: const Color(0xFF0FB271),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _MerchantStatTile(
+                  label: 'Montant',
+                  value: _formatCompactPrice(totalAmount),
+                  color: const Color(0xFFFF9E1B),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatCompactPrice(int amount) {
+    if (amount >= 1000000) {
+      return '${(amount / 1000000).toStringAsFixed(1)}M';
+    }
+    if (amount >= 1000) {
+      return '${(amount / 1000).toStringAsFixed(1)}k';
+    }
+    return '$amount';
+  }
+}
+
+class _MerchantStatTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _MerchantStatTile({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
           ),
         ],
       ),

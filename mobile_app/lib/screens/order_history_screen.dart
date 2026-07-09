@@ -413,8 +413,7 @@ class _OrderHistoryCard extends StatelessWidget {
                 Row(
                   children: [
                     _StatusPill(visual: visual),
-                    if (viewerRole == 'LIVREUR' &&
-                        (item.paymentStatus ?? '').isNotEmpty) ...[
+                    if ((item.paymentStatus ?? '').isNotEmpty) ...[
                       const SizedBox(width: 6),
                       _PaymentPill(status: item.paymentStatus!),
                     ],
@@ -689,8 +688,7 @@ class _OrderDetailsSheet extends StatelessWidget {
                       if (item.priceFcfa != null)
                         ('Prix', _formatPrice(item.priceFcfa)),
                     ]),
-                    if (viewerRole == 'LIVREUR' &&
-                        (item.paymentStatus ?? '').isNotEmpty) ...[
+                    if ((item.paymentStatus ?? '').isNotEmpty) ...[
                       const SizedBox(height: 8),
                       _PaymentPill(status: item.paymentStatus!),
                     ],

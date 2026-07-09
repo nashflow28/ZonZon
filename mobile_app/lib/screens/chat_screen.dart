@@ -8,6 +8,7 @@ import '../utils/platform_adapter.dart';
 class ChatScreen extends StatefulWidget {
   final String orderId;
   final String otherPartyName;
+  final String? headerSubtitle;
   final String? otherPartyPhone;
   final String? otherPartyRole; // 'CLIENT' ou 'LIVREUR'
   final String orderStatus;
@@ -17,6 +18,7 @@ class ChatScreen extends StatefulWidget {
     required this.orderId,
     required this.otherPartyName,
     required this.orderStatus,
+    this.headerSubtitle,
     this.otherPartyPhone,
     this.otherPartyRole,
   });
@@ -182,7 +184,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),
                     child: Text(
-                      _otherTyping ? 'écrit…' : 'En ligne',
+                      _otherTyping
+                          ? 'écrit…'
+                          : (widget.headerSubtitle ?? 'En ligne'),
                       key: ValueKey(_otherTyping),
                       style: TextStyle(
                         color: _otherTyping
@@ -219,6 +223,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     myId: _chat.myId,
                     otherTyping: _otherTyping,
                     scrollCtrl: _scrollCtrl,
+                    conversationTitle: widget.otherPartyName,
                   ),
           ),
           if (!closed) ...[
@@ -244,12 +249,14 @@ class _MessagesList extends StatelessWidget {
   final String? myId;
   final bool otherTyping;
   final ScrollController scrollCtrl;
+  final String conversationTitle;
 
   const _MessagesList({
     required this.messages,
     required this.myId,
     required this.otherTyping,
     required this.scrollCtrl,
+    required this.conversationTitle,
   });
 
   @override
@@ -285,7 +292,12 @@ class _MessagesList extends StatelessWidget {
         final tight = prev != null &&
             prev.senderId == m.senderId &&
             m.createdAt.difference(prev.createdAt).inMinutes < 2;
-        return _Bubble(message: m, mine: mine, tight: tight);
+        return _Bubble(
+          message: m,
+          mine: mine,
+          tight: tight,
+          fallbackSenderName: conversationTitle,
+        );
       },
     );
   }
@@ -295,8 +307,14 @@ class _Bubble extends StatelessWidget {
   final ChatMessage message;
   final bool mine;
   final bool tight;
+  final String fallbackSenderName;
 
-  const _Bubble({required this.message, required this.mine, required this.tight});
+  const _Bubble({
+    required this.message,
+    required this.mine,
+    required this.tight,
+    required this.fallbackSenderName,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -344,8 +362,20 @@ class _Bubble extends StatelessWidget {
                         ),
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  crossAxisAlignment:
+                      mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                   children: [
+                    if (!mine && !tight) ...[
+                      Text(
+                        message.senderDisplayName ?? fallbackSenderName,
+                        style: const TextStyle(
+                          color: Colors.white60,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                    ],
                     Text(
                       message.content,
                       style: const TextStyle(

@@ -157,6 +157,7 @@ class ChatService {
       orderId: orderId,
       senderId: _myId,
       senderFirstName: null,
+      senderLastName: null,
       type: type,
       content: content,
       createdAt: DateTime.now(),

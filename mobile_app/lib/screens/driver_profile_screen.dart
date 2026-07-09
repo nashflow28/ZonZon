@@ -10,8 +10,10 @@ import '../router/app_router.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/driver_service.dart';
+import '../services/merchant_drivers_service.dart';
 import '../services/notifications_service.dart';
 import '../screens/order_history_screen.dart';
+import '../utils/affiliation_status_utils.dart';
 import '../screens/notifications_screen.dart';
 import '../utils/platform_adapter.dart';
 
@@ -26,6 +28,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   final _api = ApiClient();
   final _auth = AuthService();
   final _driverService = DriverService();
+  final _merchantDriversService = MerchantDriversService();
   final _notificationsService = NotificationsService();
   final _picker = ImagePicker();
 
@@ -37,6 +40,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   bool _togglingVisibility = false;
   bool _uploadingIdCard = false;
   int _unreadNotificationsCount = 0;
+  int _estimatedEarningsFcfa = 0;
+  List<DriverAffiliationInvite> _affiliations = const [];
+  final Map<String, bool> _respondingAffiliations = <String, bool>{};
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -72,11 +78,13 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         _api.get('/users/me'),
         _api.get('/vehicles/me'),
         _api.get('/zones'),
+        _api.get('/orders/mine'),
       ]);
 
       final userRes = results[0];
       final vehicleRes = results[1];
       final zonesRes = results[2];
+      final ordersRes = results[3];
 
       if (userRes.statusCode == 200) {
         final data = jsonDecode(userRes.body) as Map<String, dynamic>;
@@ -108,6 +116,31 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
               .map((m) => Map<String, dynamic>.from(m))
               .toList();
         }
+      }
+
+      if (ordersRes.statusCode == 200) {
+        final decoded = jsonDecode(ordersRes.body);
+        if (decoded is List) {
+          _estimatedEarningsFcfa = decoded
+              .whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m))
+              .where((m) => m['status']?.toString() == 'COMPLETED')
+              .fold<int>(0, (sum, m) {
+            final raw = m['priceFcfa'];
+            final value = raw is int
+                ? raw
+                : raw is num
+                    ? raw.toInt()
+                    : int.tryParse(raw?.toString() ?? '') ?? 0;
+            return sum + value;
+          });
+        }
+      }
+
+      try {
+        _affiliations = await _merchantDriversService.getDriverAffiliations();
+      } catch (_) {
+        _affiliations = const [];
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
@@ -304,6 +337,56 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     }
   }
 
+  Future<void> _respondToAffiliation(
+    DriverAffiliationInvite invite,
+    String action,
+  ) async {
+    final merchantId = invite.merchantId;
+    if (merchantId.isEmpty || _respondingAffiliations[merchantId] == true) {
+      return;
+    }
+    setState(() => _respondingAffiliations[merchantId] = true);
+    try {
+      final response = await _merchantDriversService.respondToAffiliation(
+        merchantId: merchantId,
+        action: action,
+      );
+      if (!mounted) return;
+      setState(() {
+        _affiliations = _affiliations
+            .map((item) => item.merchantId == merchantId
+                ? DriverAffiliationInvite(
+                    merchantId: item.merchantId,
+                    status: response.status,
+                    createdAt: item.createdAt,
+                    acceptedAt: response.acceptedAt ?? item.acceptedAt,
+                    removedAt: response.removedAt ?? item.removedAt,
+                    merchant: item.merchant,
+                  )
+                : item)
+            .toList();
+      });
+      showAdaptiveSnack(
+        context,
+        action == 'accept'
+            ? 'Affiliation acceptée.'
+            : 'Invitation refusée.',
+      );
+    } catch (e) {
+      if (mounted) {
+        showAdaptiveSnack(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _respondingAffiliations.remove(merchantId));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -328,6 +411,8 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           _buildVisibilitySection(),
           const SizedBox(height: 16),
           _buildStatsRow(),
+          const SizedBox(height: 16),
+          _buildSection('Affiliations commerçants', _buildAffiliationsSection()),
           const SizedBox(height: 16),
           _buildHistoryTile(),
           const SizedBox(height: 16),
@@ -606,11 +691,22 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   Widget _buildStatsRow() {
     final avg = (_stats?['average'] as num?)?.toStringAsFixed(1) ?? '-';
     final total = _stats?['total']?.toString() ?? '0';
-    return Row(
+    return Column(
       children: [
-        _statCard(Icons.star_rounded, avg, 'Note moy.', const Color(0xFFFF9E1B)),
-        const SizedBox(width: 12),
-        _statCard(Icons.delivery_dining, total, 'Avis reçus', const Color(0xFF2E90FA)),
+        Row(
+          children: [
+            _statCard(Icons.star_rounded, avg, 'Note moy.', const Color(0xFFFF9E1B)),
+            const SizedBox(width: 12),
+            _statCard(Icons.delivery_dining, total, 'Avis reçus', const Color(0xFF2E90FA)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _wideStatCard(
+          Icons.account_balance_wallet_outlined,
+          _formatPrice(_estimatedEarningsFcfa),
+          'Gains estimés (courses terminées)',
+          const Color(0xFF0FB271),
+        ),
       ],
     );
   }
@@ -637,6 +733,148 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _wideStatCard(IconData icon, String value, String label, Color color) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF122530),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAffiliationsSection() {
+    if (_affiliations.isEmpty) {
+      return const Text(
+        'Aucune invitation ou affiliation commerçant pour le moment.',
+        style: TextStyle(color: Colors.white60, fontSize: 13),
+      );
+    }
+
+    return Column(
+      children: _affiliations.map((invite) {
+        final merchant = invite.merchant;
+        final merchantName = merchant?.fullName.trim().isNotEmpty == true
+            ? merchant!.fullName
+            : 'Commerçant';
+        final color = AffiliationStatusUtils.color(invite.status);
+        final busy = _respondingAffiliations[invite.merchantId] == true;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0C1A22),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          merchantName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if ((merchant?.phone ?? '').trim().isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            merchant!.phone!,
+                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: color.withValues(alpha: 0.45)),
+                    ),
+                    child: Text(
+                      AffiliationStatusUtils.label(invite.status),
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (invite.isPending) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: busy ? null : () => _respondToAffiliation(invite, 'reject'),
+                        icon: const Icon(Icons.close, color: Color(0xFFF0453D)),
+                        label: const Text(
+                          'Refuser',
+                          style: TextStyle(color: Color(0xFFF0453D)),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Color(0xFFF0453D)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: busy ? null : () => _respondToAffiliation(invite, 'accept'),
+                        icon: busy
+                            ? SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: adaptiveLoader(color: Colors.white),
+                              )
+                            : const Icon(Icons.check, color: Colors.white),
+                        label: const Text(
+                          'Accepter',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0FB271),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -800,6 +1038,16 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         borderSide: const BorderSide(color: Color(0xFF2E90FA)),
       ),
     );
+  }
+
+  String _formatPrice(int value) {
+    final raw = value.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < raw.length; i++) {
+      if (i > 0 && (raw.length - i) % 3 == 0) buffer.write(' ');
+      buffer.write(raw[i]);
+    }
+    return '$buffer FCFA';
   }
 }
 

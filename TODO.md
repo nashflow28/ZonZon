@@ -36,7 +36,7 @@
 - [x] **Post-V1 — Notifs validation/refus livreur** (à l'approbation admin). *(2026-07-07)*
 - [x] **Post-V1 — Tarif effectif par zone** (`basePrice`/`pricePerKmOverride` branchés dans `buildOrderPricing`). *(2026-07-07)*
 - [x] **Post-V1 — Conversation multi-participants** (`Conversation`/`ConversationParticipant`, hook additif au message, endpoints `GET/POST/DELETE /orders/:id/conversation/...`, commerçant autorisé aussi sur les messages HTTP). *(2026-07-07)*
-- [ ] **Reste (front, plus tard)** : UI mobile/admin pour affiliation invite/accept, participants de conversation, notifs validation in-app. Déploiement prod (auth Fly/Cloudflare interactive requise).
+- [ ] **Reste (front, plus tard)** : UI admin pour participants de conversation si souhaitée, notifs validation livreur in-app côté mobile, déploiement prod (auth Fly/Cloudflare interactive requise).
 
 ### 🔴 Priorité 1 — Validation & disponibilité des livreurs
 - [x] **Backend — Validation admin obligatoire des livreurs** *(2026-07-05)*
@@ -60,6 +60,7 @@
   - Rattachement client **existant (compte)** via `clientId` **ou par téléphone** (`clientPhone`/`clientName`, avec ou sans compte). `findForUser` cas COMMERCANT (ses livraisons créées). Pricing factorisé (`buildOrderPricing`).
   - Le commerçant ne peut jamais être livreur (garanti par `@Roles(LIVREUR)` sur `accept`). Build OK, jest **147/147**.
 - [x] **Mobile (commerçant)** — écran `create_delivery_screen` (client par téléphone/nom, retrait/livraison via LocationPicker, estimation, `POST /orders/merchant`) + écran `merchant_orders_screen` (« Mes livraisons » via `GET /orders/mine`). Accès depuis l'accueil commerçant (carte d'actions rapides), routes go_router. `flutter analyze` 10, `flutter test` 10/10. *(2026-07-05)*
+- [x] **Correctifs mobile post-P3/post-V1 (2026-07-09)** — statut d’affiliation réel côté commerçant, accept/refus côté livreur, conversation multi-participants branchée côté mobile, prix manuel commerçant, statuts/paiement complets dans « Mes livraisons », paiement visible côté client, écran profil commerçant.
 - [ ] **Admin (optionnel)** — création/gestion de livraison Type 1 depuis le dashboard (non prioritaire)
 
 ### 🟡 Priorité 3 — Attribution, affiliation, tarifs, statuts, paiement, zones

@@ -63,6 +63,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Map<String, dynamic>? _assignedLivreur;
   String? _activeOrderStatus;
+  String? _paymentStatus;
 
   LatLng? _driverPosition;
   DateTime? _driverPositionAt;
@@ -93,6 +94,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     if (item == null) return;
     _activeOrderStatus = item.status;
     _assignedLivreur = item.livreur;
+    _paymentStatus = item.paymentStatus;
     _setPickupDeliveryFromRaw(item.raw);
   }
 
@@ -226,6 +228,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       if (mine is! Map) return;
       setState(() {
         _activeOrderStatus = mine['status']?.toString() ?? _activeOrderStatus;
+        _paymentStatus = mine['paymentStatus']?.toString() ?? _paymentStatus;
         if (mine['livreur'] is Map) {
           _assignedLivreur = Map<String, dynamic>.from(mine['livreur']);
         }
@@ -625,6 +628,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 OrderAcceptedSection(
                   assignedLivreur: _assignedLivreur,
                   activeOrderStatus: _activeOrderStatus,
+                  paymentStatus: _paymentStatus,
                   driverPosition: _driverPosition,
                   driverPositionAt: _driverPositionAt,
                   distanceKm: _distanceDriverToPickup(),

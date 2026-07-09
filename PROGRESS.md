@@ -242,6 +242,31 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 31 (2026-07-09) — Mobile commerçant/livreur/client : correctifs post-P3/post-V1
+- **Affiliations commerçant/livreur enfin cohérentes** :
+  - `mobile_app/lib/services/merchant_drivers_service.dart` parse désormais `status` sur les affiliations commerçant (`PENDING/ACTIVE/REJECTED/REMOVED`) et expose aussi le flux livreur `GET/PATCH /drivers/me/affiliations`.
+  - `mobile_app/lib/screens/merchant/merchant_drivers_screen.dart` n’annonce plus un faux succès : une invitation `PENDING` affiche maintenant « invitation envoyée » + badge de statut.
+  - `mobile_app/lib/screens/driver_profile_screen.dart` affiche les invitations commerçants reçues avec **Accepter** / **Refuser** explicites ; le livreur peut donc enfin faire aboutir le flux backend d’affiliation depuis le mobile. Bonus : **gains estimés** ajoutés (somme des courses `COMPLETED`) dans les stats du profil livreur.
+- **Commerçant : création/lecture des livraisons remise à niveau** :
+  - `mobile_app/lib/services/merchant_orders_service.dart` + `lib/screens/merchant/create_delivery_screen.dart` envoient maintenant `priceFcfa` et `priceReason` (ajustement manuel du prix côté commerçant, avec traçabilité backend déjà en place).
+  - `mobile_app/lib/screens/merchant/merchant_orders_screen.dart` a été réécrit : statuts étendus centralisés via `OrderStatusUtils`, badge `paymentStatus`, cartes détaillées, agrégats (**aujourd’hui / terminées / montant**), et détail de commande avec accès réel à la conversation.
+  - `mobile_app/lib/screens/merchant_home_screen.dart` affiche ces stats agrégées dans les actions rapides.
+- **Conversation multi-participants réellement branchée côté mobile** :
+  - Nouveau `mobile_app/lib/services/conversation_service.dart` pour consommer `GET /orders/:id/conversation`, `POST /participants`, `DELETE /participants/me`.
+  - Le détail d’une livraison commerçant permet maintenant de **rejoindre / quitter / ouvrir** la conversation de la commande ; les participants actifs sont listés.
+  - `mobile_app/lib/screens/chat_screen.dart` affiche désormais le nom de l’expéditeur sur les bulles entrantes, ce qui évite l’ambiguïté quand plusieurs participants parlent dans la même conversation.
+- **Visibilité paiement / profils** :
+  - `mobile_app/lib/screens/order_tracking_screen.dart` + `lib/widgets/order_screen_widgets.dart` montrent désormais le **statut de paiement** côté client pendant le suivi.
+  - `mobile_app/lib/screens/order_history_screen.dart` affiche le badge de paiement pour tous les rôles (plus seulement le livreur).
+  - **Nouveau** `mobile_app/lib/screens/merchant/merchant_profile_screen.dart` + route `merchantProfile` dans `lib/router/app_router.dart` ; bouton profil ajouté dans `merchant_home_screen.dart`.
+- **Vérifications** :
+  - `flutter analyze` : **10 issues**, niveau revenu aux alertes non bloquantes/préexistantes.
+  - `flutter test test/` : **11/11** ✅.
+- **Reste découvert / non traité dans cette session** :
+  - pas encore de recherche/sélection d’un client existant par ID côté création commerçant ;
+  - pas encore de notification in-app dédiée à la validation/refus admin d’un livreur ;
+  - optimisation batterie GPS livreur non retouchée (le backend filtre déjà hors course active).
+
 ### Session 30 (2026-07-08) — Direction A « Évolution » (design, vague 1+2) + APK
 - Suite au choix de la **Direction A** (thème sombre conservé mais élevé — cf. proposition design). Deux agents lancés (Flutter/Angular) coupés par une limite de session → volet Flutter terminé à la main, volet Angular conservé (avait abouti).
 - **Design tokens partagés** : `mobile_app/lib/theme/app_colors.dart` (`AppColors`) ↔ `admin-dashboard/src/styles.css` (`--zz-*`). Palette évoluée : bg `#0C1A22`, card `#122530`, line `#24404C`, go `#0FB271`, mango `#FF9E1B`, sky `#2E90FA`, coral `#F0453D`, textHi `#EAF2F0`, textMut `#8FA6AE`.

@@ -49,6 +49,8 @@ class MerchantOrdersService {
     String? clientId,
     String? clientPhone,
     String? clientName,
+    int? priceFcfa,
+    String? priceReason,
     String? preferredLivreurId,
   }) async {
     if ((clientId == null || clientId.isEmpty) &&
@@ -72,6 +74,9 @@ class MerchantOrdersService {
           'clientPhone': clientPhone,
         if (clientName != null && clientName.isNotEmpty)
           'clientName': clientName,
+        if (priceFcfa != null) 'priceFcfa': priceFcfa,
+        if (priceReason != null && priceReason.isNotEmpty)
+          'priceReason': priceReason,
         if (preferredLivreurId != null && preferredLivreurId.isNotEmpty)
           'preferredLivreurId': preferredLivreurId,
       });
