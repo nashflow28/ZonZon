@@ -46,7 +46,7 @@ import { ZonesService } from '../src/zones/zones.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { PositionsService } from '../src/orders/positions.service';
 import { PricingService } from '../src/pricing/pricing.service';
-import { User, UserRole } from '../src/entities/user.entity';
+import { User, UserRole, UserStatus } from '../src/entities/user.entity';
 import { Vehicle } from '../src/entities/vehicle.entity';
 import { DeviceToken } from '../src/entities/device-token.entity';
 import { MerchantDriver } from '../src/entities/merchant-driver.entity';
@@ -302,6 +302,7 @@ export interface TestAppBundle {
     broadcastNewOrder: jest.Mock;
     broadcastOrderAccepted: jest.Mock;
     broadcastStatusUpdate: jest.Mock;
+    broadcastPaymentUpdate: jest.Mock;
     isUserConnected: jest.Mock;
   };
 }
@@ -339,6 +340,17 @@ export async function buildTestApp(): Promise<TestAppBundle> {
   });
 
   const usersRepo = makeInMemoryRepo<User>();
+  // Défaut DB non reproduit par le repo in-memory : la colonne `users.status`
+  // a un DEFAULT 'ACTIVE' côté MySQL. Sans lui, les contrôles
+  // `status !== ACTIVE` (attribution manuelle d'un livreur notamment)
+  // rejettent des comptes fraîchement inscrits via /auth/register.
+  {
+    const originalSave = usersRepo.save.getMockImplementation()!;
+    usersRepo.save.mockImplementation(async (entity: any) => {
+      if (entity.status === undefined) entity.status = UserStatus.ACTIVE;
+      return originalSave(entity);
+    });
+  }
   const vehiclesRepo = makeInMemoryRepo<Vehicle>();
   const ordersRepo = makeInMemoryRepo<DeliveryOrder>();
   const deviceTokensRepo = makeInMemoryRepo<DeviceToken>();
@@ -355,7 +367,22 @@ export async function buildTestApp(): Promise<TestAppBundle> {
     broadcastNewOrder: jest.fn(),
     broadcastOrderAccepted: jest.fn(),
     broadcastStatusUpdate: jest.fn(),
+    broadcastPaymentUpdate: jest.fn(),
     isUserConnected: jest.fn().mockReturnValue(false),
+  };
+
+  // `OrdersService.acceptOrder` exécute son UPDATE atomique dans
+  // `ordersRepository.manager.transaction` (verrou pessimiste sur le
+  // livreur). Les repos in-memory n'ont pas de vrai EntityManager : on
+  // fournit une transaction passthrough qui route User → usersRepo et le
+  // reste → ordersRepo (le verrou est sans objet ici, l'exécution des tests
+  // e2e est séquentielle ; `findOne` in-memory ignore l'option `lock`).
+  (ordersRepo as any).manager = {
+    transaction: async (cb: (em: any) => Promise<any>) =>
+      cb({
+        getRepository: (entity: any) =>
+          entity === User ? usersRepo : ordersRepo,
+      }),
   };
 
   // Stubs légers pour les services annexes : ils ne sont pas la cible des

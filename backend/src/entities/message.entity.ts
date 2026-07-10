@@ -42,6 +42,12 @@ export class Message {
   @Column({ type: 'text' })
   content: string;
 
+  /**
+   * Lu par AU MOINS UN destinataire (rétro-compat mobile : coche « lu » côté
+   * expéditeur). Le curseur de lecture individuel — nécessaire dès que la
+   * conversation a 3+ participants — vit dans `message_read_receipts`
+   * (MessageReadReceipt) : c'est lui qui alimente les compteurs non-lus.
+   */
   @Column({ type: 'datetime', nullable: true })
   readAt: Date | null;
 

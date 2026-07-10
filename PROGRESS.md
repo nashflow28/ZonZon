@@ -242,6 +242,111 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 36 (2026-07-10) — Correction des 8 findings de la revue Session 35 (P0/P1/P2)
+- **Les 7 findings + les fixtures e2e sont corrigés.** Détail :
+  - **P0 restauration course livreur** : `DriverScreen._restoreActiveOrder()` lit `/orders/mine` au boot (compte validé), détecte la course active la plus récente (ACCEPTED→NEAR_CLIENT) et rouvre le dialog de progression complet (`_showActiveOrderDialog`, ex-`_showSuccessDialog`, titre « Course en cours » en mode restauration). Géofencing réarmé si la course est encore ACCEPTED.
+  - **P0 annulation distante** : `statusUpdates$` désormais écouté côté livreur (le backend n'émet `orderStatusUpdated` qu'aux parties de la course). Statut terminal distant → fermeture du dialog non-dismissible (avec `popUntil` pour dépiler un chat ouvert au-dessus), snackbar via `_messengerKey`, arrêt géofence/GPS ; statut non terminal → synchro `dialogStatus`. Garde `dialogClosed` contre la double fermeture (transition locale + écho socket).
+  - **P0 atomicité une-course-active** : `acceptOrder` exécute re-contrôle « course active » + UPDATE atomique dans `ordersRepository.manager.transaction` avec verrou pessimiste (`findOne(User, { lock: pessimistic_write })`) sur la ligne du livreur — deux accepts simultanés du même livreur sur deux commandes distinctes sont sérialisés, le second reçoit `ConflictException`. Le contrôle hors transaction est conservé comme fast-path. Tests : race simulée (re-contrôle sous verrou) + vérification de la prise du verrou ; mocks unitaires et in-memory e2e câblés avec un `manager.transaction` passthrough.
+  - **P1 normalisation téléphone** : `searchClients` utilise `replace(/[^0-9]/g, '')` (le `RegExp('[^0-9]')` sans flag ne retirait que le premier séparateur).
+  - **P1 diffusion paiement** : nouvel event `orderPaymentUpdated` (gateway `broadcastPaymentUpdate` appelé par `updatePaymentStatus` → client/livreur/commerçant). Mobile : stream `paymentUpdates$` dans `OrderSocketController`, consommé par `order_tracking_screen` (client), le dialog livreur (badge paiement live) et `merchant_orders_screen` (liste + détail).
+  - **P1 lecture chat par participant** : nouvelle entité/table `message_read_receipts` (PK `messageId`+`userId`, FKs CASCADE, migration `1780000000000` avec backfill client+livreur des messages déjà lus). `markAsRead` insère des receipts pour CE participant (INSERT … orIgnore) et `unreadCountForUser` compte via la jointure receipts — la lecture par un participant ne consomme plus le non-lu des autres. `Message.readAt` conservé (sémantique « lu par au moins un destinataire », rétro-compat coche « lu » mobile), `broadcastChatRead` inchangé.
+  - **P2 GPS strict mobile** : le tracking (position stream + heartbeat 90 s) ne démarre plus à la connexion socket mais à l'ouverture du dialog de course active (accept ou restauration) et s'arrête à sa fermeture (`_stopLocationUpdates`). À la reconnexion socket, le GPS n'est relancé que si une course est active.
+  - **P2 fixtures e2e** : le repo in-memory `usersRepo` applique le défaut DB `User.status=ACTIVE` au save (comme la colonne MySQL) → attribution manuelle réparée.
+- **Fichiers touchés** :
+  - backend : `src/orders/orders.service.ts` (transaction accept + broadcast paiement), `src/orders/orders.gateway.ts` (`broadcastPaymentUpdate`), `src/users/users.service.ts` (regex), `src/messages/messages.service.ts` (receipts), `src/entities/message-read-receipt.entity.ts` (nouveau), `src/entities/message.entity.ts` (doc readAt), `src/migrations/1780000000000-AddMessageReadReceipts.ts` (nouveau), `src/app.module.ts`, `src/messages/messages.module.ts`, specs orders/gateway/messages, `test/test-helpers.ts`
+  - mobile : `lib/driver_screen.dart` (restauration, statuts distants, cycle de vie GPS, paiement live), `lib/controllers/order_socket_controller.dart` (`paymentUpdates$`), `lib/screens/order_tracking_screen.dart`, `lib/screens/merchant/merchant_orders_screen.dart`
+- **Vérifications exécutées** :
+  - backend : `npm run build` → **OK** ; `npx jest` → **353/353 OK (19 suites)** (343 → 353, +10) ; `npm run test:e2e` → **56/56 OK** (54 → 56)
+  - mobile : `flutter analyze --no-pub lib` → **10 alertes préexistantes, 0 nouvelle** ; `flutter test` → **11/11 OK**
+- **Notes migration/prod** : la migration `1780000000000` tourne automatiquement au déploiement (`migrationsRun` en prod). Le verrou pessimiste s'appuie sur le mode transactionnel pessimiste (défaut TiDB) — pas de changement de config requis.
+- **Résiduel** : items « CDC source — inscription livreur » et « Décision PO — tarif » toujours ouverts (arbitrage produit) ; tests widget/intégration Flutter dédiés aux nouveaux flux toujours manquants (item `[~]` existant).
+
+### Session 35 (2026-07-10) — Revue de conformité mobile/backend après correctifs
+- **Verdict : FAIL ciblé / non prêt pour un PASS CDC complet**. Les correctifs commerçant et transverses de la session 34 sont réellement présents et les contrats mobile/backend sont cohérents, mais la revue fraîche a identifié des risques résiduels importants sur la reprise de course livreur et la concurrence.
+- **Conforme vérifié** : affiliation avec statut PENDING/ACTIVE/REJECTED et accept/refus mobile ; conversation commerçant branchée ; prix manuel + raison ; client existant par recherche ; zones envoyées à l'estimation/création ; statuts/paiement affichés ; profil et stats commerçant ; gains livreur ; tracking GPS/ETA commerçant ; session/FCM et navigation notification.
+- **Findings nouveaux / résiduels** :
+  - HIGH CONFIRMED : après redémarrage de l'app mobile pendant une course, le livreur ne recharge aucune course active (`DriverScreen` ne lit que `/orders/available`) et ne peut plus reprendre les actions de statut ; l'historique est en lecture seule ;
+  - HIGH CONFIRMED : une annulation client d'une course ACCEPTED n'est pas consommée par `DriverScreen` (`statusUpdates$` non écouté) ; le dialog livreur est non dismissible et reste sur un statut obsolète ;
+  - HIGH PROBABLE : la règle « une seule course active par livreur » fait un check puis un UPDATE sans transaction/verrou sur le livreur ; deux acceptations concurrentes de deux commandes distinctes peuvent toutes deux passer ;
+  - MEDIUM CONFIRMED : `UsersService.searchClients` retire un seul séparateur du téléphone (`replace(RegExp('[^0-9]'), '')`) ; une recherche comme `+228 90-12.34` reste mal normalisée ;
+  - MEDIUM CONFIRMED : le statut de paiement client/livreur n'est pas diffusé en temps réel ; l'écran de suivi client et le dialog livreur peuvent rester sur `UNPAID` jusqu'à réouverture/rechargement ;
+  - MEDIUM CONFIRMED : `Message.readAt` reste global au message, donc en conversation à 3 un participant peut marquer le message lu pour tous ;
+  - LOW CONFIRMED : le GPS mobile livreur démarre dès la connexion socket, même sans course active ; le backend ignore ces positions, mais batterie et permission sont consommées inutilement ;
+  - conformité source toujours ouverte : photo de profil obligatoire à l'inscription livreur absente ; tarif source 150 FCFA/km différent de la configuration V1 à 200 ; commissions hebdomadaires filtrées par `createdAt` au lieu de `completedAt` (`TO_VALIDATE`).
+- **Vérifications exécutées** :
+  - backend unitaires : `npm test -- --runInBand` → **343/343 OK (19 suites)** ;
+  - backend build : `npm run build` → **OK** ;
+  - backend e2e : `npm run test:e2e -- --runInBand` → **54/56 OK** ; 2 échecs de fixture sur l'attribution manuelle, car le repo in-memory n'applique pas le défaut DB `User.status=ACTIVE` attendu par le nouveau contrôle ;
+  - mobile : `flutter test` → **11/11 OK** ; `flutter analyze --no-pub lib` → **10 alertes préexistantes, 0 erreur** ;
+  - aucun device Android connecté : tests d'intégration Flutter non exécutés.
+
+### Session 34 (2026-07-10) — Correctifs finaux mobile/backend après revue CDC
+- **Verdict : PASS sur les manques bloquants et majeurs identifiés dans la revue mobile**. Les flux commerçant et transverses signalés la veille ont été corrigés et revalidés.
+- **Correctifs livrés** :
+  - session mobile/401 : `GoRouter.refreshListenable` branché sur `AuthService.sessionListenable`, donc retour immédiat au login après expiration/logout ;
+  - FCM : `PushService` supprime uniquement le token du device courant (`previousToken`) et resynchronise correctement après logout/login dans le même processus ;
+  - commerçant : recherche/sélection d’un client existant (`GET /orders/merchant-clients/search`), saisie téléphone via `PhoneField`, prix manuel envoyé à la création, zones pickup/destination envoyées au backend, et sélection de livreur filtrée (actif/disponible/non occupé) ;
+  - backend commande : `assignPreferredLivreur` vérifie le propriétaire commerçant (ou admin), `computeEta` autorise le commerçant créateur, et le gateway réhydrate la course active d’un livreur après redémarrage avant de forwarder/persister sa position ;
+  - détail commerçant : carte de trajet, position live livreur, ETA et conversation multi-participants désormais exploitables depuis l’app ;
+  - chat : `FAILED` ferme aussi la conversation côté mobile/backend, `chat:typing` est protégé par contrôle d’appartenance ;
+  - paiements/statuts : mapping centralisé `OrderStatusUtils`/`PaymentStatusUtils` réutilisé côté commerçant/client avec statuts étendus et visibilité paiement.
+- **Fichiers majeurs touchés** :
+  - backend : `src/orders/orders.service.ts`, `orders.controller.ts`, `orders.gateway.ts`, `src/users/users.service.ts`, `src/messages/messages.service.ts`, `src/orders/dto/search-merchant-clients-query.dto.ts`
+  - mobile : `lib/router/app_router.dart`, `lib/services/push_service.dart`, `lib/services/merchant_orders_service.dart`, `lib/services/zones_service.dart`, `lib/screens/client/home_tab.dart`, `lib/screens/merchant/create_delivery_screen.dart`, `lib/screens/merchant/merchant_orders_screen.dart`, `lib/screens/chat_screen.dart`
+- **Vérifications exécutées** :
+  - backend ciblé : `npm test -- --runInBand src/orders/orders.gateway.spec.ts src/orders/orders.service.spec.ts src/messages/messages.service.spec.ts` → **171/171 OK**
+  - backend build : `npm run build` → **OK**
+  - mobile : `flutter test` → **11/11 OK**
+  - mobile : `flutter analyze --no-pub lib` → **10 alertes préexistantes/non bloquantes, 0 erreur**
+- **Résiduel non bloquant** :
+  - il manque encore des tests widget/intégration Flutter dédiés pour couvrir les nouveaux flux commerçant/affiliation/notif tap/conversation ;
+  - la contradiction documentaire sur le tarif source (150) vs décision backlog/config (200 FCFA/km) reste à arbitrer côté PO, mais l’implémentation mobile/backend est cohérente entre elles.
+
+### Session 33 (2026-07-09) — Revue mobile complète vs CDC après correctifs
+- **Verdict : FAIL / non prêt pour validation finale**, malgré un cœur client/livreur solide et les correctifs commerçant désormais présents. Les flux conformes vérifiés incluent double géolocalisation, description colis, premier livreur atomique, statuts étendus, paiement visible, WhatsApp, affiliation invite/accept, profil commerçant, prix manuel, stats et chat commerçant.
+- **Findings confirmés** :
+  - session supprimée sur `401` mais `GoRouter` non rafraîchi ; l'utilisateur peut rester sur un écran protégé ;
+  - logout FCM envoie `{token:null}` et supprime tous les devices, tandis que `PushService._initialized` empêche une resynchronisation fiable après logout/login dans le même processus ;
+  - téléphone client commerçant non normalisé (`+228`) + aucun vrai sélecteur de compte : un client existant peut être traité comme invité ;
+  - `available-drivers` ne filtre ni compte suspendu ni course active, ce qui permet de réserver une livraison à un livreur qui ne pourra pas l'accepter ;
+  - suivi GPS/ETA commerçant absent du mobile et ETA backend non autorisé au commerçant ;
+  - tarification par zone inactive dans les parcours mobile (`pickupZoneId`/`destinationZoneId` jamais envoyés) ;
+  - mapping GPS `activeOrders` uniquement en mémoire : après restart/deploy backend, une course déjà active n'est plus reconnue par le gateway ;
+  - chat multi-participants encore partiel (`FAILED` ne ferme pas l'envoi, typing sans authz, `readAt` global et non par participant) ;
+  - inscription livreur sans photo de profil immédiate, contrairement au CDC source ; tarif source 150 FCFA/km contradictoire avec la décision V1 actuelle à 200 FCFA/km.
+- **Qualité / vérifications exécutées** :
+  - `flutter analyze --no-pub lib` : 10 alertes préexistantes/non bloquantes, aucune erreur ;
+  - `flutter test` : 11/11 OK, mais aucune couverture des flux récents affiliation/notifs/commerçant/chat ;
+  - `backend npm run build` : OK ;
+  - `npm test -- --runInBand src/messages/messages.service.spec.ts src/orders/orders.service.spec.ts src/orders/orders.gateway.spec.ts` : 161/161 OK ;
+  - `flutter build apk --release` : premier essai bloqué par un `GeneratedPluginRegistrant.java` ignoré et obsolète qui incluait `integration_test`; après `flutter clean`, suppression de l'artefact et régénération correcte, second essai sans erreur mais non terminé avant le timeout de 10 min. Validation APK release donc `TO_VALIDATE` sur cette machine.
+
+### Session 32 (2026-07-09) — Durcissement mobile/session/notifs + cohérence chat multi-participants
+- **Notifications push enfin opérationnelles de bout en bout** :
+  - `mobile_app/lib/main.dart` écoute désormais l’état de session et appelle réellement `PushService.init()` après authentification ou restauration de session.
+  - Nouveau `mobile_app/lib/services/notification_navigation_service.dart` : un tap sur notif FCM ou notif persistée redirige vers l’écran utile (`tracking` client, détail livraison commerçant, home livreur).
+  - `mobile_app/lib/screens/notifications_screen.dart` n’est plus une liste morte : le tap marque lu puis ouvre le flux concerné.
+  - `mobile_app/lib/screens/merchant/merchant_profile_screen.dart` expose maintenant un accès notifications (avec badge non-lu), ce qui manquait au rôle commerçant.
+- **Session mobile plus robuste** :
+  - `mobile_app/lib/services/api_client.dart` ajoute timeout HTTP global (15 s) et purge automatique de session sur `401`.
+  - `mobile_app/lib/services/auth_service.dart` publie désormais les changements de session (`ValueNotifier`) pour que le routeur/app réagisse immédiatement à un JWT expiré/révoqué.
+  - `mobile_app/lib/router/app_router.dart` refuse en plus les deeplinks de rôle incohérents (client → espace commerçant, etc.).
+- **Commerçant et client remis en cohérence métier** :
+  - `mobile_app/lib/screens/merchant/merchant_orders_screen.dart` supporte un `orderId` initial (deep link notif), écoute le socket pour refresh live, et permet enfin d’ajuster **paiement** et **prix** depuis le détail d’une livraison.
+  - `mobile_app/lib/screens/merchant/create_delivery_screen.dart` accepte maintenant aussi un **`clientId` existant** en plus du téléphone, conformément au backend `POST /orders/merchant`.
+  - `mobile_app/lib/screens/merchant_home_screen.dart` recharge aussi ses stats/listes sur `orderAccepted` / `orderStatusUpdated`.
+  - `mobile_app/lib/services/active_orders_store.dart` retire maintenant correctement les courses `FAILED` de la liste active client.
+  - `mobile_app/lib/screens/order_tracking_screen.dart` + `backend/src/orders/orders.service.ts` gardent l’ETA actif sur les statuts étendus (`EN_ROUTE_PICKUP`, `AT_PICKUP`, `NEAR_CLIENT`) au lieu de tomber silencieusement en “plus d’ETA”.
+  - `mobile_app/lib/utils/order_status_utils.dart` couvre désormais aussi `CASH_ON_DELIVERY` et `REFUNDED`.
+- **Chat multi-participants moins trompeur côté backend** :
+  - `backend/src/messages/messages.service.ts` et `backend/src/orders/orders.gateway.ts` notifient maintenant **tous** les participants actifs/autres parties d’une conversation, pas uniquement le binôme client↔livreur.
+  - Les read receipts sont aussi rediffusés à tous les destinataires concernés.
+  - `backend/src/messages/messages.service.spec.ts` mis à jour pour couvrir ce contrat.
+- **Vérifications** :
+  - `flutter analyze --no-pub` : toujours 10 warnings/infos préexistants, aucune nouvelle erreur.
+  - `flutter test` : **11/11** OK.
+  - `backend` : `npm run build` OK ; `npm test -- --runInBand src/messages/messages.service.spec.ts` OK.
+
 ### Session 31 (2026-07-09) — Mobile commerçant/livreur/client : correctifs post-P3/post-V1
 - **Affiliations commerçant/livreur enfin cohérentes** :
   - `mobile_app/lib/services/merchant_drivers_service.dart` parse désormais `status` sur les affiliations commerçant (`PENDING/ACTIVE/REJECTED/REMOVED`) et expose aussi le flux livreur `GET/PATCH /drivers/me/affiliations`.

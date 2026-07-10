@@ -57,6 +57,10 @@ class AppRoutes {
   static const String merchantDrivers = '/home/merchant/drivers';
   static const String merchantProfile = '/home/merchant/profile';
 
+  static String clientOrderDetails(String orderId) => '$clientOrders/$orderId';
+  static String merchantOrderDetails(String orderId) =>
+      '$merchantOrders/$orderId';
+
   // Helper: returns the home route for a given role string.
   static String homeForRole(String? role) {
     switch (role) {
@@ -72,14 +76,18 @@ class AppRoutes {
 }
 
 // Keys nécessaires pour le shell (root) et chaque branche.
-final GlobalKey<NavigatorState> _rootNavKey =
-    GlobalKey<NavigatorState>(debugLabel: 'root');
-final GlobalKey<NavigatorState> _clientHomeNavKey =
-    GlobalKey<NavigatorState>(debugLabel: 'clientHome');
-final GlobalKey<NavigatorState> _clientOrdersNavKey =
-    GlobalKey<NavigatorState>(debugLabel: 'clientOrders');
-final GlobalKey<NavigatorState> _clientShopsNavKey =
-    GlobalKey<NavigatorState>(debugLabel: 'clientShops');
+final GlobalKey<NavigatorState> _rootNavKey = GlobalKey<NavigatorState>(
+  debugLabel: 'root',
+);
+final GlobalKey<NavigatorState> _clientHomeNavKey = GlobalKey<NavigatorState>(
+  debugLabel: 'clientHome',
+);
+final GlobalKey<NavigatorState> _clientOrdersNavKey = GlobalKey<NavigatorState>(
+  debugLabel: 'clientOrders',
+);
+final GlobalKey<NavigatorState> _clientShopsNavKey = GlobalKey<NavigatorState>(
+  debugLabel: 'clientShops',
+);
 final GlobalKey<NavigatorState> _clientProfileNavKey =
     GlobalKey<NavigatorState>(debugLabel: 'clientProfile');
 
@@ -90,6 +98,7 @@ final GoRouter appRouter = GoRouter(
   navigatorKey: _rootNavKey,
   initialLocation: AppRoutes.splash,
   redirect: _globalRedirect,
+  refreshListenable: AuthService().sessionListenable,
   routes: [
     // Splash / auth-gate: redirect immediately in _globalRedirect.
     GoRoute(
@@ -203,6 +212,14 @@ final GoRouter appRouter = GoRouter(
         GoRoute(
           path: 'orders',
           builder: (context, state) => const MerchantOrdersScreen(),
+          routes: [
+            GoRoute(
+              path: ':orderId',
+              builder: (context, state) => MerchantOrdersScreen(
+                initialOrderId: state.pathParameters['orderId'],
+              ),
+            ),
+          ],
         ),
         GoRoute(
           path: 'drivers',
@@ -261,7 +278,8 @@ Future<String?> _globalRedirect(
   final token = await AuthService().getToken();
   final hasToken = token != null && token.isNotEmpty;
 
-  final onAuthScreen = state.matchedLocation == AppRoutes.login ||
+  final onAuthScreen =
+      state.matchedLocation == AppRoutes.login ||
       state.matchedLocation == AppRoutes.register;
 
   // Unauthenticated user trying to access a protected route → send to login.
@@ -279,6 +297,27 @@ Future<String?> _globalRedirect(
   if (hasToken && state.matchedLocation == AppRoutes.splash) {
     final user = await AuthService().getCurrentUser();
     return AppRoutes.homeForRole(user?.role);
+  }
+
+  if (hasToken) {
+    final user = await AuthService().getCurrentUser();
+    final role = user?.role;
+    final location = state.matchedLocation;
+    if (role == 'CLIENT' &&
+        (location.startsWith(AppRoutes.homeDriver) ||
+            location.startsWith(AppRoutes.homeMerchant))) {
+      return AppRoutes.clientHome;
+    }
+    if (role == 'LIVREUR' &&
+        (location.startsWith(AppRoutes.homeClient) ||
+            location.startsWith(AppRoutes.homeMerchant))) {
+      return AppRoutes.homeDriver;
+    }
+    if (role == 'COMMERCANT' &&
+        (location.startsWith(AppRoutes.homeClient) ||
+            location.startsWith(AppRoutes.homeDriver))) {
+      return AppRoutes.homeMerchant;
+    }
   }
 
   return null; // No redirect needed.

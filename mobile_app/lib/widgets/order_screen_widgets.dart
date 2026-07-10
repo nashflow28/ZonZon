@@ -571,6 +571,7 @@ class OrderFormSection extends StatelessWidget {
   final double? estimateKm;
   final int? estimatePrice;
   final bool submitLoading;
+  final Widget? extraSection;
 
   final VoidCallback onOpenShops;
   final VoidCallback onCancelShop;
@@ -590,6 +591,7 @@ class OrderFormSection extends StatelessWidget {
     required this.estimateKm,
     required this.estimatePrice,
     required this.submitLoading,
+    this.extraSection,
     required this.onOpenShops,
     required this.onCancelShop,
     required this.onPickPickup,
@@ -675,6 +677,10 @@ class OrderFormSection extends StatelessWidget {
           emptyHint: 'Choisir le point d’arrivée',
           onTap: onPickDelivery,
         ),
+        if (extraSection != null) ...[
+          const SizedBox(height: 14),
+          extraSection!,
+        ],
         const SizedBox(height: 14),
         EstimatePreview(
           pickup: pickup,

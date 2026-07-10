@@ -16,6 +16,7 @@ import '../../services/api_client.dart';
 import '../../services/client_services.dart';
 import '../../services/estimate_service.dart';
 import '../../services/geocoding_service.dart';
+import '../../services/zones_service.dart';
 import '../../utils/platform_adapter.dart';
 import '../../widgets/order_map_widget.dart';
 import '../../widgets/order_screen_widgets.dart';
@@ -35,8 +36,7 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab>
-    with AutomaticKeepAliveClientMixin {
+class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
   bool isLoading = false;
   bool isLocationLoading = true;
 
@@ -51,13 +51,19 @@ class _HomeTabState extends State<HomeTab>
   Shop? _shopOrigin;
   catalog.Product? _shopProduct;
 
-  final TextEditingController _descController =
-      TextEditingController(text: '1 colis de vêtements');
+  final TextEditingController _descController = TextEditingController(
+    text: '1 colis de vêtements',
+  );
   final MapController _mapController = MapController();
 
   final ApiClient _api = ApiClient();
   final GeocodingService _geo = GeocodingService();
   final EstimateService _estimateSvc = EstimateService();
+  final ZonesService _zonesService = ZonesService();
+
+  List<ZoneInfo> _zones = const [];
+  String? _pickupZoneId;
+  String? _destinationZoneId;
 
   ActiveOrdersStore get _store => ClientServices.activeOrders;
 
@@ -68,6 +74,7 @@ class _HomeTabState extends State<HomeTab>
   void initState() {
     super.initState();
     _initialPickupFromGps();
+    _loadZones();
     ClientServices.pendingShopSelection.addListener(_consumePendingShop);
     _consumePendingShop();
   }
@@ -150,6 +157,14 @@ class _HomeTabState extends State<HomeTab>
     } catch (_) {
       if (mounted) setState(() => isLocationLoading = false);
     }
+  }
+
+  Future<void> _loadZones() async {
+    try {
+      final zones = await _zonesService.listZones();
+      if (!mounted) return;
+      setState(() => _zones = zones);
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -243,6 +258,8 @@ class _HomeTabState extends State<HomeTab>
       lng1: pickup.location.longitude,
       lat2: delivery.location.latitude,
       lng2: delivery.location.longitude,
+      pickupZoneId: _pickupZoneId,
+      destinationZoneId: _destinationZoneId,
       onLoading: (loading) {
         if (!mounted) return;
         setState(() => _estimateLoading = loading);
@@ -322,15 +339,22 @@ class _HomeTabState extends State<HomeTab>
     setState(() => isLoading = true);
 
     try {
-      final orderRes = await _api.post('/orders', body: {
-        'pickupAddress': pickup.displayName,
-        'pickupLat': pickup.location.latitude,
-        'pickupLng': pickup.location.longitude,
-        'deliveryAddress': delivery.displayName,
-        'deliveryLat': delivery.location.latitude,
-        'deliveryLng': delivery.location.longitude,
-        'description': _descController.text,
-      });
+      final orderRes = await _api.post(
+        '/orders',
+        body: {
+          'pickupAddress': pickup.displayName,
+          'pickupLat': pickup.location.latitude,
+          'pickupLng': pickup.location.longitude,
+          'deliveryAddress': delivery.displayName,
+          'deliveryLat': delivery.location.latitude,
+          'deliveryLng': delivery.location.longitude,
+          'description': _descController.text,
+          if (_pickupZoneId != null && _pickupZoneId!.isNotEmpty)
+            'pickupZoneId': _pickupZoneId,
+          if (_destinationZoneId != null && _destinationZoneId!.isNotEmpty)
+            'destinationZoneId': _destinationZoneId,
+        },
+      );
 
       if (orderRes.statusCode == 201 || orderRes.statusCode == 200) {
         final responseData = jsonDecode(orderRes.body);
@@ -369,7 +393,102 @@ class _HomeTabState extends State<HomeTab>
       _routePolyline = const [];
       _estimateKm = null;
       _estimatePrice = null;
+      _pickupZoneId = null;
+      _destinationZoneId = null;
     });
+  }
+
+  Widget _buildZoneSelectors() {
+    if (_zones.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Zones tarifaires',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Optionnel, pour appliquer les tarifs configurés par quartier.',
+            style: TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            initialValue: _pickupZoneId,
+            dropdownColor: const Color(0xFF0C1A22),
+            style: const TextStyle(color: Colors.white),
+            decoration: _zoneDecoration('Zone de départ'),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Aucune'),
+              ),
+              ..._zones.map(
+                (zone) => DropdownMenuItem<String?>(
+                  value: zone.id,
+                  child: Text(zone.name),
+                ),
+              ),
+            ],
+            onChanged: (value) {
+              setState(() => _pickupZoneId = value);
+              _scheduleEstimate();
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String?>(
+            initialValue: _destinationZoneId,
+            dropdownColor: const Color(0xFF0C1A22),
+            style: const TextStyle(color: Colors.white),
+            decoration: _zoneDecoration('Zone d’arrivée'),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('Aucune'),
+              ),
+              ..._zones.map(
+                (zone) => DropdownMenuItem<String?>(
+                  value: zone.id,
+                  child: Text(zone.name),
+                ),
+              ),
+            ],
+            onChanged: (value) {
+              setState(() => _destinationZoneId = value);
+              _scheduleEstimate();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _zoneDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.white60),
+      filled: true,
+      fillColor: const Color(0xFF122530),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF2E90FA)),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -414,6 +533,7 @@ class _HomeTabState extends State<HomeTab>
               estimateKm: _estimateKm,
               estimatePrice: _estimatePrice,
               submitLoading: isLoading,
+              extraSection: _buildZoneSelectors(),
               onOpenShops: _openShops,
               onCancelShop: _cancelShopOrigin,
               onPickPickup: _pickPickup,

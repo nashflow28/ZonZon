@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/place.dart';
 import '../../services/estimate_service.dart';
 import '../../services/merchant_drivers_service.dart';
 import '../../services/merchant_orders_service.dart';
+import '../../services/zones_service.dart';
 import '../../utils/platform_adapter.dart';
+import '../../widgets/phone_field.dart';
 import '../location_picker_screen.dart';
 import 'driver_picker_sheet.dart';
 
@@ -15,7 +19,7 @@ import 'driver_picker_sheet.dart';
 /// [EstimateService], puis `POST /orders/merchant`.
 ///
 /// Contrairement au client, le commerçant doit aussi renseigner le client
-/// destinataire (téléphone obligatoire, nom optionnel). Le backend résout
+/// destinataire via `clientId` OU téléphone. Le backend résout
 /// automatiquement un compte client existant à partir du téléphone ; sinon
 /// la livraison est créée avec juste ces informations (client sans compte).
 class CreateDeliveryScreen extends StatefulWidget {
@@ -28,13 +32,24 @@ class CreateDeliveryScreen extends StatefulWidget {
 class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
   final MerchantOrdersService _service = MerchantOrdersService();
   final EstimateService _estimateSvc = EstimateService();
+  final ZonesService _zonesService = ZonesService();
 
-  final TextEditingController _clientPhone = TextEditingController();
+  final TextEditingController _clientSearch = TextEditingController();
+  final TextEditingController _clientPhoneLocal = TextEditingController();
   final TextEditingController _clientName = TextEditingController();
-  final TextEditingController _description =
-      TextEditingController(text: '1 colis');
+  final TextEditingController _description = TextEditingController(
+    text: '1 colis',
+  );
   final TextEditingController _manualPrice = TextEditingController();
   final TextEditingController _priceReason = TextEditingController();
+  Timer? _clientSearchDebounce;
+  MerchantClientSearchResult? _selectedClient;
+  List<MerchantClientSearchResult> _clientSearchResults = const [];
+  bool _searchingClients = false;
+  String _clientPhoneFull = '';
+  List<ZoneInfo> _zones = const [];
+  String? _pickupZoneId;
+  String? _destinationZoneId;
 
   Place? _pickup;
   Place? _delivery;
@@ -49,9 +64,18 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
   AvailableDriver? _selectedDriver;
 
   @override
+  void initState() {
+    super.initState();
+    _clientSearch.addListener(_onClientSearchChanged);
+    _loadZones();
+  }
+
+  @override
   void dispose() {
     _estimateSvc.dispose();
-    _clientPhone.dispose();
+    _clientSearchDebounce?.cancel();
+    _clientSearch.dispose();
+    _clientPhoneLocal.dispose();
     _clientName.dispose();
     _description.dispose();
     _manualPrice.dispose();
@@ -115,6 +139,8 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
       lng1: pickup.location.longitude,
       lat2: delivery.location.latitude,
       lng2: delivery.location.longitude,
+      pickupZoneId: _pickupZoneId,
+      destinationZoneId: _destinationZoneId,
       onLoading: (loading) {
         if (!mounted) return;
         setState(() => _estimateLoading = loading);
@@ -155,7 +181,8 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
   // ---------------------------------------------------------------------------
 
   Future<void> _submit() async {
-    final phone = _clientPhone.text.trim();
+    final clientId = _selectedClient?.id;
+    final phone = _clientPhoneFull.trim();
     final pickup = _pickup;
     final delivery = _delivery;
     final description = _description.text.trim();
@@ -164,16 +191,28 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         ? null
         : int.tryParse(manualPriceText.replaceAll(' ', ''));
 
-    if (phone.isEmpty) {
-      showAdaptiveSnack(context, 'Renseignez le téléphone du client', isError: true);
+    if ((clientId == null || clientId.isEmpty) && phone.isEmpty) {
+      showAdaptiveSnack(
+        context,
+        'Sélectionnez un client existant ou renseignez son téléphone',
+        isError: true,
+      );
       return;
     }
     if (pickup == null) {
-      showAdaptiveSnack(context, 'Sélectionnez un point de retrait', isError: true);
+      showAdaptiveSnack(
+        context,
+        'Sélectionnez un point de retrait',
+        isError: true,
+      );
       return;
     }
     if (delivery == null) {
-      showAdaptiveSnack(context, 'Sélectionnez un point de livraison', isError: true);
+      showAdaptiveSnack(
+        context,
+        'Sélectionnez un point de livraison',
+        isError: true,
+      );
       return;
     }
     if (description.isEmpty) {
@@ -181,7 +220,11 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
       return;
     }
     if (manualPriceText.isNotEmpty && manualPrice == null) {
-      showAdaptiveSnack(context, 'Le prix manuel doit être un nombre entier', isError: true);
+      showAdaptiveSnack(
+        context,
+        'Le prix manuel doit être un nombre entier',
+        isError: true,
+      );
       return;
     }
 
@@ -195,7 +238,8 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         deliveryLat: delivery.location.latitude,
         deliveryLng: delivery.location.longitude,
         description: description,
-        clientPhone: phone,
+        clientId: clientId,
+        clientPhone: phone.isEmpty ? null : phone,
         clientName: _clientName.text.trim().isEmpty
             ? null
             : _clientName.text.trim(),
@@ -204,6 +248,8 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
             ? null
             : _priceReason.text.trim(),
         preferredLivreurId: _selectedDriver?.id,
+        pickupZoneId: _pickupZoneId,
+        destinationZoneId: _destinationZoneId,
       );
       if (!mounted) return;
       hapticSuccess();
@@ -247,10 +293,30 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
           _SectionTitle('Client destinataire'),
           const SizedBox(height: 8),
           _input(
-            'Téléphone du client',
-            _clientPhone,
-            icon: Icons.phone_outlined,
-            keyboard: TextInputType.phone,
+            'Rechercher un client existant',
+            _clientSearch,
+            icon: Icons.search,
+          ),
+          if (_searchingClients) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Recherche en cours...',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
+          ],
+          if (_clientSearchResults.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _clientResultsCard(),
+          ],
+          if (_selectedClient != null) ...[
+            const SizedBox(height: 8),
+            _selectedClientBanner(),
+          ],
+          const SizedBox(height: 12),
+          PhoneField(
+            controller: _clientPhoneLocal,
+            hint: 'Téléphone du client (si pas de compte)',
+            onFullNumberChanged: (value) => _clientPhoneFull = value,
           ),
           const SizedBox(height: 12),
           _input(
@@ -278,6 +344,28 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
             color: const Color(0xFF0FB271),
             onTap: _pickDelivery,
           ),
+          if (_zones.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            _SectionTitle('Zones tarifaires'),
+            const SizedBox(height: 8),
+            _zoneDropdown(
+              label: 'Zone de retrait',
+              value: _pickupZoneId,
+              onChanged: (value) {
+                setState(() => _pickupZoneId = value);
+                _scheduleEstimate();
+              },
+            ),
+            const SizedBox(height: 12),
+            _zoneDropdown(
+              label: 'Zone de livraison',
+              value: _destinationZoneId,
+              onChanged: (value) {
+                setState(() => _destinationZoneId = value);
+                _scheduleEstimate();
+              },
+            ),
+          ],
           const SizedBox(height: 24),
           _SectionTitle('Livreur'),
           const SizedBox(height: 8),
@@ -319,7 +407,10 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
                   ? const Text('Création…')
                   : const Text(
                       'Créer la livraison',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0FB271),
@@ -356,39 +447,172 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
               children: [
                 adaptiveLoader(color: const Color(0xFF0FB271)),
                 const SizedBox(width: 12),
-                const Text('Estimation en cours…',
-                    style: TextStyle(color: Colors.white70)),
+                const Text(
+                  'Estimation en cours…',
+                  style: TextStyle(color: Colors.white70),
+                ),
               ],
             )
           : _estimateKm != null && _estimatePrice != null
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.route, color: Color(0xFF2E90FA), size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${_estimateKm!.toStringAsFixed(1)} km',
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
+                    const Icon(Icons.route, color: Color(0xFF2E90FA), size: 20),
+                    const SizedBox(width: 8),
                     Text(
-                      '$_estimatePrice FCFA',
+                      '${_estimateKm!.toStringAsFixed(1)} km',
                       style: const TextStyle(
-                        color: Color(0xFF0FB271),
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
-                )
-              : const Text(
-                  'Estimation indisponible',
-                  style: TextStyle(color: Colors.white54, fontSize: 13),
                 ),
+                Text(
+                  '$_estimatePrice FCFA',
+                  style: const TextStyle(
+                    color: Color(0xFF0FB271),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            )
+          : const Text(
+              'Estimation indisponible',
+              style: TextStyle(color: Colors.white54, fontSize: 13),
+            ),
+    );
+  }
+
+  Future<void> _loadZones() async {
+    try {
+      final zones = await _zonesService.listZones();
+      if (!mounted) return;
+      setState(() => _zones = zones);
+    } catch (_) {}
+  }
+
+  void _onClientSearchChanged() {
+    final query = _clientSearch.text.trim();
+    _clientSearchDebounce?.cancel();
+    if (_selectedClient != null && query != _selectedClient!.fullName) {
+      setState(() => _selectedClient = null);
+    }
+    if (query.length < 2) {
+      setState(() {
+        _searchingClients = false;
+        _clientSearchResults = const [];
+      });
+      return;
+    }
+    _clientSearchDebounce = Timer(const Duration(milliseconds: 300), () async {
+      if (!mounted) return;
+      setState(() => _searchingClients = true);
+      try {
+        final results = await _service.searchClients(query);
+        if (!mounted || _clientSearch.text.trim() != query) return;
+        setState(() {
+          _searchingClients = false;
+          _clientSearchResults = results;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _searchingClients = false;
+          _clientSearchResults = const [];
+        });
+      }
+    });
+  }
+
+  void _selectClient(MerchantClientSearchResult client) {
+    setState(() {
+      _selectedClient = client;
+      _clientSearch.text = client.fullName.isEmpty
+          ? client.phone
+          : client.fullName;
+      _clientName.text = client.fullName;
+      _clientSearchResults = const [];
+    });
+  }
+
+  void _clearSelectedClient() {
+    setState(() {
+      _selectedClient = null;
+      _clientSearch.clear();
+    });
+  }
+
+  Widget _clientResultsCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        children: _clientSearchResults.map((client) {
+          return ListTile(
+            onTap: () => _selectClient(client),
+            leading: const Icon(Icons.person_search, color: Color(0xFF2E90FA)),
+            title: Text(
+              client.fullName.isEmpty ? 'Client ZonZon' : client.fullName,
+              style: const TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              client.phone,
+              style: const TextStyle(color: Colors.white54),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _selectedClientBanner() {
+    final client = _selectedClient!;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2E90FA).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF2E90FA).withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.verified_user_outlined, color: Color(0xFF2E90FA)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  client.fullName.isEmpty
+                      ? 'Client ZonZon sélectionné'
+                      : client.fullName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  client.phone,
+                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: _clearSelectedClient,
+            child: const Text('Retirer'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -397,10 +621,10 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
     final driver = _selectedDriver;
     final subtitle = driver == null
         ? (canPick
-            ? 'Laisser la plateforme choisir'
-            : 'Sélectionnez un point de retrait pour choisir un livreur')
+              ? 'Laisser la plateforme choisir'
+              : 'Sélectionnez un point de retrait pour choisir un livreur')
         : '${driver.fullName}${driver.vehicle != null ? ' · ${driver.vehicle!.label}' : ''}'
-            '${driver.distanceKm != null ? ' · ${driver.distanceKm!.toStringAsFixed(1)} km' : ''}';
+              '${driver.distanceKm != null ? ' · ${driver.distanceKm!.toStringAsFixed(1)} km' : ''}';
 
     return Material(
       color: Colors.white.withValues(alpha: 0.05),
@@ -437,10 +661,13 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
-                              color:
-                                  const Color(0xFF0FB271).withValues(alpha: 0.2),
+                              color: const Color(
+                                0xFF0FB271,
+                              ).withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(
@@ -563,11 +790,50 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         decoration: InputDecoration(
           hintText: label,
           hintStyle: const TextStyle(color: Colors.white60),
-          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF0FB271)) : null,
+          prefixIcon: icon != null
+              ? Icon(icon, color: const Color(0xFF0FB271))
+              : null,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _zoneDropdown({
+    required String label,
+    required String? value,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: DropdownButtonFormField<String?>(
+        initialValue: value,
+        dropdownColor: const Color(0xFF122530),
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.white60),
+          border: InputBorder.none,
+        ),
+        items: [
+          const DropdownMenuItem<String?>(value: null, child: Text('Aucune')),
+          ..._zones.map(
+            (zone) => DropdownMenuItem<String?>(
+              value: zone.id,
+              child: Text(zone.name),
+            ),
+          ),
+        ],
+        onChanged: onChanged,
       ),
     );
   }

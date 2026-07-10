@@ -37,6 +37,15 @@ class OrderStatusUpdate {
   OrderStatusUpdate({required this.orderId, required this.status});
 }
 
+/// Mise à jour du statut de PAIEMENT `orderPaymentUpdated` (diffusé par le
+/// backend au client, au livreur et au commerçant de la course).
+class OrderPaymentUpdate {
+  final String orderId;
+  final String paymentStatus;
+
+  OrderPaymentUpdate({required this.orderId, required this.paymentStatus});
+}
+
 /// Nouveau message chat reçu sur la commande active.
 class NewChatMessageEvent {
   final String orderId;
@@ -121,6 +130,7 @@ class OrderSocketController {
   final _driverPositionCtrl = StreamController<DriverPosition>.broadcast();
   final _orderAcceptedCtrl = StreamController<OrderAcceptedEvent>.broadcast();
   final _statusUpdatesCtrl = StreamController<OrderStatusUpdate>.broadcast();
+  final _paymentUpdatesCtrl = StreamController<OrderPaymentUpdate>.broadcast();
   final _newChatMessageCtrl = StreamController<NewChatMessageEvent>.broadcast();
   final _newOrderAvailableCtrl = StreamController<NewOrderEvent>.broadcast();
   final _connectedCtrl = StreamController<void>.broadcast();
@@ -136,6 +146,11 @@ class OrderSocketController {
 
   /// Stream des nouveaux statuts (filtré par [watchedOrderIds]).
   Stream<OrderStatusUpdate> get statusUpdates$ => _statusUpdatesCtrl.stream;
+
+  /// Stream des changements de statut de paiement (filtré par
+  /// [watchedOrderIds]). Permet à toutes les parties de voir un paiement
+  /// marqué « payé » sans recharger l'écran.
+  Stream<OrderPaymentUpdate> get paymentUpdates$ => _paymentUpdatesCtrl.stream;
 
   /// Stream des nouveaux messages de chat reçus (filtré par [watchedOrderIds]).
   /// Le consommateur doit lire `evt.orderId` pour aiguiller le badge non-lu
@@ -198,6 +213,17 @@ class OrderSocketController {
       _statusUpdatesCtrl.add(OrderStatusUpdate(orderId: orderId, status: status));
     });
 
+    socket.on('orderPaymentUpdated', (data) {
+      if (data is! Map) return;
+      final orderId = data['orderId']?.toString();
+      final paymentStatus = data['paymentStatus']?.toString();
+      if (orderId == null || paymentStatus == null) return;
+      if (!_shouldEmit(orderId)) return;
+      _paymentUpdatesCtrl.add(
+        OrderPaymentUpdate(orderId: orderId, paymentStatus: paymentStatus),
+      );
+    });
+
     socket.on('driver:position', (data) {
       if (data is! Map) return;
       final orderId = data['orderId']?.toString();
@@ -243,6 +269,7 @@ class OrderSocketController {
     await _driverPositionCtrl.close();
     await _orderAcceptedCtrl.close();
     await _statusUpdatesCtrl.close();
+    await _paymentUpdatesCtrl.close();
     await _newChatMessageCtrl.close();
     await _newOrderAvailableCtrl.close();
     await _connectedCtrl.close();

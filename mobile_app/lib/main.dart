@@ -3,6 +3,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'config/env.dart';
 import 'router/app_router.dart';
+import 'services/auth_service.dart';
+import 'services/notification_navigation_service.dart';
 import 'services/push_service.dart';
 
 Future<void> main() async {
@@ -36,8 +38,38 @@ void _runApp() {
   runApp(const ZonZonApp());
 }
 
-class ZonZonApp extends StatelessWidget {
+class ZonZonApp extends StatefulWidget {
   const ZonZonApp({super.key});
+
+  @override
+  State<ZonZonApp> createState() => _ZonZonAppState();
+}
+
+class _ZonZonAppState extends State<ZonZonApp> {
+  final AuthService _auth = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    _auth.sessionListenable.addListener(_syncPushState);
+    PushService.instance.onTap$.listen(
+      NotificationNavigationService.openFromPayload,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) => _syncPushState());
+  }
+
+  @override
+  void dispose() {
+    _auth.sessionListenable.removeListener(_syncPushState);
+    super.dispose();
+  }
+
+  Future<void> _syncPushState() async {
+    final token = await _auth.getToken();
+    if (token != null && token.isNotEmpty) {
+      await PushService.instance.init();
+    }
+  }
 
   // Fallback Inter ; sur iOS le système utilisera SF Pro pour le texte non
   // stylé, sur Android Roboto. On garde Inter comme fallback explicite pour

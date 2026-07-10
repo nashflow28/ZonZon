@@ -270,13 +270,46 @@ export class UsersService {
     return { ok: true };
   }
 
-  async updateProfile(userId: string, dto: { firstName?: string; lastName?: string }) {
+  async updateProfile(
+    userId: string,
+    dto: { firstName?: string; lastName?: string },
+  ) {
     await this.usersRepository.update(userId, dto);
     return this.findOne(userId);
   }
 
   findByPhone(phone: string) {
     return this.usersRepository.findOne({ where: { phone } });
+  }
+
+  async searchClients(query: string, limit = 8): Promise<User[]> {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) return [];
+
+    // /g obligatoire : sans lui, seul le PREMIER caractère non numérique est
+    // retiré ("+228 90-12.34" → "228 90-12.34"), ce qui casse le matching
+    // contre le téléphone normalisé côté SQL.
+    const digits = normalizedQuery.replace(/[^0-9]/g, '');
+    const qb = this.usersRepository
+      .createQueryBuilder('user')
+      .where('user.role = :role', { role: UserRole.CLIENT })
+      .andWhere('user.status = :status', { status: UserStatus.ACTIVE })
+      .orderBy('user.firstName', 'ASC')
+      .take(Math.min(Math.max(limit, 1), 20));
+
+    qb.andWhere(
+      `(
+        LOWER(CONCAT(COALESCE(user.firstName, ''), ' ', COALESCE(user.lastName, ''))) LIKE :text
+        OR LOWER(user.phone) LIKE :text
+        OR REPLACE(REPLACE(REPLACE(REPLACE(user.phone, '+', ''), ' ', ''), '-', ''), '.', '') LIKE :digits
+      )`,
+      {
+        text: `%${normalizedQuery}%`,
+        digits: `%${digits || normalizedQuery}%`,
+      },
+    );
+
+    return qb.getMany();
   }
 
   findAll() {

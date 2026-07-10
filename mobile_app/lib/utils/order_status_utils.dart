@@ -115,6 +115,10 @@ class PaymentStatusUtils {
         return 'Reçu (commerçant)';
       case 'RECEIVED_BY_LIVREUR':
         return 'Reçu (livreur)';
+      case 'CASH_ON_DELIVERY':
+        return 'Payé à la livraison';
+      case 'REFUNDED':
+        return 'Remboursé';
       default:
         return (status == null || status.trim().isEmpty)
             ? 'Statut de paiement inconnu'
@@ -134,6 +138,10 @@ class PaymentStatusUtils {
         return const Color(0xFF2E90FA);
       case 'RECEIVED_BY_LIVREUR':
         return const Color(0xFF0FB271);
+      case 'CASH_ON_DELIVERY':
+        return const Color(0xFF0FB271);
+      case 'REFUNDED':
+        return const Color(0xFFF97316);
       default:
         return Colors.white54;
     }

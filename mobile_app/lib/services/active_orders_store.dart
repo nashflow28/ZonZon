@@ -167,7 +167,9 @@ class ActiveOrdersStore extends ChangeNotifier {
   void _onStatusUpdate(OrderStatusUpdate evt) {
     final idx = _orders.indexWhere((o) => o.id == evt.orderId);
     if (idx < 0) return;
-    if (evt.status == 'COMPLETED' || evt.status == 'CANCELLED') {
+    if (evt.status == 'COMPLETED' ||
+        evt.status == 'CANCELLED' ||
+        evt.status == 'FAILED') {
       _removeAndUnwatch(evt.orderId);
       return;
     }

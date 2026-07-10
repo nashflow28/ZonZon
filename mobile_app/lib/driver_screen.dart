@@ -171,7 +171,37 @@ class _DriverScreenState extends State<DriverScreen> {
 
   StreamSubscription<NewOrderEvent>? _newOrderSub;
   StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
+  StreamSubscription<OrderStatusUpdate>? _statusSub;
+  StreamSubscription<OrderPaymentUpdate>? _paymentSub;
   StreamSubscription<void>? _connectedSub;
+
+  /// Statuts pour lesquels une course est considérée « active » côté livreur
+  /// (mêmes valeurs que ACTIVE_DELIVERY_STATUSES backend).
+  static const Set<String> _activeStatuses = {
+    'ACCEPTED',
+    'EN_ROUTE_PICKUP',
+    'AT_PICKUP',
+    'IN_PROGRESS',
+    'NEAR_CLIENT',
+  };
+
+  /// Course active affichée dans le dialog de progression (null sinon).
+  /// Sert au filtrage des events socket et au cycle de vie du GPS (P2 :
+  /// tracking uniquement pendant une course active).
+  String? _activeOrderId;
+
+  /// Payload de la course active — le même objet Map que celui affiché par
+  /// le dialog, pour que les mises à jour distantes (paiement) soient
+  /// visibles au prochain rebuild.
+  Map<String, dynamic>? _activeOrderData;
+
+  /// Callback branché par le dialog : reçoit les statuts poussés par le
+  /// serveur (`orderStatusUpdated`) — annulation client/admin comprise.
+  void Function(String status)? _onRemoteStatusChanged;
+
+  /// Callback branché par le dialog : force un rebuild (ex. changement de
+  /// statut de paiement reçu par socket).
+  void Function()? _refreshActiveDialog;
 
   /// Stream de positions (remplace l'ancien Timer.periodic 30s pour économiser
   /// la batterie : on n'émet que quand le livreur a réellement bougé).
@@ -210,7 +240,7 @@ class _DriverScreenState extends State<DriverScreen> {
   final GlobalKey<ScaffoldMessengerState> _messengerKey =
       GlobalKey<ScaffoldMessengerState>();
 
-  /// Callback fourni par le `_showSuccessDialog` pour faire avancer
+  /// Callback fourni par le `_showActiveOrderDialog` pour faire avancer
   /// `dialogStatus` quand la transition vient de la suggestion de
   /// géofencing (sans devoir cliquer le bouton du dialog).
   void Function(String status)? _onGeofenceTransitioned;
@@ -243,7 +273,37 @@ class _DriverScreenState extends State<DriverScreen> {
     // On n'interroge le radar que si le compte est validé : sinon le
     // backend répond 403 (ce qui déclencherait un état d'erreur opaque).
     if (_isApproved) {
+      // P0 : restaure la course active éventuelle AVANT le radar — sans ça,
+      // un redémarrage de l'app pendant une course faisait perdre au livreur
+      // tout moyen de la faire avancer/terminer.
+      await _restoreActiveOrder();
       await _loadAvailableOrders();
+    }
+  }
+
+  /// Recharge depuis `GET /orders/mine` la course active éventuellement
+  /// assignée à ce livreur (statut ACCEPTED → NEAR_CLIENT) et rouvre le
+  /// dialog de progression complet (boutons d'avancement, chat, géofencing).
+  Future<void> _restoreActiveOrder() async {
+    if (_activeOrderId != null) return;
+    try {
+      final res = await _api.get('/orders/mine');
+      if (res.statusCode != 200 && res.statusCode != 201) return;
+      final data = jsonDecode(res.body);
+      if (data is! List) return;
+      // /orders/mine est trié createdAt DESC → la première course active
+      // trouvée est la plus récente.
+      final active = data.firstWhere(
+        (o) => o is Map && _activeStatuses.contains(o['status']?.toString()),
+        orElse: () => null,
+      );
+      if (active is! Map || !mounted) return;
+      _showActiveOrderDialog(
+        Map<String, dynamic>.from(active),
+        restored: true,
+      );
+    } catch (_) {
+      // Hors-ligne au boot : rien à restaurer pour l'instant.
     }
   }
 
@@ -315,18 +375,37 @@ class _DriverScreenState extends State<DriverScreen> {
   }
 
   /// Initialise `OrderSocketController` et abonne les streams pertinents
-  /// pour le livreur (nouvelle course / acceptation par un autre / connexion).
-  /// L'ancien `socket.on('orderStatusUpdated')` n'était pas utilisé côté
-  /// livreur (les transitions sont déclenchées par le livreur lui-même via
-  /// `_updateStatus`), donc on n'écoute pas `statusUpdates$` ici.
+  /// pour le livreur (nouvelle course / acceptation par un autre / statuts
+  /// et paiement de SA course active / connexion). Le backend n'émet
+  /// `orderStatusUpdated` au livreur que pour les courses dont il est
+  /// partie — le filtrage sur [_activeOrderId] suffit.
   Future<void> _initSocket() async {
     await _socketCtrl.init();
 
-    // Démarrer le tracking GPS dès que le socket est effectivement connecté
-    // (comportement identique à l'ancien `socket.onConnect`).
+    // P2 (GPS strict) : le tracking GPS ne démarre plus à la connexion du
+    // socket mais à l'ouverture d'une course active. À la (re)connexion, on
+    // ne le (re)lance que si une course est effectivement en cours.
     _connectedSub = _socketCtrl.connected$.listen((_) {
       debugPrint('Connecté aux WebSockets du serveur !');
-      _startLocationUpdates();
+      if (_activeOrderId != null) {
+        _startLocationUpdates();
+      }
+    });
+
+    // P0 : synchronise le dialog non-dismissible avec les statuts décidés
+    // ailleurs — annulation par le client ou l'admin en tête. Sans cette
+    // écoute, le livreur restait bloqué sur une course annulée.
+    _statusSub = _socketCtrl.statusUpdates$.listen((evt) {
+      if (!mounted || evt.orderId != _activeOrderId) return;
+      _onRemoteStatusChanged?.call(evt.status);
+    });
+
+    // P1 : reflète en direct un changement de statut de paiement fait par
+    // le client, le commerçant ou un admin.
+    _paymentSub = _socketCtrl.paymentUpdates$.listen((evt) {
+      if (!mounted || evt.orderId != _activeOrderId) return;
+      _activeOrderData?['paymentStatus'] = evt.paymentStatus;
+      _refreshActiveDialog?.call();
     });
 
     _newOrderSub = _socketCtrl.newOrderAvailable$.listen((evt) {
@@ -493,13 +572,23 @@ class _DriverScreenState extends State<DriverScreen> {
     });
   }
 
+  /// Arrête le tracking GPS (stream de positions + heartbeat). Appelé quand
+  /// la course active se termine — P2 : pas de tracking hors course.
+  Future<void> _stopLocationUpdates() async {
+    await _positionSub?.cancel();
+    _positionSub = null;
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+    _lastEmittedAt = null;
+  }
+
   Future<void> _acceptOrder(String orderId) async {
     try {
       final res = await _api.post('/orders/$orderId/accept', body: {});
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final orderData = jsonDecode(res.body);
-        _showSuccessDialog(orderData);
+        _showActiveOrderDialog(orderData);
       } else {
         throw Exception('Course déjà prise ou erreur serveur.');
       }
@@ -572,12 +661,52 @@ class _DriverScreenState extends State<DriverScreen> {
     );
   }
 
-  void _showSuccessDialog(dynamic orderData) {
+  /// Affiche un Snackbar (par-dessus le dialog via [_messengerKey]) quand la
+  /// course active a été clôturée à distance (annulation client/admin, etc.).
+  void _notifyRemoteTermination(String status) {
+    final label = switch (status) {
+      'CANCELLED' => 'La course a été annulée.',
+      'FAILED' => 'La course a été marquée en échec.',
+      _ => 'La course est terminée.',
+    };
+    final messenger = _messengerKey.currentState;
+    messenger?.clearSnackBars();
+    messenger?.showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFF122530),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Color(0xFFF0453D), width: 1),
+        ),
+        content: Text(label, style: const TextStyle(color: Colors.white)),
+      ),
+    );
+  }
+
+  /// Dialog de progression de la course active. Ouvert à l'acceptation
+  /// ([restored] = false) ou à la restauration après redémarrage de l'app
+  /// ([restored] = true — P0).
+  void _showActiveOrderDialog(dynamic orderData, {bool restored = false}) {
     final orderId = orderData['id'].toString();
 
     // Variables d'état du dialog (closures partagées avec StatefulBuilder)
     String dialogStatus = orderData['status']?.toString() ?? 'ACCEPTED';
     bool dialogProcessing = false;
+
+    // Garde anti double-fermeture : une transition terminale locale ET
+    // l'event socket qui en résulte peuvent vouloir fermer le même dialog.
+    bool dialogClosed = false;
+
+    final Map<String, dynamic> data = orderData is Map<String, dynamic>
+        ? orderData
+        : Map<String, dynamic>.from(orderData as Map);
+    _activeOrderId = orderId;
+    _activeOrderData = data;
+
+    // P2 (GPS strict) : le tracking ne tourne que pendant une course active.
+    _startLocationUpdates();
 
     final client = orderData['client'] as Map<String, dynamic>?;
     final clientName = client != null
@@ -621,6 +750,7 @@ class _DriverScreenState extends State<DriverScreen> {
             if (targetStatus == 'COMPLETED' ||
                 targetStatus == 'CANCELLED' ||
                 targetStatus == 'FAILED') {
+              dialogClosed = true;
               _resetGeofenceState();
               if (dlgCtx.mounted) Navigator.pop(dlgCtx);
               if (targetStatus == 'COMPLETED') {
@@ -656,12 +786,53 @@ class _DriverScreenState extends State<DriverScreen> {
             });
           };
 
-          final paymentStatus = orderData['paymentStatus']?.toString();
+          // P0 : statuts poussés par le serveur (annulation client/admin en
+          // tête). Statut terminal → fermeture du dialog non-dismissible ;
+          // sinon simple synchronisation de l'affichage.
+          _onRemoteStatusChanged = (newStatus) {
+            if (dialogClosed) return;
+            if (newStatus == 'COMPLETED' ||
+                newStatus == 'CANCELLED' ||
+                newStatus == 'FAILED') {
+              dialogClosed = true;
+              if (dlgCtx.mounted) {
+                // Dépile d'abord ce qui est empilé au-dessus du dialog
+                // (chat…) — la conversation est de toute façon fermée côté
+                // serveur pour un statut terminal — puis ferme le dialog.
+                final navigator = Navigator.of(dlgCtx);
+                final route = ModalRoute.of(dlgCtx);
+                if (route != null) {
+                  navigator.popUntil((r) => r == route);
+                }
+                navigator.pop();
+              }
+              _notifyRemoteTermination(newStatus);
+              return;
+            }
+            if (!dlgCtx.mounted) return;
+            if (newStatus == 'IN_PROGRESS' || newStatus == 'NEAR_CLIENT') {
+              _currentPickupLat = null;
+              _currentPickupLng = null;
+              _geofenceTriggered = true;
+            }
+            setDialogState(() {
+              dialogStatus = newStatus;
+              dialogProcessing = false;
+            });
+          };
+
+          // P1 : rebuild sur changement distant (statut de paiement).
+          _refreshActiveDialog = () {
+            if (dialogClosed || !dlgCtx.mounted) return;
+            setDialogState(() {});
+          };
+
+          final paymentStatus = data['paymentStatus']?.toString();
 
           return AlertDialog(
             backgroundColor: const Color(0xFF122530),
-            title: const Text('Course Acceptée ! 🎉',
-                style: TextStyle(color: Colors.white)),
+            title: Text(restored ? 'Course en cours 🚴' : 'Course Acceptée ! 🎉',
+                style: const TextStyle(color: Colors.white)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,7 +1002,17 @@ class _DriverScreenState extends State<DriverScreen> {
           );
         },
       ),
-    );
+    ).then((_) {
+      // Fermeture du dialog (locale ou distante) : plus de course active.
+      // P2 (GPS strict) : le tracking s'arrête avec la course.
+      dialogClosed = true;
+      _activeOrderId = null;
+      _activeOrderData = null;
+      _onRemoteStatusChanged = null;
+      _refreshActiveDialog = null;
+      _resetGeofenceState();
+      _stopLocationUpdates();
+    });
   }
 
   @override
@@ -840,6 +1021,8 @@ class _DriverScreenState extends State<DriverScreen> {
     _heartbeatTimer?.cancel();
     _newOrderSub?.cancel();
     _orderAcceptedSub?.cancel();
+    _statusSub?.cancel();
+    _paymentSub?.cancel();
     _connectedSub?.cancel();
     _socketCtrl.dispose();
     super.dispose();

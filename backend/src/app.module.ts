@@ -14,6 +14,7 @@ import { Vehicle } from './entities/vehicle.entity';
 import { DeliveryOrder } from './entities/delivery-order.entity';
 import { Commission } from './entities/commission.entity';
 import { Message } from './entities/message.entity';
+import { MessageReadReceipt } from './entities/message-read-receipt.entity';
 import { SavedAddress } from './entities/saved-address.entity';
 import { Shop } from './entities/shop.entity';
 import { Product } from './entities/product.entity';
@@ -98,6 +99,7 @@ import { ConversationsModule } from './conversations/conversations.module';
         DeliveryOrder,
         Commission,
         Message,
+        MessageReadReceipt,
         SavedAddress,
         Shop,
         Product,

@@ -55,6 +55,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   StreamSubscription<DriverPosition>? _driverPosSub;
   StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
   StreamSubscription<OrderStatusUpdate>? _statusSub;
+  StreamSubscription<OrderPaymentUpdate>? _paymentSub;
   StreamSubscription<NewChatMessageEvent>? _chatMsgSub;
 
   Place? _pickup;
@@ -196,20 +197,37 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       if (!mounted) return;
       setState(() {
         _activeOrderStatus = evt.status;
-        if (evt.status == 'COMPLETED' || evt.status == 'CANCELLED') {
+        if (evt.status == 'COMPLETED' ||
+            evt.status == 'CANCELLED' ||
+            evt.status == 'FAILED') {
           _driverPosition = null;
           _driverPositionAt = null;
         }
       });
-      if (evt.status == 'IN_PROGRESS') {
+      if (evt.status == 'ACCEPTED' ||
+          evt.status == 'EN_ROUTE_PICKUP' ||
+          evt.status == 'AT_PICKUP' ||
+          evt.status == 'IN_PROGRESS' ||
+          evt.status == 'NEAR_CLIENT') {
         _refreshEta();
-      } else if (evt.status == 'COMPLETED' || evt.status == 'CANCELLED') {
+      } else if (evt.status == 'COMPLETED' ||
+          evt.status == 'CANCELLED' ||
+          evt.status == 'FAILED') {
         _stopEtaPolling();
       }
       if (evt.status == 'COMPLETED') {
         hapticSuccess();
         _promptRating();
       }
+    });
+
+    // P1 : reflète en direct un changement de paiement fait par le livreur,
+    // le commerçant ou un admin (sans devoir recharger l'écran).
+    _paymentSub = _socketCtrl.paymentUpdates$
+        .where((e) => e.orderId == widget.orderId)
+        .listen((evt) {
+      if (!mounted) return;
+      setState(() => _paymentStatus = evt.paymentStatus);
     });
 
     _chatMsgSub = _socketCtrl.newChatMessage$
@@ -268,7 +286,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Future<void> _refreshEta() async {
     final status = _activeOrderStatus;
-    if (status != 'ACCEPTED' && status != 'IN_PROGRESS') return;
+    const etaStatuses = <String>{
+      'ACCEPTED',
+      'EN_ROUTE_PICKUP',
+      'AT_PICKUP',
+      'IN_PROGRESS',
+      'NEAR_CLIENT',
+    };
+    if (!etaStatuses.contains(status)) return;
     final result = await _etaSvc.fetchEta(widget.orderId);
     if (!mounted) return;
     setState(() => _eta = result);
@@ -579,6 +604,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _driverPosSub?.cancel();
     _orderAcceptedSub?.cancel();
     _statusSub?.cancel();
+    _paymentSub?.cancel();
     _chatMsgSub?.cancel();
     _etaTimer?.cancel();
     _estimateSvc.dispose();

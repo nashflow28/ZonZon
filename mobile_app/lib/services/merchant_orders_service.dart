@@ -13,6 +13,31 @@ class MerchantOrderException implements Exception {
   String toString() => message;
 }
 
+class MerchantClientSearchResult {
+  final String id;
+  final String firstName;
+  final String lastName;
+  final String phone;
+
+  const MerchantClientSearchResult({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    required this.phone,
+  });
+
+  String get fullName => '$firstName $lastName'.trim();
+
+  factory MerchantClientSearchResult.fromJson(Map<String, dynamic> json) {
+    return MerchantClientSearchResult(
+      id: json['id']?.toString() ?? '',
+      firstName: json['firstName']?.toString() ?? '',
+      lastName: json['lastName']?.toString() ?? '',
+      phone: json['phone']?.toString() ?? '',
+    );
+  }
+}
+
 /// Service dédié aux livraisons créées par un COMMERCANT pour un client.
 ///
 /// Contrat backend :
@@ -22,6 +47,15 @@ class MerchantOrderException implements Exception {
 ///   livraisons créées (même payload que l'historique client/livreur).
 class MerchantOrdersService {
   final ApiClient _api = ApiClient();
+  static const List<String> paymentStatuses = <String>[
+    'UNPAID',
+    'PAY_ON_DELIVERY',
+    'RECEIVED_BY_MERCHANT',
+    'RECEIVED_BY_LIVREUR',
+    'CASH_ON_DELIVERY',
+    'PAID',
+    'REFUNDED',
+  ];
 
   /// Crée une livraison pour un client.
   ///
@@ -52,6 +86,8 @@ class MerchantOrdersService {
     int? priceFcfa,
     String? priceReason,
     String? preferredLivreurId,
+    String? pickupZoneId,
+    String? destinationZoneId,
   }) async {
     if ((clientId == null || clientId.isEmpty) &&
         (clientPhone == null || clientPhone.isEmpty)) {
@@ -61,25 +97,32 @@ class MerchantOrdersService {
     }
 
     try {
-      final res = await _api.post('/orders/merchant', body: {
-        'pickupAddress': pickupAddress,
-        if (pickupLat != null) 'pickupLat': pickupLat,
-        if (pickupLng != null) 'pickupLng': pickupLng,
-        'deliveryAddress': deliveryAddress,
-        if (deliveryLat != null) 'deliveryLat': deliveryLat,
-        if (deliveryLng != null) 'deliveryLng': deliveryLng,
-        'description': description,
-        if (clientId != null && clientId.isNotEmpty) 'clientId': clientId,
-        if (clientPhone != null && clientPhone.isNotEmpty)
-          'clientPhone': clientPhone,
-        if (clientName != null && clientName.isNotEmpty)
-          'clientName': clientName,
-        if (priceFcfa != null) 'priceFcfa': priceFcfa,
-        if (priceReason != null && priceReason.isNotEmpty)
-          'priceReason': priceReason,
-        if (preferredLivreurId != null && preferredLivreurId.isNotEmpty)
-          'preferredLivreurId': preferredLivreurId,
-      });
+      final res = await _api.post(
+        '/orders/merchant',
+        body: {
+          'pickupAddress': pickupAddress,
+          if (pickupLat != null) 'pickupLat': pickupLat,
+          if (pickupLng != null) 'pickupLng': pickupLng,
+          'deliveryAddress': deliveryAddress,
+          if (deliveryLat != null) 'deliveryLat': deliveryLat,
+          if (deliveryLng != null) 'deliveryLng': deliveryLng,
+          'description': description,
+          if (clientId != null && clientId.isNotEmpty) 'clientId': clientId,
+          if (clientPhone != null && clientPhone.isNotEmpty)
+            'clientPhone': clientPhone,
+          if (clientName != null && clientName.isNotEmpty)
+            'clientName': clientName,
+          if (priceFcfa != null) 'priceFcfa': priceFcfa,
+          if (priceReason != null && priceReason.isNotEmpty)
+            'priceReason': priceReason,
+          if (preferredLivreurId != null && preferredLivreurId.isNotEmpty)
+            'preferredLivreurId': preferredLivreurId,
+          if (pickupZoneId != null && pickupZoneId.isNotEmpty)
+            'pickupZoneId': pickupZoneId,
+          if (destinationZoneId != null && destinationZoneId.isNotEmpty)
+            'destinationZoneId': destinationZoneId,
+        },
+      );
 
       if (res.statusCode == 201 || res.statusCode == 200) {
         final decoded = jsonDecode(res.body);
@@ -130,6 +173,90 @@ class MerchantOrdersService {
       return decoded
           .whereType<Map>()
           .map((m) => OrderHistoryItem.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
+    } on MerchantOrderException {
+      rethrow;
+    } catch (e) {
+      throw MerchantOrderException('Erreur réseau : $e');
+    }
+  }
+
+  Future<OrderHistoryItem> updatePaymentStatus({
+    required String orderId,
+    required String paymentStatus,
+  }) async {
+    try {
+      final res = await _api.patch(
+        '/orders/$orderId/payment-status',
+        body: {'paymentStatus': paymentStatus},
+      );
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        throw MerchantOrderException('Erreur ${res.statusCode}');
+      }
+      final decoded = jsonDecode(res.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const MerchantOrderException('Réponse inattendue du serveur.');
+      }
+      return OrderHistoryItem.fromJson(decoded);
+    } on MerchantOrderException {
+      rethrow;
+    } catch (e) {
+      throw MerchantOrderException('Erreur réseau : $e');
+    }
+  }
+
+  Future<OrderHistoryItem> updatePrice({
+    required String orderId,
+    required int priceFcfa,
+    String? reason,
+  }) async {
+    try {
+      final res = await _api.patch(
+        '/orders/$orderId/price',
+        body: {
+          'priceFcfa': priceFcfa,
+          if (reason != null && reason.isNotEmpty) 'reason': reason,
+        },
+      );
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        throw MerchantOrderException('Erreur ${res.statusCode}');
+      }
+      final decoded = jsonDecode(res.body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const MerchantOrderException('Réponse inattendue du serveur.');
+      }
+      return OrderHistoryItem.fromJson(decoded);
+    } on MerchantOrderException {
+      rethrow;
+    } catch (e) {
+      throw MerchantOrderException('Erreur réseau : $e');
+    }
+  }
+
+  Future<List<MerchantClientSearchResult>> searchClients(
+    String query, {
+    int limit = 8,
+  }) async {
+    final trimmed = query.trim();
+    if (trimmed.length < 2) return const [];
+    try {
+      final encodedQuery = Uri.encodeQueryComponent(trimmed);
+      final res = await _api.get(
+        '/orders/merchant-clients/search?query=$encodedQuery&limit=$limit',
+      );
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        throw MerchantOrderException('Erreur ${res.statusCode}');
+      }
+      final decoded = jsonDecode(res.body);
+      if (decoded is! List) return const [];
+      return decoded
+          .whereType<Map>()
+          .map(
+            (item) => MerchantClientSearchResult.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .where((item) => item.id.isNotEmpty)
           .toList();
     } on MerchantOrderException {
       rethrow;

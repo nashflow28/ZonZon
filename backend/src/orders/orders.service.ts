@@ -38,6 +38,7 @@ import { UpdateStatusDto } from './dto/update-status.dto';
 import { ListOrdersDto } from './dto/list-orders.dto';
 import {
   DriverApprovalStatus,
+  User,
   UserRole,
   UserStatus,
 } from '../entities/user.entity';
@@ -105,6 +106,14 @@ const LIVREUR_ONLY_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.NEAR_CLIENT,
   OrderStatus.COMPLETED,
   OrderStatus.FAILED,
+]);
+
+const ACTIVE_DELIVERY_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.ACCEPTED,
+  OrderStatus.EN_ROUTE_PICKUP,
+  OrderStatus.AT_PICKUP,
+  OrderStatus.IN_PROGRESS,
+  OrderStatus.NEAR_CLIENT,
 ]);
 
 @Injectable()
@@ -325,6 +334,10 @@ export class OrdersService {
     pickupLng: number,
     deliveryLat: number,
     deliveryLng: number,
+    options?: {
+      pickupZoneId?: string;
+      destinationZoneId?: string;
+    },
   ): Promise<{ distanceKm: number; priceFcfa: number; polyline: number[][] }> {
     const route = await this.calculateRouteWithGeometry(
       pickupLat,
@@ -332,19 +345,16 @@ export class OrdersService {
       deliveryLat,
       deliveryLng,
     );
-    let km = route.km;
-    if (km < 0.5) km = 0.5;
-    const pricePerKm = await this.getPricePerKm();
-    const minPriceFcfa = await this.pricing
-      .getMinPriceFcfa()
-      .catch(() => null);
-    let priceFcfa = Math.round(km * pricePerKm);
-    if (minPriceFcfa != null) {
-      priceFcfa = Math.max(priceFcfa, minPriceFcfa);
-    }
+    const pricing = await this.buildOrderPricing({
+      pickupLat,
+      pickupLng,
+      deliveryLat,
+      deliveryLng,
+      pickupZoneId: options?.pickupZoneId,
+    });
     return {
-      distanceKm: parseFloat(km.toFixed(2)),
-      priceFcfa,
+      distanceKm: pricing.distanceKm,
+      priceFcfa: pricing.priceFcfa,
       polyline: route.geometry,
     };
   }
@@ -478,9 +488,7 @@ export class OrdersService {
     const pricePerKm = pickupZone?.pricePerKmOverride ?? globalPricePerKm;
     const basePrice = pickupZone?.basePrice ?? 0;
 
-    const minPriceFcfa = await this.pricing
-      .getMinPriceFcfa()
-      .catch(() => null);
+    const minPriceFcfa = await this.pricing.getMinPriceFcfa().catch(() => null);
     let priceFcfa = basePrice + Math.round(distanceKm * pricePerKm);
     if (minPriceFcfa != null) {
       priceFcfa = Math.max(priceFcfa, minPriceFcfa);
@@ -509,7 +517,47 @@ export class OrdersService {
         "Le livreur sélectionné n'est pas encore validé par un administrateur",
       );
     }
+    if (driver.status !== UserStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Le livreur sélectionné est suspendu ou inactif',
+      );
+    }
+    if (!driver.isAvailable) {
+      throw new BadRequestException(
+        "Le livreur sélectionné n'est pas disponible actuellement",
+      );
+    }
+    const busyOrder = await this.ordersRepository.findOne({
+      where: {
+        livreur: { id: preferredLivreurId } as any,
+        status: In([...ACTIVE_DELIVERY_STATUSES]),
+      },
+      select: ['id'],
+    });
+    if (busyOrder) {
+      throw new BadRequestException(
+        'Le livreur sélectionné est déjà engagé sur une autre course',
+      );
+    }
     return driver;
+  }
+
+  private async findBusyLivreurIds(driverIds: string[]): Promise<Set<string>> {
+    if (driverIds.length === 0) return new Set<string>();
+    const rows = await this.ordersRepository
+      .createQueryBuilder('order')
+      .select('order.livreurId', 'livreurId')
+      .where('order.livreurId IN (:...driverIds)', { driverIds })
+      .andWhere('order.status IN (:...statuses)', {
+        statuses: [...ACTIVE_DELIVERY_STATUSES],
+      })
+      .groupBy('order.livreurId')
+      .getRawMany<{ livreurId: string }>();
+    return new Set(
+      rows
+        .map((row) => row.livreurId)
+        .filter((value): value is string => !!value),
+    );
   }
 
   /**
@@ -657,7 +705,8 @@ export class OrdersService {
       }
       client = found;
       clientPhone = found.phone ?? null;
-      clientName = `${found.firstName ?? ''} ${found.lastName ?? ''}`.trim() || null;
+      clientName =
+        `${found.firstName ?? ''} ${found.lastName ?? ''}`.trim() || null;
     } else if (dto.clientPhone) {
       const found = await this.usersService.findByPhone(dto.clientPhone);
       if (found && found.role === UserRole.CLIENT) {
@@ -994,16 +1043,14 @@ export class OrdersService {
     // écriture implicite perturberait cet affichage. La présente vérification
     // suffit à bloquer l'acceptation, ce qui satisfait la règle métier sans
     // toucher à l'UX de disponibilité.
+    //
+    // NB : ce contrôle hors transaction ne sert qu'au fast-path (message
+    // d'erreur immédiat sans verrou). La garantie ATOMIQUE est assurée par le
+    // re-contrôle sous verrou pessimiste dans la transaction plus bas.
     const activeOrder = await this.ordersRepository.findOne({
       where: {
         livreur: { id: livreurId },
-        status: In([
-          OrderStatus.ACCEPTED,
-          OrderStatus.EN_ROUTE_PICKUP,
-          OrderStatus.AT_PICKUP,
-          OrderStatus.IN_PROGRESS,
-          OrderStatus.NEAR_CLIENT,
-        ]),
+        status: In([...ACTIVE_DELIVERY_STATUSES]),
       },
     });
     if (activeOrder) {
@@ -1030,25 +1077,55 @@ export class OrdersService {
       );
     }
 
-    // 2) UPDATE atomique : seul le premier livreur dont la transaction
-    //    arrive en DB matchera (status=PENDING ET livreurId IS NULL ET
-    //    (preferredLivreurId IS NULL OU = ce livreur)).
-    const result = await this.ordersRepository
-      .createQueryBuilder()
-      .update(DeliveryOrder)
-      .set({
-        status: OrderStatus.ACCEPTED,
-        livreur: { id: livreurId } as any,
-        acceptedAt: () => 'CURRENT_TIMESTAMP',
-      })
-      .where('id = :id', { id: orderId })
-      .andWhere('status = :pending', { pending: OrderStatus.PENDING })
-      .andWhere('livreurId IS NULL')
-      .andWhere(
-        '(preferredLivreurId IS NULL OR preferredLivreurId = :livreurId)',
-        { livreurId },
-      )
-      .execute();
+    // 2) Transaction avec verrou pessimiste sur la ligne `users` du livreur :
+    //    sérialise les acceptations concurrentes d'un MÊME livreur sur deux
+    //    commandes DIFFÉRENTES (le contrôle 0bis seul est un check-then-act
+    //    non atomique : deux requêtes simultanées le passaient toutes les
+    //    deux). Le second accept attend le commit du premier, puis le
+    //    re-contrôle « course active » sous verrou le rejette.
+    const result = await this.ordersRepository.manager.transaction(
+      async (em) => {
+        await em.getRepository(User).findOne({
+          where: { id: livreurId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        const concurrentActive = await em.getRepository(DeliveryOrder).findOne(
+          {
+            where: {
+              livreur: { id: livreurId },
+              status: In([...ACTIVE_DELIVERY_STATUSES]),
+            },
+          },
+        );
+        if (concurrentActive) {
+          throw new ConflictException(
+            "Vous avez déjà une course active. Terminez-la avant d'en accepter une autre.",
+          );
+        }
+
+        // UPDATE atomique : seul le premier livreur dont la transaction
+        // arrive en DB matchera (status=PENDING ET livreurId IS NULL ET
+        // (preferredLivreurId IS NULL OU = ce livreur)).
+        return em
+          .getRepository(DeliveryOrder)
+          .createQueryBuilder()
+          .update(DeliveryOrder)
+          .set({
+            status: OrderStatus.ACCEPTED,
+            livreur: { id: livreurId } as any,
+            acceptedAt: () => 'CURRENT_TIMESTAMP',
+          })
+          .where('id = :id', { id: orderId })
+          .andWhere('status = :pending', { pending: OrderStatus.PENDING })
+          .andWhere('livreurId IS NULL')
+          .andWhere(
+            '(preferredLivreurId IS NULL OR preferredLivreurId = :livreurId)',
+            { livreurId },
+          )
+          .execute();
+      },
+    );
 
     if (!result.affected || result.affected === 0) {
       throw new ConflictException(
@@ -1247,13 +1324,13 @@ export class OrdersService {
    * Calcule un ETA pour la course `orderId` du point de vue du livreur.
    *
    * Stratégie :
-   * - Course `ACCEPTED` → ETA livreur → pickup
-   * - Course `IN_PROGRESS` → ETA livreur → delivery
+   * - Course `ACCEPTED` / `EN_ROUTE_PICKUP` / `AT_PICKUP` → ETA vers pickup
+   * - Course `IN_PROGRESS` / `NEAR_CLIENT` → ETA vers delivery
    * - Autres statuts → `basedOn: 'unavailable'` (la course n'est pas en route)
    *
    * Source de la position du livreur :
    *  1. Dernière position persistée (fraîche < 5 min) → `basedOn: 'driver_position'`
-   *  2. Si la course est `IN_PROGRESS` mais qu'on n'a pas de position fraîche,
+   *  2. Si la course est déjà partie vers le client mais qu'on n'a pas de position fraîche,
    *     on suppose que le livreur est encore au pickup (point de retrait
    *     connu) → `basedOn: 'pickup'`. Cas ACCEPTED sans position fraîche →
    *     `basedOn: 'unavailable'` (estimer un ETA = 0 vers le pickup serait
@@ -1275,21 +1352,25 @@ export class OrdersService {
   }> {
     const order = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['client', 'livreur'],
+      relations: ['client', 'livreur', 'merchant'],
     });
     if (!order) throw new NotFoundException('Commande introuvable');
 
     const actorId = actor.id ?? actor.sub;
     const isClient = order.client?.id === actorId;
     const isLivreur = order.livreur?.id === actorId;
+    const isMerchant = order.merchant?.id === actorId;
     const isAdmin = actor.role === UserRole.ADMIN;
-    if (!isClient && !isLivreur && !isAdmin) {
+    if (!isClient && !isLivreur && !isMerchant && !isAdmin) {
       throw new ForbiddenException();
     }
 
     if (
       order.status !== OrderStatus.ACCEPTED &&
-      order.status !== OrderStatus.IN_PROGRESS
+      order.status !== OrderStatus.EN_ROUTE_PICKUP &&
+      order.status !== OrderStatus.AT_PICKUP &&
+      order.status !== OrderStatus.IN_PROGRESS &&
+      order.status !== OrderStatus.NEAR_CLIENT
     ) {
       return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
     }
@@ -1315,7 +1396,11 @@ export class OrdersService {
       driverLat = position!.lat;
       driverLng = position!.lng;
       basedOn = 'driver_position';
-    } else if (order.status === OrderStatus.ACCEPTED) {
+    } else if (
+      order.status === OrderStatus.ACCEPTED ||
+      order.status === OrderStatus.EN_ROUTE_PICKUP ||
+      order.status === OrderStatus.AT_PICKUP
+    ) {
       // Pas de position fraîche en ACCEPTED : estimer ETA=0 vers pickup
       // serait trompeur (on ne sait pas où il est). On retourne unavailable.
       return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
@@ -1333,7 +1418,11 @@ export class OrdersService {
 
     let targetLat: number;
     let targetLng: number;
-    if (order.status === OrderStatus.ACCEPTED) {
+    if (
+      order.status === OrderStatus.ACCEPTED ||
+      order.status === OrderStatus.EN_ROUTE_PICKUP ||
+      order.status === OrderStatus.AT_PICKUP
+    ) {
       if (!order.pickupLat || !order.pickupLng) {
         return { distanceKm: null, etaMinutes: null, basedOn: 'unavailable' };
       }
@@ -1350,10 +1439,7 @@ export class OrdersService {
     const distanceKm = haversineKm(driverLat, driverLng, targetLat, targetLng);
     // Vitesse moyenne en ville (Lomé, motos prédominantes) : ~25 km/h.
     const speedKmh = 25;
-    const etaMinutes = Math.max(
-      1,
-      Math.round((distanceKm / speedKmh) * 60),
-    );
+    const etaMinutes = Math.max(1, Math.round((distanceKm / speedKmh) * 60));
 
     return {
       distanceKm: parseFloat(distanceKm.toFixed(2)),
@@ -1403,6 +1489,16 @@ export class OrdersService {
       newStatus: paymentStatus,
       changedBy: actorId ?? null,
     });
+
+    // Diffusion temps réel aux autres parties : sans cet event, client et
+    // livreur gardaient l'ancien statut de paiement jusqu'au rechargement.
+    this.ordersGateway.broadcastPaymentUpdate(
+      order.id,
+      paymentStatus,
+      order.client?.id,
+      order.livreur?.id,
+      order.merchant?.id,
+    );
 
     return saved;
   }
@@ -1555,7 +1651,17 @@ export class OrdersService {
       isAffiliated: boolean;
     }>
   > {
-    const drivers = await this.usersService.findAvailableDrivers();
+    const rawDrivers = await this.usersService.findAvailableDrivers();
+    const eligibleDrivers = rawDrivers.filter(
+      (driver: any) =>
+        driver.status !== UserStatus.SUSPENDED && driver.isAvailable,
+    );
+    const busyDriverIds = await this.findBusyLivreurIds(
+      eligibleDrivers.map((driver) => driver.id),
+    );
+    const drivers = eligibleDrivers.filter(
+      (driver) => !busyDriverIds.has(driver.id),
+    );
 
     const hasCoords =
       typeof lat === 'number' &&
@@ -1567,9 +1673,8 @@ export class OrdersService {
     const actorId = actor?.id ?? actor?.sub;
     if (actor?.role === UserRole.COMMERCANT && actorId) {
       const affiliatedDrivers =
-        (await this.merchantDriversService?.listDriversForMerchant(
-          actorId,
-        )) ?? [];
+        (await this.merchantDriversService?.listDriversForMerchant(actorId)) ??
+        [];
       // Seule une affiliation ACTIVE (invitation acceptée par le livreur,
       // §9.2) compte pour le flag `isAffiliated` / le tri "affiliés en tête".
       affiliatedIds = new Set(
@@ -1628,12 +1733,22 @@ export class OrdersService {
   async assignPreferredLivreur(
     orderId: string,
     livreurId: string,
+    actor: any,
   ): Promise<DeliveryOrder> {
     const order = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['client', 'livreur', 'preferredLivreur'],
+      relations: ['client', 'livreur', 'preferredLivreur', 'merchant'],
     });
     if (!order) throw new NotFoundException('Commande introuvable');
+
+    const actorId = actor.id ?? actor.sub;
+    const isAdmin = actor.role === UserRole.ADMIN;
+    const isMerchantOwner = order.merchant?.id === actorId;
+    if (!isAdmin && !isMerchantOwner) {
+      throw new ForbiddenException(
+        'Vous ne pouvez pas réassigner cette livraison',
+      );
+    }
 
     if (order.status !== OrderStatus.PENDING || order.livreur) {
       throw new BadRequestException(
@@ -1648,5 +1763,15 @@ export class OrdersService {
     await this.dispatchNewOrder(saved, driver.id);
 
     return saved;
+  }
+
+  async searchMerchantClients(query: string, limit = 8) {
+    const clients = await this.usersService.searchClients(query, limit);
+    return clients.map((client) => ({
+      id: client.id,
+      firstName: client.firstName,
+      lastName: client.lastName,
+      phone: client.phone,
+    }));
   }
 }

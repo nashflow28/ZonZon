@@ -11,10 +11,12 @@ import '../../models/user.dart';
 import '../../router/app_router.dart';
 import '../../services/api_client.dart';
 import '../../services/auth_service.dart';
+import '../../services/notifications_service.dart';
 import '../../utils/platform_adapter.dart';
 import 'create_delivery_screen.dart';
 import 'merchant_drivers_screen.dart';
 import 'merchant_orders_screen.dart';
+import '../notifications_screen.dart';
 
 class MerchantProfileScreen extends StatefulWidget {
   const MerchantProfileScreen({super.key});
@@ -26,10 +28,12 @@ class MerchantProfileScreen extends StatefulWidget {
 class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
   final ApiClient _api = ApiClient();
   final AuthService _auth = AuthService();
+  final NotificationsService _notificationsService = NotificationsService();
   final ImagePicker _picker = ImagePicker();
 
   User? _user;
   bool _loading = true;
+  int _unreadNotificationsCount = 0;
 
   final _firstNameCtrl = TextEditingController();
   final _lastNameCtrl = TextEditingController();
@@ -38,6 +42,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
   void initState() {
     super.initState();
     _load();
+    _loadUnreadNotificationsCount();
   }
 
   @override
@@ -61,6 +66,21 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
     if (mounted) {
       setState(() => _loading = false);
     }
+  }
+
+  Future<void> _loadUnreadNotificationsCount() async {
+    try {
+      final page = await _notificationsService.list();
+      if (!mounted) return;
+      setState(() {
+        _unreadNotificationsCount = page.items.where((n) => n.isUnread).length;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _openNotifications() async {
+    await pushAdaptive<void>(context, const NotificationsScreen());
+    if (mounted) _loadUnreadNotificationsCount();
   }
 
   Future<void> _pickAndUploadPhoto() async {
@@ -145,6 +165,39 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
           'Profil commerçant',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: _openNotifications,
+              ),
+              if (_unreadNotificationsCount > 0)
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0453D),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _unreadNotificationsCount > 99
+                          ? '99+'
+                          : '$_unreadNotificationsCount',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
       body: _loading
           ? Center(child: adaptiveLoader(color: const Color(0xFF0FB271)))
@@ -186,6 +239,14 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                       context,
                       const MerchantDriversScreen(),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildActionTile(
+                    icon: Icons.notifications_outlined,
+                    color: const Color(0xFF2E90FA),
+                    title: 'Notifications',
+                    subtitle: 'Consulter les alertes et messages reçus',
+                    onTap: _openNotifications,
                   ),
                   const SizedBox(height: 18),
                   _buildSection('Informations personnelles', _buildProfileFields()),

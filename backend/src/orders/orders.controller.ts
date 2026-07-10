@@ -20,6 +20,7 @@ import { EstimateOrderDto } from './dto/estimate-order.dto';
 import { ListOrdersDto } from './dto/list-orders.dto';
 import { AvailableDriversQueryDto } from './dto/available-drivers-query.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
+import { SearchMerchantClientsQueryDto } from './dto/search-merchant-clients-query.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
@@ -45,6 +46,10 @@ export class OrdersController {
       dto.pickupLng,
       dto.deliveryLat,
       dto.deliveryLng,
+      {
+        pickupZoneId: dto.pickupZoneId,
+        destinationZoneId: dto.destinationZoneId,
+      },
     );
   }
 
@@ -80,6 +85,12 @@ export class OrdersController {
       query.lat,
       query.lng,
     );
+  }
+
+  @Roles(UserRole.COMMERCANT)
+  @Get('merchant-clients/search')
+  searchMerchantClients(@Query() query: SearchMerchantClientsQueryDto) {
+    return this.ordersService.searchMerchantClients(query.query, query.limit);
   }
 
   @Get('mine')
@@ -155,12 +166,7 @@ export class OrdersController {
     @Body() dto: UpdatePriceDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.ordersService.updatePrice(
-      id,
-      dto.priceFcfa,
-      user,
-      dto.reason,
-    );
+    return this.ordersService.updatePrice(id, dto.priceFcfa, user, dto.reason);
   }
 
   /**
@@ -172,7 +178,8 @@ export class OrdersController {
   assign(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AssignOrderDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.ordersService.assignPreferredLivreur(id, dto.livreurId);
+    return this.ordersService.assignPreferredLivreur(id, dto.livreurId, user);
   }
 }

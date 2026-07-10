@@ -17,7 +17,7 @@
 > **Contrainte absolue : ne rien casser** — tracking GPS, Socket.IO, FCM, messagerie client↔livreur, admin dashboard.
 > Ordre d'exécution : **backend d'abord**, puis fronts (Flutter, Angular).
 
-### 🆕 CDC V1 détaillé — audit `AUDIT_CDC_ZONZON_V1.md` (2026-07-07, conformité ~68%)
+### 🆕 CDC V1 détaillé — audit `AUDIT_CDC_ZONZON_V1.md` (2026-07-07, conformité initiale ~68%)
 - [x] **P0 — Suspension de compte** — `User.status` (ACTIVE/SUSPENDED), `PATCH /users/:id/suspend|reactivate` (ADMIN + audit), blocage login + create/accept. Migration `1779000000000`. *(backend, jest 232/232)*
 - [x] **P0 — Une seule course active par livreur** — `acceptOrder` refuse (`ConflictException`) si course `ACCEPTED…NEAR_CLIENT`. *(backend)*
 - [x] **Tests e2e règles métier** — infra hermétique réparée + 25 scénarios §21.4 (validation, permissions, propriété, double-accept). `test:e2e` 37/37. `TEST_PLAN_ZONZON_V1.md`. *(backend/test)*
@@ -36,7 +36,8 @@
 - [x] **Post-V1 — Notifs validation/refus livreur** (à l'approbation admin). *(2026-07-07)*
 - [x] **Post-V1 — Tarif effectif par zone** (`basePrice`/`pricePerKmOverride` branchés dans `buildOrderPricing`). *(2026-07-07)*
 - [x] **Post-V1 — Conversation multi-participants** (`Conversation`/`ConversationParticipant`, hook additif au message, endpoints `GET/POST/DELETE /orders/:id/conversation/...`, commerçant autorisé aussi sur les messages HTTP). *(2026-07-07)*
-- [ ] **Reste (front, plus tard)** : UI admin pour participants de conversation si souhaitée, notifs validation livreur in-app côté mobile, déploiement prod (auth Fly/Cloudflare interactive requise).
+- [x] **Notifs validation/refus livreur in-app côté mobile** — notification persistée + centre de notifications + refresh de l'état livreur. *(2026-07-09)*
+- [ ] **Reste (front/ops, plus tard)** : UI admin pour participants de conversation si souhaitée, déploiement prod (auth Fly/Cloudflare interactive requise).
 
 ### 🔴 Priorité 1 — Validation & disponibilité des livreurs
 - [x] **Backend — Validation admin obligatoire des livreurs** *(2026-07-05)*
@@ -61,6 +62,7 @@
   - Le commerçant ne peut jamais être livreur (garanti par `@Roles(LIVREUR)` sur `accept`). Build OK, jest **147/147**.
 - [x] **Mobile (commerçant)** — écran `create_delivery_screen` (client par téléphone/nom, retrait/livraison via LocationPicker, estimation, `POST /orders/merchant`) + écran `merchant_orders_screen` (« Mes livraisons » via `GET /orders/mine`). Accès depuis l'accueil commerçant (carte d'actions rapides), routes go_router. `flutter analyze` 10, `flutter test` 10/10. *(2026-07-05)*
 - [x] **Correctifs mobile post-P3/post-V1 (2026-07-09)** — statut d’affiliation réel côté commerçant, accept/refus côté livreur, conversation multi-participants branchée côté mobile, prix manuel commerçant, statuts/paiement complets dans « Mes livraisons », paiement visible côté client, écran profil commerçant.
+- [x] **Correctifs mobile post-audit (2026-07-09)** — FCM réellement initialisé après auth + navigation sur tap notification, logout auto sur 401/token expiré, détail commerçant deep-linkable et actions paiement/prix, refresh temps réel commerçant via socket, `FAILED` retiré des commandes actives client, ETA aligné sur les statuts étendus, labels paiement complétés, saisie `clientId` ajoutée dans la création commerçant. Build backend OK, `flutter test` OK, `flutter analyze` sans nouvelle erreur.
 - [ ] **Admin (optionnel)** — création/gestion de livraison Type 1 depuis le dashboard (non prioritaire)
 
 ### 🟡 Priorité 3 — Attribution, affiliation, tarifs, statuts, paiement, zones
@@ -85,6 +87,28 @@
 ---
 
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)
+
+### Revue mobile vs CDC (2026-07-09) — verdict FAIL
+- [x] **Revue post-correctifs rejouée (2026-07-10)** — contrats mobile/backend inspectés ; backend 343/343 unitaires + build OK ; Flutter 11/11 + analyze sans erreur ; e2e 54/56 (2 fixtures obsolètes). Verdict : correctifs commerçant conformes, mais PASS CDC complet refusé à cause des findings ci-dessous.
+- [x] **P0 — Restaurer la course active côté livreur après redémarrage mobile** — `_restoreActiveOrder()` charge `/orders/mine` au boot, détecte la course active (ACCEPTED→NEAR_CLIENT) et rouvre le dialog de progression complet (titre « Course en cours »). *(2026-07-10)*
+- [x] **P0 — Synchroniser l'annulation distante dans l'UI livreur** — `statusUpdates$` écouté ; statut terminal distant → fermeture du dialog non dismissible (popUntil du chat empilé inclus), snackbar, arrêt géofence + GPS ; statut non terminal → synchro de l'affichage. *(2026-07-10)*
+- [x] **P0 — Rendre atomique la règle une-course-active** — `acceptOrder` fait le re-contrôle « course active » + UPDATE atomique dans une transaction avec verrou pessimiste (`SELECT … FOR UPDATE`) sur la ligne `users` du livreur ; tests dédiés (race simulée + prise du verrou). *(2026-07-10)*
+- [x] **P1 — Corriger la normalisation de recherche client** — `replace(/[^0-9]/g, '')` (flag global) dans `searchClients` ; `+228 90-12.34` désormais bien normalisé. *(2026-07-10)*
+- [x] **P1 — Diffuser les changements de paiement en temps réel** — event `orderPaymentUpdated` (gateway `broadcastPaymentUpdate` → client/livreur/commerçant), stream `paymentUpdates$` mobile consommé par le suivi client, le dialog livreur et la liste/détail commerçant. *(2026-07-10)*
+- [x] **P1 — Lecture chat par participant** — table `message_read_receipts` (receipt par user/message, migration `1780000000000` + backfill), `markAsRead`/`unreadCountForUser` par participant ; `Message.readAt` conservé (sémantique « lu par au moins un destinataire », rétro-compat mobile). *(2026-07-10)*
+- [x] **P2 — Réparer les fixtures e2e d'attribution manuelle** — le repo in-memory applique désormais le défaut DB `User.status=ACTIVE` à l'inscription ; e2e **56/56**. *(2026-07-10)*
+- [x] **P2 — N'activer le GPS mobile livreur que pendant une course active** — position stream + heartbeat démarrés à l'ouverture du dialog (accept/restauration), arrêtés à sa fermeture (statut terminal local ou distant) ; reconnexion socket ne relance le GPS que si une course est active. *(2026-07-10)*
+- [x] **Revue de conformité rejouée** — contrats mobile/backend inspectés, `flutter analyze --no-pub lib` (10 alertes non bloquantes), `flutter test` (11/11), backend `npm run build` + 161 tests commandes/gateway/messages OK. Build APK release non conclu après 10 min ; premier échec attribué à un registrant Flutter local obsolète, corrigé par nettoyage.
+- [x] **P0 — Cycle session/FCM mobile** — `GoRouter.refreshListenable` branché sur la session ; suppression ciblée du token device (`previousToken`) ; resynchronisation du token possible après logout/login dans le même processus.
+- [x] **P0 — Restaurer le tracking GPS après redémarrage backend** — le gateway réhydrate désormais la course active du livreur depuis la DB avant de forwarder/persister sa position.
+- [x] **P1 — Fiabiliser la sélection commerçant** — recherche/sélection d’un client existant, saisie téléphone via `PhoneField`, filtre `available-drivers` sur compte actif + disponibilité + absence de course active.
+- [x] **P1 — Suivi commerçant réel** — position live + ETA visibles dans le détail commerçant ; `GET /orders/:id/eta` autorisé au commerçant créateur.
+- [x] **P1 — Activer les tarifs par zone dans le mobile** — sélection/envoi `pickupZoneId` / `destinationZoneId` côté client et commerçant, estimation alignée sur le pricing backend.
+- [x] **P1 — Sécuriser la réassignation** — `PATCH /orders/:id/assign` vérifie désormais le commerçant propriétaire (ou admin).
+- [x] **P2 — Sécuriser le chat multi-participants** — fermeture aussi sur `FAILED`, `chat:typing` autorisé seulement après contrôle d'appartenance, conversation commerçant réellement exploitable côté mobile.
+- [~] **P2 — Couvrir les flux récents** — backend couvert (171 tests commandes/gateway/messages OK), mais il manque encore des tests widget/intégration Flutter dédiés pour affiliation invite/accept, création commerçant, notification tap et conversation multi-participants.
+- [ ] **CDC source — inscription livreur** — si la photo de profil doit être obligatoire dès l'inscription, l'ajouter au flux `RegisterScreen` ; aujourd'hui elle est seulement complétable après création du compte.
+- [ ] **Décision PO — tarif CDC** — résoudre la contradiction entre le document source (150 FCFA/km) et le backlog V1 actuel/config backend (200 FCFA/km).
 
 ### Audit codex (2026-07-04) — 8/9 findings corrigés
 > Audit par triangulation des 3 stacks. Verdict initial FAIL. Correctifs via 3 agents parallèles + manuels. Détail complet : `PROGRESS.md` Session 22.

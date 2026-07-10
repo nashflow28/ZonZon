@@ -146,7 +146,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final closed =
-        widget.orderStatus == 'COMPLETED' || widget.orderStatus == 'CANCELLED';
+        widget.orderStatus == 'COMPLETED' ||
+        widget.orderStatus == 'CANCELLED' ||
+        widget.orderStatus == 'FAILED';
     return Scaffold(
       backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
@@ -210,7 +212,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               color: const Color(0xFFFF9E1B).withValues(alpha: 0.15),
               child: Text(
-                'Conversation fermée — la course est ${widget.orderStatus == 'COMPLETED' ? 'terminée' : 'annulée'}.',
+                'Conversation fermée — la course est ${widget.orderStatus == 'COMPLETED'
+                    ? 'terminée'
+                    : widget.orderStatus == 'FAILED'
+                    ? 'en échec'
+                    : 'annulée'}.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Color(0xFFFF9E1B), fontSize: 13),
               ),
@@ -289,7 +295,8 @@ class _MessagesList extends StatelessWidget {
         final mine = m.senderId != null && m.senderId == myId;
         // Pour ne pas re-grouper les bulles consécutives du même expéditeur
         final prev = index > 0 ? messages[index - 1] : null;
-        final tight = prev != null &&
+        final tight =
+            prev != null &&
             prev.senderId == m.senderId &&
             m.createdAt.difference(prev.createdAt).inMinutes < 2;
         return _Bubble(
@@ -318,9 +325,7 @@ class _Bubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = mine
-        ? const Color(0xFF2E90FA)
-        : const Color(0xFF122530);
+    final bg = mine ? const Color(0xFF2E90FA) : const Color(0xFF122530);
     final radius = BorderRadius.only(
       topLeft: const Radius.circular(18),
       topRight: const Radius.circular(18),
@@ -342,8 +347,9 @@ class _Bubble extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.only(top: tight ? 2 : 8, bottom: 2),
         child: Row(
-          mainAxisAlignment:
-              mine ? MainAxisAlignment.end : MainAxisAlignment.start,
+          mainAxisAlignment: mine
+              ? MainAxisAlignment.end
+              : MainAxisAlignment.start,
           children: [
             ConstrainedBox(
               constraints: BoxConstraints(
@@ -351,19 +357,20 @@ class _Bubble extends StatelessWidget {
               ),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
+                  horizontal: 14,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: bg,
                   borderRadius: radius,
                   border: mine
                       ? null
-                      : Border.all(
-                          color: Colors.white.withValues(alpha: 0.05),
-                        ),
+                      : Border.all(color: Colors.white.withValues(alpha: 0.05)),
                 ),
                 child: Column(
-                  crossAxisAlignment:
-                      mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  crossAxisAlignment: mine
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
                   children: [
                     if (!mine && !tight) ...[
                       Text(
@@ -437,7 +444,11 @@ class _StatusIndicator extends StatelessWidget {
     if (message.readAt != null) {
       return const Icon(Icons.done_all, size: 14, color: Colors.white);
     }
-    return Icon(Icons.done, size: 14, color: Colors.white.withValues(alpha: 0.7));
+    return Icon(
+      Icons.done,
+      size: 14,
+      color: Colors.white.withValues(alpha: 0.7),
+    );
   }
 }
 
@@ -612,8 +623,10 @@ class _Composer extends StatelessWidget {
                     hintText: 'Écrire un message…',
                     hintStyle: TextStyle(color: Colors.white60),
                     border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 12,
+                    ),
                   ),
                 ),
               ),
@@ -638,8 +651,11 @@ class _Composer extends StatelessWidget {
                         child: const SizedBox(
                           width: 46,
                           height: 46,
-                          child: Icon(Icons.send_rounded,
-                              color: Colors.white, size: 22),
+                          child: Icon(
+                            Icons.send_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
                         ),
                       ),
                     ),

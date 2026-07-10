@@ -37,9 +37,11 @@ class EstimateResult {
 ///   des changements de saisie rapides (les appels successifs annulent le
 ///   précédent).
 class EstimateService {
-  EstimateService({ApiClient? api, Duration debounceDelay = const Duration(milliseconds: 500)})
-      : _api = api ?? ApiClient(),
-        _debounceDelay = debounceDelay;
+  EstimateService({
+    ApiClient? api,
+    Duration debounceDelay = const Duration(milliseconds: 500),
+  }) : _api = api ?? ApiClient(),
+       _debounceDelay = debounceDelay;
 
   final ApiClient _api;
   final Duration _debounceDelay;
@@ -59,13 +61,22 @@ class EstimateService {
     required double lng1,
     required double lat2,
     required double lng2,
+    String? pickupZoneId,
+    String? destinationZoneId,
     required void Function(EstimateResult? result) onResult,
     void Function(bool loading)? onLoading,
   }) {
     _debounce?.cancel();
     onLoading?.call(true);
     _debounce = Timer(_debounceDelay, () async {
-      final res = await estimate(lat1: lat1, lng1: lng1, lat2: lat2, lng2: lng2);
+      final res = await estimate(
+        lat1: lat1,
+        lng1: lng1,
+        lat2: lat2,
+        lng2: lng2,
+        pickupZoneId: pickupZoneId,
+        destinationZoneId: destinationZoneId,
+      );
       onResult(res);
       onLoading?.call(false);
     });
@@ -78,14 +89,23 @@ class EstimateService {
     required double lng1,
     required double lat2,
     required double lng2,
+    String? pickupZoneId,
+    String? destinationZoneId,
   }) async {
     try {
-      final res = await _api.post('/orders/estimate', body: {
-        'pickupLat': lat1,
-        'pickupLng': lng1,
-        'deliveryLat': lat2,
-        'deliveryLng': lng2,
-      });
+      final res = await _api.post(
+        '/orders/estimate',
+        body: {
+          'pickupLat': lat1,
+          'pickupLng': lng1,
+          'deliveryLat': lat2,
+          'deliveryLng': lng2,
+          if (pickupZoneId != null && pickupZoneId.isNotEmpty)
+            'pickupZoneId': pickupZoneId,
+          if (destinationZoneId != null && destinationZoneId.isNotEmpty)
+            'destinationZoneId': destinationZoneId,
+        },
+      );
       if (res.statusCode != 200 && res.statusCode != 201) return null;
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final km = (data['distanceKm'] as num?)?.toDouble() ?? 0;

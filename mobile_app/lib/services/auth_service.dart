@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import '../config/env.dart';
@@ -14,6 +15,9 @@ class AuthService {
   AuthService._internal();
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
+  final ValueNotifier<int> _sessionVersion = ValueNotifier<int>(0);
+
+  Listenable get sessionListenable => _sessionVersion;
 
   Future<AuthResult> login(String phone, String password) async {
     final res = await http.post(
@@ -66,8 +70,11 @@ class AuthService {
   Future<void> logout() async {
     // Efface le token FCM côté serveur AVANT de perdre le JWT
     await PushService.instance.clearToken();
-    await _storage.delete(key: _tokenKey);
-    await _storage.delete(key: _userKey);
+    await _clearLocalSession();
+  }
+
+  Future<void> handleUnauthorized() async {
+    await _clearLocalSession();
   }
 
   Future<String?> getToken() async {
@@ -87,6 +94,7 @@ class AuthService {
   Future<void> _persist(AuthResult result) async {
     await _storage.write(key: _tokenKey, value: result.accessToken);
     await _storage.write(key: _userKey, value: jsonEncode(result.user.toJson()));
+    _sessionVersion.value++;
   }
 
   /// Met à jour uniquement l'utilisateur stocké (le token reste inchangé).
@@ -94,6 +102,13 @@ class AuthService {
   /// `GET /users/me`) sans repasser par un login complet.
   Future<void> saveUser(User user) async {
     await _storage.write(key: _userKey, value: jsonEncode(user.toJson()));
+    _sessionVersion.value++;
+  }
+
+  Future<void> _clearLocalSession() async {
+    await _storage.delete(key: _tokenKey);
+    await _storage.delete(key: _userKey);
+    _sessionVersion.value++;
   }
 
   String _extractError(http.Response res) {

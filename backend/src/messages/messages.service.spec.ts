@@ -4,19 +4,60 @@ import { ForbiddenException } from '@nestjs/common';
 
 import { MessagesService } from './messages.service';
 import { Message, MessageType } from '../entities/message.entity';
+import { MessageReadReceipt } from '../entities/message-read-receipt.entity';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
 import { UserRole } from '../entities/user.entity';
 import { OrdersGateway } from '../orders/orders.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ConversationsService } from '../conversations/conversations.service';
 
-const mockMessagesRepo = () => ({
-  find: jest.fn(),
-  findOne: jest.fn(),
-  create: jest.fn((data: any) => ({ ...data })),
-  save: jest.fn(),
-  createQueryBuilder: jest.fn(),
-});
+/**
+ * `markAsRead`/`unreadCountForUser` utilisent DEUX query builders distincts
+ * sur le repo messages : un SELECT (alias 'message', leftJoin receipts →
+ * getMany/getCount) et un UPDATE rétro-compat de `readAt` (sans alias).
+ * On route selon la présence de l'alias, comme TypeORM.
+ */
+const mockMessagesRepo = () => {
+  const selectQb: any = {
+    leftJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue([]),
+    getCount: jest.fn().mockResolvedValue(0),
+  };
+  const updateQb: any = {
+    update: jest.fn().mockReturnThis(),
+    set: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    execute: jest.fn().mockResolvedValue({ affected: 0 }),
+  };
+  return {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    create: jest.fn((data: any) => ({ ...data })),
+    save: jest.fn(),
+    createQueryBuilder: jest.fn((alias?: string) =>
+      alias ? selectQb : updateQb,
+    ),
+    __selectQb: selectQb,
+    __updateQb: updateQb,
+  };
+};
+
+const mockReadReceiptsRepo = () => {
+  const insertQb: any = {
+    insert: jest.fn().mockReturnThis(),
+    into: jest.fn().mockReturnThis(),
+    values: jest.fn().mockReturnThis(),
+    orIgnore: jest.fn().mockReturnThis(),
+    execute: jest.fn().mockResolvedValue(undefined),
+  };
+  return {
+    createQueryBuilder: jest.fn(() => insertQb),
+    __insertQb: insertQb,
+  };
+};
 
 const mockOrdersRepo = () => ({
   findOne: jest.fn(),
@@ -25,10 +66,18 @@ const mockOrdersRepo = () => ({
 describe('MessagesService', () => {
   let service: MessagesService;
   let messagesRepo: ReturnType<typeof mockMessagesRepo>;
+  let readReceiptsRepo: ReturnType<typeof mockReadReceiptsRepo>;
   let ordersRepo: ReturnType<typeof mockOrdersRepo>;
-  let gateway: { broadcastChatMessage: jest.Mock; isInChatRoom: jest.Mock };
+  let gateway: {
+    broadcastChatMessage: jest.Mock;
+    broadcastChatRead: jest.Mock;
+    isInChatRoom: jest.Mock;
+  };
   let notifications: { sendToUser: jest.Mock };
-  let conversationsService: { trackMessageSender: jest.Mock };
+  let conversationsService: {
+    trackMessageSender: jest.Mock;
+    listParticipants: jest.Mock;
+  };
 
   const order = {
     id: 'order-1',
@@ -39,20 +88,27 @@ describe('MessagesService', () => {
 
   beforeEach(async () => {
     messagesRepo = mockMessagesRepo();
+    readReceiptsRepo = mockReadReceiptsRepo();
     ordersRepo = mockOrdersRepo();
     gateway = {
       broadcastChatMessage: jest.fn(),
+      broadcastChatRead: jest.fn(),
       isInChatRoom: jest.fn().mockReturnValue(true),
     };
     notifications = { sendToUser: jest.fn().mockResolvedValue(undefined) };
     conversationsService = {
       trackMessageSender: jest.fn().mockResolvedValue(undefined),
+      listParticipants: jest.fn().mockResolvedValue([]),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MessagesService,
         { provide: getRepositoryToken(Message), useValue: messagesRepo },
+        {
+          provide: getRepositoryToken(MessageReadReceipt),
+          useValue: readReceiptsRepo,
+        },
         {
           provide: getRepositoryToken(DeliveryOrder),
           useValue: ordersRepo,
@@ -151,6 +207,112 @@ describe('MessagesService', () => {
       ).rejects.toThrow(ForbiddenException);
 
       expect(conversationsService.trackMessageSender).not.toHaveBeenCalled();
+    });
+
+    it('refuse aussi l’envoi si la course est en échec (FAILED)', async () => {
+      ordersRepo.findOne.mockResolvedValue({
+        ...order,
+        status: OrderStatus.FAILED,
+      });
+      const actor = { id: 'client-1', role: UserRole.CLIENT };
+
+      await expect(
+        service.sendMessage('order-1', actor, {
+          type: MessageType.TEXT,
+          content: 'Toujours là ?',
+        }),
+      ).rejects.toThrow(ForbiddenException);
+
+      expect(conversationsService.trackMessageSender).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('markAsRead() — lecture PAR PARTICIPANT (P1, chat à 3+)', () => {
+    it('insère un receipt par message non lu POUR CE participant et broadcast chat:read', async () => {
+      ordersRepo.findOne.mockResolvedValue(order);
+      messagesRepo.__selectQb.getMany.mockResolvedValue([
+        { id: 'msg-1' },
+        { id: 'msg-2' },
+      ]);
+
+      const result = await service.markAsRead('order-1', {
+        id: 'livreur-1',
+        role: UserRole.LIVREUR,
+      });
+
+      expect(result).toEqual({ updated: 2 });
+      // Le SELECT filtre bien sur le receipt absent DE CE user
+      expect(messagesRepo.__selectQb.leftJoin).toHaveBeenCalledWith(
+        MessageReadReceipt,
+        'receipt',
+        'receipt.messageId = message.id AND receipt.userId = :userId',
+        { userId: 'livreur-1' },
+      );
+      // Un receipt inséré par message, pour CE user
+      expect(readReceiptsRepo.__insertQb.values).toHaveBeenCalledWith([
+        expect.objectContaining({ messageId: 'msg-1', userId: 'livreur-1' }),
+        expect.objectContaining({ messageId: 'msg-2', userId: 'livreur-1' }),
+      ]);
+      expect(readReceiptsRepo.__insertQb.orIgnore).toHaveBeenCalled();
+      // Rétro-compat : readAt global toujours alimenté
+      expect(messagesRepo.__updateQb.execute).toHaveBeenCalled();
+      expect(gateway.broadcastChatRead).toHaveBeenCalledWith(
+        'order-1',
+        expect.objectContaining({ readerId: 'livreur-1' }),
+      );
+    });
+
+    it("la lecture par un participant ne consomme PAS le non-lu d'un autre (receipts distincts)", async () => {
+      ordersRepo.findOne.mockResolvedValue(order);
+      // Même si le message a déjà été lu par le client (readAt global posé),
+      // le SELECT joint sur les receipts DU livreur → toujours non lu pour lui.
+      messagesRepo.__selectQb.getMany.mockResolvedValue([
+        { id: 'msg-1', readAt: new Date() },
+      ]);
+
+      const result = await service.markAsRead('order-1', {
+        id: 'livreur-1',
+        role: UserRole.LIVREUR,
+      });
+
+      expect(result).toEqual({ updated: 1 });
+      expect(readReceiptsRepo.__insertQb.values).toHaveBeenCalledWith([
+        expect.objectContaining({ messageId: 'msg-1', userId: 'livreur-1' }),
+      ]);
+    });
+
+    it('aucun message à lire → pas de receipt, pas de broadcast', async () => {
+      ordersRepo.findOne.mockResolvedValue(order);
+      messagesRepo.__selectQb.getMany.mockResolvedValue([]);
+
+      const result = await service.markAsRead('order-1', {
+        id: 'client-1',
+        role: UserRole.CLIENT,
+      });
+
+      expect(result).toEqual({ updated: 0 });
+      expect(readReceiptsRepo.createQueryBuilder).not.toHaveBeenCalled();
+      expect(messagesRepo.__updateQb.execute).not.toHaveBeenCalled();
+      expect(gateway.broadcastChatRead).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unreadCountForUser() — compteur par participant', () => {
+    it('compte via la jointure sur les receipts DU user (et non readAt global)', async () => {
+      messagesRepo.__selectQb.getCount.mockResolvedValue(3);
+
+      const count = await service.unreadCountForUser('order-1', 'client-1');
+
+      expect(count).toBe(3);
+      expect(messagesRepo.__selectQb.leftJoin).toHaveBeenCalledWith(
+        MessageReadReceipt,
+        'receipt',
+        'receipt.messageId = message.id AND receipt.userId = :userId',
+        { userId: 'client-1' },
+      );
+      expect(messagesRepo.__selectQb.andWhere).toHaveBeenCalledWith(
+        'receipt.messageId IS NULL',
+      );
     });
   });
 });

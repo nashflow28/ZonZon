@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../controllers/order_socket_controller.dart';
 import 'package:image_picker/image_picker.dart';
 import '../config/env.dart';
 import '../models/order_history_item.dart';
@@ -27,6 +28,7 @@ class MerchantHomeScreen extends StatefulWidget {
 class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   final ShopsService _shops = ShopsService();
   final MerchantOrdersService _merchantOrders = MerchantOrdersService();
+  final OrderSocketController _socketCtrl = OrderSocketController();
   Shop? _shop;
   List<Product> _products = [];
   List<OrderHistoryItem> _orders = const [];
@@ -35,7 +37,22 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   @override
   void initState() {
     super.initState();
+    _socketCtrl.init();
+    _socketCtrl.orderAccepted$.listen((evt) {
+      if (!mounted || !_orders.any((order) => order.id == evt.orderId)) return;
+      _refresh();
+    });
+    _socketCtrl.statusUpdates$.listen((evt) {
+      if (!mounted || !_orders.any((order) => order.id == evt.orderId)) return;
+      _refresh();
+    });
     _refresh();
+  }
+
+  @override
+  void dispose() {
+    _socketCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
@@ -53,6 +70,10 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       _orders = orders;
       _loading = false;
     });
+    _socketCtrl.clearWatchedOrders();
+    for (final order in orders) {
+      _socketCtrl.watchOrder(order.id);
+    }
   }
 
   Future<void> _logout() async {

@@ -1,7 +1,7 @@
 import { Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   ConnectedSocket,
   MessageBody,
@@ -126,12 +126,14 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * GPS strict (CDC V1 §11.2) : on ne persiste/forward la position QUE si le
    * livreur a une course active (`activeOrders` mappé par `broadcastOrderAccepted`
-   * et purgé sur statut terminal). Un livreur sans course active qui émet sa
+   * et purgé sur statut terminal). En cas de redémarrage backend, le mapping
+   * en mémoire peut être vide alors qu'une course est toujours active : on le
+   * rehydrate à la demande depuis la DB. Un livreur sans course active qui émet sa
    * position ne doit pas la voir relayée ni stockée — évite un tracking
    * hors-course. Forward au client ET au commerçant de la course active.
    */
   @SubscribeMessage('driver:location')
-  handleDriverLocation(
+  async handleDriverLocation(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { lat: number; lng: number },
   ) {
@@ -140,7 +142,9 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    const active = this.activeOrders.get(user.sub);
+    const active =
+      this.activeOrders.get(user.sub) ??
+      (await this.hydrateActiveOrderForDriver(user.sub));
     if (!active) {
       // Pas de course active : on ignore silencieusement (pas de forward,
       // pas de persistance).
@@ -238,16 +242,12 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     // exclurait tous les livreurs du rayon).
     const rawLat = order?.pickupLat;
     const rawLng = order?.pickupLng;
-    const pickupLat =
-      rawLat != null && rawLat !== 0 ? Number(rawLat) : null;
-    const pickupLng =
-      rawLng != null && rawLng !== 0 ? Number(rawLng) : null;
+    const pickupLat = rawLat != null && rawLat !== 0 ? Number(rawLat) : null;
+    const pickupLng = rawLng != null && rawLng !== 0 ? Number(rawLng) : null;
 
     const connectedDrivers = this.getConnectedDriverIds();
     const targetDrivers = eligibleDriverIds
-      ? new Set(
-          [...connectedDrivers].filter((id) => eligibleDriverIds.has(id)),
-        )
+      ? new Set([...connectedDrivers].filter((id) => eligibleDriverIds.has(id)))
       : connectedDrivers;
     const totalDrivers = targetDrivers.size;
 
@@ -340,10 +340,19 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     // Si on a déjà la dernière position connue du livreur, on la pousse tout de suite
     // pour que le client voie un marker dès l'acceptation (sinon il faut attendre ~30s).
-    if (clientId) {
-      const pos = this.driverPositions.get(livreurId);
-      if (pos) {
+    const pos = this.driverPositions.get(livreurId);
+    if (pos) {
+      if (clientId) {
         this.server.to(`user:${clientId}`).emit('driver:position', {
+          orderId,
+          livreurId,
+          lat: pos.lat,
+          lng: pos.lng,
+          at: pos.at,
+        });
+      }
+      if (merchantId) {
+        this.server.to(`user:${merchantId}`).emit('driver:position', {
           orderId,
           livreurId,
           lat: pos.lat,
@@ -367,9 +376,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (livreurId)
       this.server.to(`user:${livreurId}`).emit('orderStatusUpdated', payload);
     if (merchantId)
-      this.server
-        .to(`user:${merchantId}`)
-        .emit('orderStatusUpdated', payload);
+      this.server.to(`user:${merchantId}`).emit('orderStatusUpdated', payload);
 
     // Cleanup du mapping quand la course se termine (statuts terminaux)
     if (
@@ -378,6 +385,30 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     ) {
       this.activeOrders.delete(livreurId);
     }
+  }
+
+  /**
+   * Diffuse un changement de statut de PAIEMENT aux parties de la course
+   * (client, livreur, commerçant créateur). Sans cet event, un changement
+   * fait par une partie (ex. commerçant marque « payé ») restait invisible
+   * pour les autres jusqu'au prochain rechargement d'écran.
+   */
+  broadcastPaymentUpdate(
+    orderId: string,
+    paymentStatus: string,
+    clientId?: string,
+    livreurId?: string,
+    merchantId?: string,
+  ) {
+    const payload = { orderId, paymentStatus };
+    if (clientId)
+      this.server.to(`user:${clientId}`).emit('orderPaymentUpdated', payload);
+    if (livreurId)
+      this.server.to(`user:${livreurId}`).emit('orderPaymentUpdated', payload);
+    if (merchantId)
+      this.server
+        .to(`user:${merchantId}`)
+        .emit('orderPaymentUpdated', payload);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -446,12 +477,18 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('chat:typing')
-  handleChatTyping(
+  async handleChatTyping(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { orderId: string; isTyping: boolean },
   ) {
     const user = client.data?.user;
     if (!user || !data?.orderId) return;
+    const authorized = await this.isUserPartyToOrder(
+      data.orderId,
+      user.sub,
+      user.role,
+    );
+    if (!authorized) return;
     // Diffuse à la room sauf l'émetteur
     client.to(`order:${data.orderId}:chat`).emit('chat:typing', {
       orderId: data.orderId,
@@ -464,30 +501,27 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     orderId: string,
     message: any,
     parties: {
-      clientId?: string;
-      livreurId?: string;
       senderId: string;
-      recipientId?: string;
+      recipientIds: string[];
     },
   ) {
     const payload = { orderId, message };
     // Tout le monde dans la room reçoit (chat ouvert)
     this.server.to(`order:${orderId}:chat`).emit('chat:message', payload);
-    // Et notification "tap" personnelle à l'autre partie (pour badge non-lu)
-    if (parties.recipientId) {
-      this.server
-        .to(`user:${parties.recipientId}`)
-        .emit('chat:message', payload);
+    for (const recipientId of parties.recipientIds) {
+      this.server.to(`user:${recipientId}`).emit('chat:message', payload);
     }
   }
 
   broadcastChatRead(
     orderId: string,
-    data: { readerId: string; otherPartyId: string; at: string },
+    data: { readerId: string; recipientIds: string[]; at: string },
   ) {
     const payload = { orderId, readerId: data.readerId, at: data.at };
     this.server.to(`order:${orderId}:chat`).emit('chat:read', payload);
-    this.server.to(`user:${data.otherPartyId}`).emit('chat:read', payload);
+    for (const recipientId of data.recipientIds) {
+      this.server.to(`user:${recipientId}`).emit('chat:read', payload);
+    }
   }
 
   /**
@@ -512,5 +546,32 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   isUserConnected(userId: string): boolean {
     const room = this.server?.sockets?.adapter?.rooms?.get(`user:${userId}`);
     return !!room && room.size > 0;
+  }
+
+  private async hydrateActiveOrderForDriver(
+    livreurId: string,
+  ): Promise<ActiveOrderRef | null> {
+    const activeOrder = await this.ordersRepository.findOne({
+      where: {
+        livreur: { id: livreurId } as any,
+        status: In([
+          'ACCEPTED',
+          'EN_ROUTE_PICKUP',
+          'AT_PICKUP',
+          'IN_PROGRESS',
+          'NEAR_CLIENT',
+        ]),
+      },
+      relations: ['client', 'merchant'],
+      order: { updatedAt: 'DESC' as any, createdAt: 'DESC' as any },
+    });
+    if (!activeOrder) return null;
+    const hydrated = {
+      orderId: activeOrder.id,
+      clientId: activeOrder.client?.id,
+      merchantId: activeOrder.merchant?.id,
+    };
+    this.activeOrders.set(livreurId, hydrated);
+    return hydrated;
   }
 }

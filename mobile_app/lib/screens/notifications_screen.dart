@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/notification_navigation_service.dart';
 import '../services/notifications_service.dart';
 import '../utils/platform_adapter.dart';
 
@@ -73,6 +74,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         // Pas bloquant pour l'UX : au pire un prochain refresh corrigera l'état.
       }
     }
+    await NotificationNavigationService.openFromPayload({
+      if ((n.deliveryId ?? '').isNotEmpty) 'deliveryId': n.deliveryId!,
+      if (n.type.isNotEmpty) 'kind': n.type,
+    });
   }
 
   Future<void> _markAllRead() async {

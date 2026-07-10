@@ -7,14 +7,14 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Message, MessageType } from '../entities/message.entity';
+import { MessageReadReceipt } from '../entities/message-read-receipt.entity';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
 import { UserRole } from '../entities/user.entity';
 import { OrdersGateway } from '../orders/orders.gateway';
 import { SendMessageDto } from './dto/send-message.dto';
 import { NotificationsService } from '../notifications/notifications.service';
-import { User } from '../entities/user.entity';
 import { ConversationsService } from '../conversations/conversations.service';
 import type { ConversationParticipantRole } from '../entities/conversation-participant.entity';
 
@@ -31,6 +31,8 @@ export class MessagesService {
   constructor(
     @InjectRepository(Message)
     private messagesRepo: Repository<Message>,
+    @InjectRepository(MessageReadReceipt)
+    private readReceiptsRepo: Repository<MessageReadReceipt>,
     @InjectRepository(DeliveryOrder)
     private ordersRepo: Repository<DeliveryOrder>,
     @Inject(forwardRef(() => OrdersGateway))
@@ -96,7 +98,8 @@ export class MessagesService {
     }
     if (
       order.status === OrderStatus.COMPLETED ||
-      order.status === OrderStatus.CANCELLED
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.FAILED
     ) {
       throw new ForbiddenException(
         'La conversation est fermée pour cette course',
@@ -120,7 +123,11 @@ export class MessagesService {
     // deviendrait une unhandledRejection qui plante le process.
     try {
       void this.conversationsService
-        .trackMessageSender(orderId, senderId, this.conversationRole(actor.role))
+        .trackMessageSender(
+          orderId,
+          senderId,
+          this.conversationRole(actor.role),
+        )
         .catch((err) => {
           this.logger.warn(
             `Échec du hook de suivi de conversation pour la commande ${orderId} : ${
@@ -141,69 +148,134 @@ export class MessagesService {
       relations: ['sender'],
     });
 
-    const recipientId =
-      order.client?.id === senderId ? order.livreur?.id : order.client?.id;
+    const participantIds = new Set<string>();
+    if (order.client?.id) participantIds.add(order.client.id);
+    if (order.livreur?.id) participantIds.add(order.livreur.id);
+    const extraParticipants =
+      await this.conversationsService.listParticipants(orderId);
+    for (const participant of extraParticipants) {
+      if (participant.userId) {
+        participantIds.add(participant.userId);
+      }
+    }
+    participantIds.delete(senderId);
+    const recipientIds = [...participantIds];
 
     this.ordersGateway.broadcastChatMessage(orderId, full!, {
-      clientId: order.client?.id,
-      livreurId: order.livreur?.id,
       senderId,
-      recipientId,
+      recipientIds,
     });
 
-    // Push notification : seulement si le destinataire n'est pas dans la room du chat
-    if (recipientId && !this.ordersGateway.isInChatRoom(orderId, recipientId)) {
-      const senderName = (full as any)?.sender?.firstName ?? "Quelqu'un";
-      void this.notifications.sendToUser(recipientId, {
-        title: senderName,
-        body:
-          full!.content.length > 80
-            ? full!.content.substring(0, 77) + '…'
-            : full!.content,
-        data: {
-          kind: 'chat',
-          orderId,
-        },
-      });
+    const senderName = (full as any)?.sender?.firstName ?? "Quelqu'un";
+    for (const recipientId of recipientIds) {
+      if (!this.ordersGateway.isInChatRoom(orderId, recipientId)) {
+        void this.notifications.sendToUser(recipientId, {
+          title: senderName,
+          body:
+            full!.content.length > 80
+              ? full!.content.substring(0, 77) + '…'
+              : full!.content,
+          data: {
+            kind: 'chat',
+            orderId,
+          },
+        });
+      }
     }
 
     return full;
   }
 
+  /**
+   * Marque comme lus PAR CE PARTICIPANT les messages de la commande envoyés
+   * par d'autres. Le curseur individuel vit dans `message_read_receipts`
+   * (une conversation à 3+ garde ainsi un compteur non-lu correct par
+   * participant). `Message.readAt` reste alimenté à la première lecture par
+   * un destinataire (rétro-compat de la coche « lu » côté mobile).
+   */
   async markAsRead(orderId: string, actor: ActorPayload) {
     const { order } = await this.loadOrderAndAuthorize(orderId, actor);
     const userId = this.actorId(actor);
 
-    const result = await this.messagesRepo
-      .createQueryBuilder()
-      .update(Message)
-      .set({ readAt: () => 'CURRENT_TIMESTAMP' })
-      .where('orderId = :orderId', { orderId })
-      .andWhere('senderId IS NOT NULL')
-      .andWhere('senderId != :userId', { userId })
-      .andWhere('readAt IS NULL')
-      .execute();
+    const unread = await this.messagesRepo
+      .createQueryBuilder('message')
+      .leftJoin(
+        MessageReadReceipt,
+        'receipt',
+        'receipt.messageId = message.id AND receipt.userId = :userId',
+        { userId },
+      )
+      .where('message.orderId = :orderId', { orderId })
+      .andWhere('message.senderId IS NOT NULL')
+      .andWhere('message.senderId != :userId', { userId })
+      .andWhere('receipt.messageId IS NULL')
+      .getMany();
 
-    const otherPartyId =
-      order.client?.id === userId ? order.livreur?.id : order.client?.id;
-    if (otherPartyId && (result.affected ?? 0) > 0) {
+    if (unread.length > 0) {
+      const now = new Date();
+      await this.readReceiptsRepo
+        .createQueryBuilder()
+        .insert()
+        .into(MessageReadReceipt)
+        .values(
+          unread.map((m) => ({ messageId: m.id, userId, readAt: now })),
+        )
+        // Deux PATCH read concurrents du même participant ne doivent pas
+        // planter sur la PK composite (messageId, userId).
+        .orIgnore()
+        .execute();
+
+      // Rétro-compat : première lecture par un destinataire quelconque.
+      await this.messagesRepo
+        .createQueryBuilder()
+        .update(Message)
+        .set({ readAt: () => 'CURRENT_TIMESTAMP' })
+        .where('orderId = :orderId', { orderId })
+        .andWhere('senderId IS NOT NULL')
+        .andWhere('senderId != :userId', { userId })
+        .andWhere('readAt IS NULL')
+        .execute();
+    }
+
+    const participantIds = new Set<string>();
+    if (order.client?.id) participantIds.add(order.client.id);
+    if (order.livreur?.id) participantIds.add(order.livreur.id);
+    const extraParticipants =
+      await this.conversationsService.listParticipants(orderId);
+    for (const participant of extraParticipants) {
+      if (participant.userId) {
+        participantIds.add(participant.userId);
+      }
+    }
+    participantIds.delete(userId);
+    if (unread.length > 0 && participantIds.size > 0) {
       this.ordersGateway.broadcastChatRead(orderId, {
         readerId: userId,
-        otherPartyId,
+        recipientIds: [...participantIds],
         at: new Date().toISOString(),
       });
     }
 
-    return { updated: result.affected ?? 0 };
+    return { updated: unread.length };
   }
 
+  /**
+   * Nombre de messages de la commande non lus PAR CE user (receipt absent),
+   * hors messages envoyés par lui-même et messages système (sender null).
+   */
   async unreadCountForUser(orderId: string, userId: string): Promise<number> {
-    return this.messagesRepo.count({
-      where: {
-        orderId,
-        readAt: IsNull(),
-        senderId: Not(userId),
-      },
-    });
+    return this.messagesRepo
+      .createQueryBuilder('message')
+      .leftJoin(
+        MessageReadReceipt,
+        'receipt',
+        'receipt.messageId = message.id AND receipt.userId = :userId',
+        { userId },
+      )
+      .where('message.orderId = :orderId', { orderId })
+      .andWhere('message.senderId IS NOT NULL')
+      .andWhere('message.senderId != :userId', { userId })
+      .andWhere('receipt.messageId IS NULL')
+      .getCount();
   }
 }

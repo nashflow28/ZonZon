@@ -1,4 +1,4 @@
-import { IsLatitude, IsLongitude } from 'class-validator';
+import { IsLatitude, IsLongitude, IsOptional, IsUUID } from 'class-validator';
 
 export class EstimateOrderDto {
   @IsLatitude()
@@ -12,4 +12,12 @@ export class EstimateOrderDto {
 
   @IsLongitude()
   deliveryLng: number;
+
+  @IsOptional()
+  @IsUUID()
+  pickupZoneId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  destinationZoneId?: string;
 }
