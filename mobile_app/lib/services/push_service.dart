@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'api_client.dart';
+import 'auth_service.dart';
 import '../utils/platform_adapter.dart';
 
 /// Handler de message en arrière-plan. DOIT être top-level.
@@ -148,7 +149,6 @@ class PushService {
       }
 
       messaging.onTokenRefresh.listen((token) async {
-        _syncedToken = token;
         await _syncToken(token);
       });
     }
@@ -159,14 +159,48 @@ class PushService {
     } catch (_) {}
     if (token != null && token != _syncedToken) {
       await _syncToken(token);
-      _syncedToken = token;
     }
   }
 
-  Future<void> _syncToken(String token) async {
+  /// Synchronise le token FCM côté serveur. `_syncedToken` n'est renseigné
+  /// QUE sur une réponse 2xx : en cas d'échec HTTP/réseau, le token reste
+  /// « non synchronisé » et une nouvelle tentative est programmée (sinon les
+  /// pushs sont perdus jusqu'au redémarrage ou au renouvellement FCM).
+  Future<void> _syncToken(String token, {bool retryOnFailure = true}) async {
     try {
-      await _api.patch('/users/me/fcm-token', body: {'token': token});
+      final res = await _api.patch(
+        '/users/me/fcm-token',
+        body: {'token': token},
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        _syncedToken = token;
+        return;
+      }
+    } catch (_) {
+      // Échec réseau : traité comme un échec HTTP ci-dessous.
+    }
+    if (retryOnFailure) {
+      unawaited(
+        Future.delayed(const Duration(seconds: 45), () async {
+          if (_syncedToken == token) return; // synchronisé entre-temps
+          // Plus de session (logout/401 entre-temps) : inutile de réessayer.
+          final jwt = await AuthService().getToken();
+          if (jwt == null || jwt.isEmpty) return;
+          await _syncToken(token, retryOnFailure: false);
+        }),
+      );
+    }
+  }
+
+  /// Invalidation LOCALE (session expirée / 401) : impossible d'appeler le
+  /// serveur (JWT invalide). Supprimer le token FCM côté device suffit à
+  /// stopper la réception des pushs adressés à l'ancien compte, et force une
+  /// resynchronisation complète au prochain login.
+  Future<void> invalidateLocalToken() async {
+    try {
+      await FirebaseMessaging.instance.deleteToken();
     } catch (_) {}
+    _syncedToken = null;
   }
 
   /// À appeler au logout : efface le token côté serveur pour stopper les pushs.

@@ -118,18 +118,51 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       // Upload de la photo juste après la création du compte (le token est
-      // déjà persisté). En cas d'échec réseau, le compte existe : on informe
-      // que la photo reste à compléter dans le profil plutôt que de bloquer.
+      // déjà persisté). La photo est OBLIGATOIRE pour un livreur (CDC §2) :
+      // en cas d'échec, on boucle sur un dialog bloquant (réessayer / changer
+      // de photo) au lieu de continuer sans photo.
       if (_profilePhoto != null) {
-        final uploaded = await _uploadProfilePhoto(_profilePhoto!);
-        if (!uploaded && mounted) {
-          showAdaptiveSnack(
-            context,
-            'Compte créé, mais l’envoi de la photo a échoué — '
-            'ajoutez-la depuis votre profil.',
-            isError: true,
+        var uploaded = await _uploadProfilePhoto(_profilePhoto!);
+        while (!uploaded) {
+          if (!mounted) return;
+          final action = await showDialog<String>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              backgroundColor: const Color(0xFF122530),
+              title: const Text('Photo non envoyée',
+                  style: TextStyle(color: Colors.white)),
+              content: const Text(
+                'La photo de profil est obligatoire pour les livreurs. '
+                'Vérifiez votre connexion puis réessayez, ou choisissez '
+                'une autre photo.',
+                style: TextStyle(color: Colors.white70),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'change'),
+                  child: const Text('Changer de photo',
+                      style: TextStyle(color: Colors.white70)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, 'retry'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E90FA)),
+                  child: const Text('Réessayer',
+                      style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
           );
+          if (!mounted) return;
+          if (action == 'change') {
+            await _pickProfilePhoto();
+          }
+          if (_profilePhoto != null) {
+            uploaded = await _uploadProfilePhoto(_profilePhoto!);
+          }
         }
+        if (!mounted) return;
       }
 
       if (!mounted) return;

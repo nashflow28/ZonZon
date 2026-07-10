@@ -23,12 +23,25 @@ class ChatService {
   final StreamController<List<ChatMessage>> _messagesCtrl =
       StreamController.broadcast();
   final StreamController<bool> _typingCtrl = StreamController.broadcast();
+  final StreamController<String> _orderStatusCtrl =
+      StreamController.broadcast();
+
+  /// Destinataires connus de la conversation (participants − moi). Sert à
+  /// l'accusé de lecture honnête : « lu par tous » = readBy ⊇ recipients.
+  final Set<String> _recipients = {};
 
   Stream<List<ChatMessage>> get messages$ => _messagesCtrl.stream;
   Stream<bool> get otherTyping$ => _typingCtrl.stream;
 
+  /// Statut de la course poussé par le backend (`orderStatusUpdated`) — le
+  /// socket du chat est dans la room `user:<id>` et reçoit donc les statuts
+  /// des courses dont l'utilisateur est partie. Permet de fermer l'UI de
+  /// saisie dès qu'un statut terminal survient pendant que le chat est ouvert.
+  Stream<String> get orderStatus$ => _orderStatusCtrl.stream;
+
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   String? get myId => _myId;
+  Set<String> get recipients => Set.unmodifiable(_recipients);
 
   Timer? _typingDebounce;
   bool _typingEmitted = false;
@@ -43,6 +56,31 @@ class ChatService {
     await _connectSocket();
     // Marquer comme lu dès l'ouverture (les messages déjà reçus)
     unawaited(markRead());
+    // Non bloquant : les destinataires servent uniquement à affiner
+    // l'affichage de l'accusé de lecture.
+    unawaited(_loadRecipients());
+  }
+
+  /// Charge les participants de la conversation (client/livreur/commerçant
+  /// suivis + ajoutés) pour connaître les destinataires. Échec silencieux :
+  /// l'indicateur de lecture retombe sur la sémantique « lu par au moins un ».
+  Future<void> _loadRecipients() async {
+    try {
+      final res = await _api.get('/orders/$orderId/conversation');
+      if (res.statusCode != 200 && res.statusCode != 201) return;
+      final data = jsonDecode(res.body);
+      final participants = data is Map ? data['participants'] : null;
+      if (participants is! List) return;
+      for (final p in participants) {
+        if (p is! Map) continue;
+        if (p['leftAt'] != null) continue;
+        final userId = p['userId']?.toString();
+        if (userId != null && userId.isNotEmpty && userId != _myId) {
+          _recipients.add(userId);
+        }
+      }
+      if (_recipients.isNotEmpty) _emit();
+    } catch (_) {}
   }
 
   Future<void> _loadHistory() async {
@@ -126,17 +164,35 @@ class ChatService {
       if (data['orderId']?.toString() != orderId) return;
       final readerId = data['readerId']?.toString();
       if (readerId == null || readerId == _myId) return;
-      // Tous mes messages envoyés avant le timestamp passent à "lu"
+      // Un lecteur actif est de facto un destinataire de la conversation
+      // (utile si _loadRecipients n'a pas encore/pas pu répondre).
+      _recipients.add(readerId);
+      // Tous mes messages envoyés avant le timestamp sont lus PAR CE lecteur
+      // (readBy) ; readAt garde la sémantique « lu par au moins un ».
       final readAt = DateTime.tryParse(data['at']?.toString() ?? '') ?? DateTime.now();
       var changed = false;
       for (var i = 0; i < _messages.length; i++) {
         final m = _messages[i];
-        if (m.senderId == _myId && m.readAt == null && !m.createdAt.isAfter(readAt)) {
-          _messages[i] = m.copyWith(readAt: readAt);
-          changed = true;
-        }
+        if (m.senderId != _myId || m.createdAt.isAfter(readAt)) continue;
+        final alreadyRead = m.readBy.contains(readerId);
+        if (m.readAt != null && alreadyRead) continue;
+        _messages[i] = m.copyWith(
+          readAt: m.readAt ?? readAt,
+          readBy: alreadyRead ? m.readBy : [...m.readBy, readerId],
+        );
+        changed = true;
       }
       if (changed) _emit();
+    });
+
+    // Statut de la course (annulation, complétion…) pendant que le chat est
+    // ouvert : propagé à l'écran pour fermer la saisie en direct.
+    _socket!.on('orderStatusUpdated', (data) {
+      if (data is! Map) return;
+      if (data['orderId']?.toString() != orderId) return;
+      final status = data['status']?.toString();
+      if (status == null || _orderStatusCtrl.isClosed) return;
+      _orderStatusCtrl.add(status);
     });
   }
 
@@ -236,5 +292,6 @@ class ChatService {
     _socket = null;
     await _messagesCtrl.close();
     await _typingCtrl.close();
+    await _orderStatusCtrl.close();
   }
 }

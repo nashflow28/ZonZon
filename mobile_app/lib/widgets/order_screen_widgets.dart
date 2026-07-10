@@ -715,6 +715,10 @@ class OrderAcceptedSection extends StatelessWidget {
   final VoidCallback onOpenChat;
   final VoidCallback onOpenWhatsapp;
   final VoidCallback? onCancelOrder;
+
+  /// Déclaration de paiement en espèces par le client (CDC §4 : le règlement
+  /// se fait en espèces au livreur). Null = action masquée (déjà payé…).
+  final VoidCallback? onMarkPaid;
   final EtaResult? eta;
 
   const OrderAcceptedSection({
@@ -729,6 +733,7 @@ class OrderAcceptedSection extends StatelessWidget {
     required this.onOpenWhatsapp,
     this.unreadChatCount = 0,
     this.onCancelOrder,
+    this.onMarkPaid,
     this.eta,
   });
 
@@ -800,6 +805,22 @@ class OrderAcceptedSection extends StatelessWidget {
               ),
             ),
           ),
+          if (onMarkPaid != null)
+            Center(
+              child: TextButton.icon(
+                onPressed: onMarkPaid,
+                icon: const Icon(Icons.payments_outlined,
+                    size: 16, color: Color(0xFF0FB271)),
+                label: const Text(
+                  'J’ai payé en espèces',
+                  style: TextStyle(
+                    color: Color(0xFF0FB271),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
         ],
         LiveTrackingBanner(

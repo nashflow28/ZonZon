@@ -22,7 +22,16 @@ class ChatMessage {
   final String type;
   final String content;
   final DateTime createdAt;
+
+  /// Lu par AU MOINS UN destinataire (sémantique serveur). Pour un accusé de
+  /// lecture honnête en conversation à 3+, utiliser [readBy].
   final DateTime? readAt;
+
+  /// Ids des participants ayant lu ce message (receipts par participant,
+  /// renvoyés par `GET /orders/:id/messages` et enrichis en live via
+  /// `chat:read`). Champ d'affichage uniquement — non renvoyé au serveur.
+  @JsonKey(includeToJson: false)
+  final List<String> readBy;
 
   /// Client-side status — not part of the server payload.
   @JsonKey(includeToJson: false)
@@ -42,6 +51,7 @@ class ChatMessage {
     required this.content,
     required this.createdAt,
     required this.readAt,
+    this.readBy = const [],
     this.status = MessageStatus.sent,
     this.localId,
   });
@@ -64,6 +74,10 @@ class ChatMessage {
       readAt: json['readAt'] != null
           ? DateTime.tryParse(json['readAt'].toString())
           : null,
+      readBy: json['readBy'] is List
+          ? List<String>.from(
+              (json['readBy'] as List).map((e) => e.toString()))
+          : const [],
       status: MessageStatus.sent,
     );
   }
@@ -73,6 +87,7 @@ class ChatMessage {
   ChatMessage copyWith({
     String? id,
     DateTime? readAt,
+    List<String>? readBy,
     MessageStatus? status,
   }) {
     return ChatMessage(
@@ -85,6 +100,7 @@ class ChatMessage {
       content: content,
       createdAt: createdAt,
       readAt: readAt ?? this.readAt,
+      readBy: readBy ?? this.readBy,
       status: status ?? this.status,
       localId: localId,
     );

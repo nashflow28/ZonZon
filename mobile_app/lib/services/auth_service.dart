@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import '../config/env.dart';
 import '../models/user.dart';
+import 'client_services.dart';
 import 'push_service.dart';
 
 class AuthService {
@@ -70,10 +71,20 @@ class AuthService {
   Future<void> logout() async {
     // Efface le token FCM côté serveur AVANT de perdre le JWT
     await PushService.instance.clearToken();
+    // Libère les services statiques de session (socket, commandes actives) :
+    // sans ça, un autre compte reconnecté dans le même processus héritait de
+    // l'état du précédent (fuite inter-session).
+    await ClientServices.reset();
     await _clearLocalSession();
   }
 
+  /// Session invalidée par le serveur (401 / token expiré). On ne peut plus
+  /// rien nettoyer côté serveur (le JWT est mort) : on invalide le token FCM
+  /// LOCALEMENT (les pushs adressés à l'ancien token n'atteignent plus cet
+  /// appareil) et on libère les services de session comme au logout.
   Future<void> handleUnauthorized() async {
+    await PushService.instance.invalidateLocalToken();
+    await ClientServices.reset();
     await _clearLocalSession();
   }
 

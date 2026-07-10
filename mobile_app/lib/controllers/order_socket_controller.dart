@@ -167,10 +167,16 @@ class OrderSocketController {
   /// effectivement prêt à recevoir des `driver:location`.
   Stream<void> get connected$ => _connectedCtrl.stream;
 
+  /// `true` après [dispose] : init() lancé sans await par un écran peut se
+  /// terminer APRÈS le dispose de cet écran — sans ce flag, on créerait un
+  /// socket orphelin jamais fermé.
+  bool _disposed = false;
+
   /// Connecte le socket et abonne les listeners. À appeler une seule fois.
   Future<void> init() async {
-    if (_socket != null) return;
+    if (_socket != null || _disposed) return;
     final token = await _auth.getToken();
+    if (_disposed) return; // dispose() est passé pendant l'await du token
     final socket = io.io(apiUrl, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
@@ -264,6 +270,7 @@ class OrderSocketController {
   }
 
   Future<void> dispose() async {
+    _disposed = true;
     _socket?.dispose();
     _socket = null;
     await _driverPositionCtrl.close();

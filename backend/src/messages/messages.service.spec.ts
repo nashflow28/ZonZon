@@ -54,6 +54,7 @@ const mockReadReceiptsRepo = () => {
     execute: jest.fn().mockResolvedValue(undefined),
   };
   return {
+    find: jest.fn().mockResolvedValue([]),
     createQueryBuilder: jest.fn(() => insertQb),
     __insertQb: insertQb,
   };
@@ -294,6 +295,48 @@ describe('MessagesService', () => {
       expect(readReceiptsRepo.createQueryBuilder).not.toHaveBeenCalled();
       expect(messagesRepo.__updateQb.execute).not.toHaveBeenCalled();
       expect(gateway.broadcastChatRead).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listForOrder() — readBy par message', () => {
+    it('attache la liste des lecteurs (receipts) à chaque message', async () => {
+      ordersRepo.findOne.mockResolvedValue(order);
+      messagesRepo.find.mockResolvedValue([
+        { id: 'msg-1', content: 'a' },
+        { id: 'msg-2', content: 'b' },
+      ]);
+      readReceiptsRepo.find.mockResolvedValue([
+        { messageId: 'msg-1', userId: 'client-1' },
+        { messageId: 'msg-1', userId: 'merchant-1' },
+      ]);
+
+      const result = await service.listForOrder('order-1', {
+        id: 'livreur-1',
+        role: UserRole.LIVREUR,
+      });
+
+      expect(result[0]).toEqual(
+        expect.objectContaining({
+          id: 'msg-1',
+          readBy: ['client-1', 'merchant-1'],
+        }),
+      );
+      expect(result[1]).toEqual(
+        expect.objectContaining({ id: 'msg-2', readBy: [] }),
+      );
+    });
+
+    it('liste vide → aucun appel au repo des receipts', async () => {
+      ordersRepo.findOne.mockResolvedValue(order);
+      messagesRepo.find.mockResolvedValue([]);
+
+      const result = await service.listForOrder('order-1', {
+        id: 'client-1',
+        role: UserRole.CLIENT,
+      });
+
+      expect(result).toEqual([]);
+      expect(readReceiptsRepo.find).not.toHaveBeenCalled();
     });
   });
 

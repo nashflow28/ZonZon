@@ -37,13 +37,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _otherTyping = false;
   bool _ready = false;
 
+  /// Statut vivant de la course : initialisé depuis le paramètre (figé au
+  /// push de l'écran) puis mis à jour via `orderStatusUpdated` — la saisie
+  /// se ferme donc en direct si la course se termine pendant la discussion.
+  late String _orderStatus;
+
   late final StreamSubscription _msgSub;
   late final StreamSubscription _typingSub;
+  late final StreamSubscription _statusSub;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _orderStatus = widget.orderStatus;
     _chat = ChatService(widget.orderId);
     _bootstrap();
   }
@@ -61,6 +68,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() => _otherTyping = isTyping);
       if (isTyping) _scrollToBottom();
+    });
+    _statusSub = _chat.orderStatus$.listen((status) {
+      if (!mounted || status == _orderStatus) return;
+      setState(() => _orderStatus = status);
     });
 
     await _chat.init();
@@ -113,7 +124,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   List<String> _quickRepliesForRole() {
     final role = widget.otherPartyRole;
-    final status = widget.orderStatus;
+    final status = _orderStatus;
     if (role == 'CLIENT') {
       // Le livreur écrit au client
       if (status == 'ACCEPTED') {
@@ -136,6 +147,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _msgSub.cancel();
     _typingSub.cancel();
+    _statusSub.cancel();
     _input.dispose();
     _scrollCtrl.dispose();
     _focusNode.dispose();
@@ -146,9 +158,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final closed =
-        widget.orderStatus == 'COMPLETED' ||
-        widget.orderStatus == 'CANCELLED' ||
-        widget.orderStatus == 'FAILED';
+        _orderStatus == 'COMPLETED' ||
+        _orderStatus == 'CANCELLED' ||
+        _orderStatus == 'FAILED';
     return Scaffold(
       backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
@@ -212,9 +224,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
               color: const Color(0xFFFF9E1B).withValues(alpha: 0.15),
               child: Text(
-                'Conversation fermée — la course est ${widget.orderStatus == 'COMPLETED'
+                'Conversation fermée — la course est ${_orderStatus == 'COMPLETED'
                     ? 'terminée'
-                    : widget.orderStatus == 'FAILED'
+                    : _orderStatus == 'FAILED'
                     ? 'en échec'
                     : 'annulée'}.',
                 textAlign: TextAlign.center,
@@ -227,6 +239,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 : _MessagesList(
                     messages: _messages,
                     myId: _chat.myId,
+                    recipients: _chat.recipients,
                     otherTyping: _otherTyping,
                     scrollCtrl: _scrollCtrl,
                     conversationTitle: widget.otherPartyName,
@@ -253,6 +266,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 class _MessagesList extends StatelessWidget {
   final List<ChatMessage> messages;
   final String? myId;
+  final Set<String> recipients;
   final bool otherTyping;
   final ScrollController scrollCtrl;
   final String conversationTitle;
@@ -260,6 +274,7 @@ class _MessagesList extends StatelessWidget {
   const _MessagesList({
     required this.messages,
     required this.myId,
+    required this.recipients,
     required this.otherTyping,
     required this.scrollCtrl,
     required this.conversationTitle,
@@ -303,6 +318,7 @@ class _MessagesList extends StatelessWidget {
           message: m,
           mine: mine,
           tight: tight,
+          recipients: recipients,
           fallbackSenderName: conversationTitle,
         );
       },
@@ -314,12 +330,14 @@ class _Bubble extends StatelessWidget {
   final ChatMessage message;
   final bool mine;
   final bool tight;
+  final Set<String> recipients;
   final String fallbackSenderName;
 
   const _Bubble({
     required this.message,
     required this.mine,
     required this.tight,
+    required this.recipients,
     required this.fallbackSenderName,
   });
 
@@ -404,7 +422,10 @@ class _Bubble extends StatelessWidget {
                         ),
                         if (mine) ...[
                           const SizedBox(width: 4),
-                          _StatusIndicator(message: message),
+                          _StatusIndicator(
+                            message: message,
+                            recipients: recipients,
+                          ),
                         ],
                       ],
                     ),
@@ -425,9 +446,16 @@ class _Bubble extends StatelessWidget {
   }
 }
 
+/// Accusé de lecture honnête (conversations à 3+) :
+/// - `done` : envoyé, lu par personne ;
+/// - `done_all` estompé : lu par UNE PARTIE des destinataires connus ;
+/// - `done_all` plein : lu par TOUS les destinataires connus.
+/// Si les destinataires sont inconnus (endpoint conversation indisponible),
+/// on retombe sur l'ancienne sémantique : `readAt`/`readBy` non vide = lu.
 class _StatusIndicator extends StatelessWidget {
   final ChatMessage message;
-  const _StatusIndicator({required this.message});
+  final Set<String> recipients;
+  const _StatusIndicator({required this.message, required this.recipients});
 
   @override
   Widget build(BuildContext context) {
@@ -441,8 +469,19 @@ class _StatusIndicator extends StatelessWidget {
     if (message.status == MessageStatus.failed) {
       return const Icon(Icons.error_outline, size: 14, color: Colors.redAccent);
     }
-    if (message.readAt != null) {
+    final someRead = message.readBy.isNotEmpty || message.readAt != null;
+    final allRead = recipients.isNotEmpty
+        ? recipients.every(message.readBy.contains)
+        : someRead;
+    if (allRead) {
       return const Icon(Icons.done_all, size: 14, color: Colors.white);
+    }
+    if (someRead) {
+      return Icon(
+        Icons.done_all,
+        size: 14,
+        color: Colors.white.withValues(alpha: 0.55),
+      );
     }
     return Icon(
       Icons.done,

@@ -318,6 +318,20 @@ Future<String?> _globalRedirect(
             location.startsWith(AppRoutes.homeDriver))) {
       return AppRoutes.homeMerchant;
     }
+
+    // Routes plates (poussées sans préfixe de rôle) : mêmes restrictions que
+    // les shells — un rôle non concerné est renvoyé vers son accueil.
+    // `/notifications` reste accessible à tous les rôles.
+    final allowedRolesByFlatRoute = <String, Set<String>>{
+      AppRoutes.shops: {'CLIENT'},
+      AppRoutes.favorites: {'CLIENT'},
+      AppRoutes.driverProfile: {'LIVREUR'},
+      AppRoutes.history: {'CLIENT', 'LIVREUR'},
+    };
+    final allowedRoles = allowedRolesByFlatRoute[location];
+    if (allowedRoles != null && !allowedRoles.contains(role)) {
+      return AppRoutes.homeForRole(role);
+    }
   }
 
   return null; // No redirect needed.

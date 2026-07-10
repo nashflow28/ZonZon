@@ -7,7 +7,7 @@ import {
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Message, MessageType } from '../entities/message.entity';
 import { MessageReadReceipt } from '../entities/message-read-receipt.entity';
 import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
@@ -81,13 +81,34 @@ export class MessagesService {
     return { order, isClient, isLivreur, isMerchant, isAdmin };
   }
 
+  /**
+   * Liste les messages de la commande, enrichis de `readBy` (ids des
+   * participants ayant un receipt de lecture) — permet au mobile d'afficher
+   * un accusé de lecture honnête en conversation à 3+ (le `readAt` global ne
+   * signifie que « lu par au moins un destinataire »).
+   */
   async listForOrder(orderId: string, actor: ActorPayload) {
     await this.loadOrderAndAuthorize(orderId, actor);
-    return this.messagesRepo.find({
+    const messages = await this.messagesRepo.find({
       where: { orderId },
       relations: ['sender'],
       order: { createdAt: 'ASC' },
     });
+    if (messages.length === 0) return messages;
+
+    const receipts = await this.readReceiptsRepo.find({
+      where: { messageId: In(messages.map((m) => m.id)) },
+    });
+    const readersByMessage = new Map<string, string[]>();
+    for (const receipt of receipts) {
+      const readers = readersByMessage.get(receipt.messageId) ?? [];
+      readers.push(receipt.userId);
+      readersByMessage.set(receipt.messageId, readers);
+    }
+    return messages.map((m) => ({
+      ...m,
+      readBy: readersByMessage.get(m.id) ?? [],
+    }));
   }
 
   async sendMessage(orderId: string, actor: ActorPayload, dto: SendMessageDto) {

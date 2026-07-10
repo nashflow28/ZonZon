@@ -368,6 +368,69 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     await WhatsappService.openChat(phone: phone, message: message);
   }
 
+  /// Le client peut déclarer un paiement en espèces tant que celui-ci n'est
+  /// pas réglé (CDC §4 : règlement en espèces au livreur en fin de course).
+  bool get _canMarkPaid {
+    const settled = {
+      'PAID',
+      'RECEIVED_BY_LIVREUR',
+      'RECEIVED_BY_MERCHANT',
+      'CASH_ON_DELIVERY',
+    };
+    final payment = _paymentStatus;
+    if (payment == null || settled.contains(payment)) return false;
+    return true;
+  }
+
+  Future<void> _markPaidCash() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF122530),
+        title: const Text('Paiement en espèces',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Confirmez-vous avoir remis le paiement en espèces au livreur ?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child:
+                const Text('Annuler', style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0FB271)),
+            child: const Text('Oui, payé',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      final res = await _api.patch(
+        '/orders/${widget.orderId}/payment-status',
+        body: {'paymentStatus': 'PAID'},
+      );
+      if (!mounted) return;
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        setState(() => _paymentStatus = 'PAID');
+        showAdaptiveSnack(context, 'Paiement enregistré, merci !');
+      } else {
+        showAdaptiveSnack(context, 'Impossible d’enregistrer le paiement.',
+            isError: true);
+      }
+    } catch (_) {
+      if (mounted) {
+        showAdaptiveSnack(context, 'Impossible d’enregistrer le paiement.',
+            isError: true);
+      }
+    }
+  }
+
   Future<void> _confirmCancelOrder() async {
     final status = _activeOrderStatus;
     if (status != 'PENDING' && status != 'ACCEPTED') return;
@@ -671,6 +734,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   onOpenChat: _openChat,
                   onOpenWhatsapp: _openWhatsappToLivreur,
                   onCancelOrder: _confirmCancelOrder,
+                  onMarkPaid: _canMarkPaid ? _markPaidCash : null,
                 ),
               ],
             ),

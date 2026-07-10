@@ -599,6 +599,79 @@ class _DriverScreenState extends State<DriverScreen> {
     }
   }
 
+  /// Statuts de paiement considérés « réglés » — plus rien à confirmer.
+  static const Set<String> _settledPayments = {
+    'PAID',
+    'RECEIVED_BY_LIVREUR',
+    'RECEIVED_BY_MERCHANT',
+    'CASH_ON_DELIVERY',
+  };
+
+  /// PATCH /orders/:id/payment-status — retourne `true` si accepté.
+  /// Le backend autorise le livreur assigné (paiement espèces, CDC §4).
+  Future<bool> _updatePaymentStatus(String orderId, String paymentStatus) async {
+    try {
+      final res = await _api.patch(
+        '/orders/$orderId/payment-status',
+        body: {'paymentStatus': paymentStatus},
+      );
+      return res.statusCode == 200 || res.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Après un COMPLETED : si le paiement n'est pas réglé, propose au livreur
+  /// de confirmer la réception des espèces (le flux CDC : le client paie en
+  /// espèces à la fin de la course). Sans ce point d'entrée, une course
+  /// client↔livreur restait UNPAID à vie.
+  Future<void> _promptCashPaymentIfNeeded(
+    Map<String, dynamic> data,
+    String orderId,
+  ) async {
+    final current = data['paymentStatus']?.toString() ?? '';
+    if (_settledPayments.contains(current)) return;
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF122530),
+        title: const Text('Paiement en espèces',
+            style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Avez-vous reçu le paiement en espèces du client ?',
+          style: TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Plus tard',
+                style: TextStyle(color: Colors.white70)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0FB271)),
+            child:
+                const Text('Oui, reçu', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await _updatePaymentStatus(orderId, 'CASH_ON_DELIVERY');
+    if (ok) data['paymentStatus'] = 'CASH_ON_DELIVERY';
+    if (mounted) {
+      showAdaptiveSnack(
+        context,
+        ok
+            ? 'Paiement en espèces enregistré'
+            : 'Impossible d’enregistrer le paiement — réessayez depuis l’historique.',
+        isError: !ok,
+      );
+    }
+  }
+
   /// Retourne `true` si la mise à jour a réussi.
   Future<bool> _updateStatus(String orderId, String status) async {
     try {
@@ -754,6 +827,7 @@ class _DriverScreenState extends State<DriverScreen> {
               _resetGeofenceState();
               if (dlgCtx.mounted) Navigator.pop(dlgCtx);
               if (targetStatus == 'COMPLETED') {
+                await _promptCashPaymentIfNeeded(data, orderId);
                 await _promptRatingForClient(orderData);
               }
             } else {
@@ -959,6 +1033,47 @@ class _DriverScreenState extends State<DriverScreen> {
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(
                                 color: Color(0xFF0FB271), width: 1.2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
+                    // Paiement espèces (CDC §4) : le livreur confirme la
+                    // réception. Visible tant que la course est active et
+                    // que le paiement n'est pas réglé.
+                    if (_canFail(dialogStatus) &&
+                        !_settledPayments.contains(
+                            data['paymentStatus']?.toString() ?? '')) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            setDialogState(() => dialogProcessing = true);
+                            final ok = await _updatePaymentStatus(
+                                orderId, 'CASH_ON_DELIVERY');
+                            if (ok) {
+                              data['paymentStatus'] = 'CASH_ON_DELIVERY';
+                            } else {
+                              _messengerKey.currentState?.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Impossible d’enregistrer le paiement.'),
+                                  backgroundColor: Color(0xFFF0453D),
+                                ),
+                              );
+                            }
+                            if (dlgCtx.mounted) {
+                              setDialogState(() => dialogProcessing = false);
+                            }
+                          },
+                          icon: const Icon(Icons.payments_outlined,
+                              color: Color(0xFFEAB308)),
+                          label: const Text('Paiement reçu (espèces)',
+                              style: TextStyle(color: Color(0xFFEAB308))),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(
+                                color: Color(0xFFEAB308), width: 1.2),
                           ),
                         ),
                       ),
