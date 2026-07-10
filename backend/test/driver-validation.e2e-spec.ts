@@ -21,7 +21,11 @@ import request = require('supertest');
 
 import { UserRole } from '../src/entities/user.entity';
 import { OrderStatus } from '../src/entities/delivery-order.entity';
-import { TestAppBundle, buildTestApp } from './test-helpers';
+import {
+  TestAppBundle,
+  buildTestApp,
+  setDriverProfilePhoto,
+} from './test-helpers';
 
 describe('Driver validation & availability (e2e)', () => {
   let bundle: TestAppBundle;
@@ -117,6 +121,12 @@ describe('Driver validation & availability (e2e)', () => {
 
   describe('Livreur APPROVED mais indisponible (isAvailable=false)', () => {
     beforeAll(async () => {
+      await request(app.getHttpServer())
+        .patch(`/users/${livreurId}/driver-approval`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ status: 'APPROVED' })
+        .expect(400);
+      setDriverProfilePhoto(bundle.usersRepo, livreurId);
       await request(app.getHttpServer())
         .patch(`/users/${livreurId}/driver-approval`)
         .set('Authorization', `Bearer ${adminToken}`)

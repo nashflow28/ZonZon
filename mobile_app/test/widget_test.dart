@@ -14,8 +14,9 @@ void _installPluginMocks() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
   // flutter_secure_storage: every read returns null (no token stored).
-  const secureStorageChannel =
-      MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  const secureStorageChannel = MethodChannel(
+    'plugins.it_nomads.com/flutter_secure_storage',
+  );
   messenger.setMockMethodCallHandler(secureStorageChannel, (call) async {
     switch (call.method) {
       case 'read':
@@ -37,8 +38,9 @@ void _installPluginMocks() {
 void _clearPluginMocks() {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  const secureStorageChannel =
-      MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  const secureStorageChannel = MethodChannel(
+    'plugins.it_nomads.com/flutter_secure_storage',
+  );
   messenger.setMockMethodCallHandler(secureStorageChannel, null);
 }
 

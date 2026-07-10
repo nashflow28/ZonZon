@@ -55,11 +55,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _profilePhoto = picked);
   }
 
-  /// Envoie la photo de profil sur `POST /users/me/photo` (le token vient
-  /// d'être persisté par `register`). Retourne `true` si l'upload a réussi.
-  Future<bool> _uploadProfilePhoto(XFile photo) async {
+  /// Envoie la photo de profil sur `POST /users/me/photo` avec le token
+  /// émis par l'inscription, avant de publier la session localement.
+  Future<bool> _uploadProfilePhoto(XFile photo, String accessToken) async {
     try {
-      final token = await AuthService().getToken();
       MediaType mimeFromPath(String p) {
         final ext = p.toLowerCase().split('.').last;
         return switch (ext) {
@@ -69,16 +68,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
         };
       }
 
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
-      )
-        ..headers['Authorization'] = 'Bearer $token'
-        ..files.add(await http.MultipartFile.fromPath(
-          'file',
-          photo.path,
-          contentType: mimeFromPath(photo.path),
-        ));
+      final request =
+          http.MultipartRequest(
+              'POST',
+              Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
+            )
+            ..headers['Authorization'] = 'Bearer $accessToken'
+            ..files.add(
+              await http.MultipartFile.fromPath(
+                'file',
+                photo.path,
+                contentType: mimeFromPath(photo.path),
+              ),
+            );
 
       final response = await request.send();
       return response.statusCode == 200 || response.statusCode == 201;
@@ -108,21 +110,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      await AuthService().register(
+      final result = await AuthService().register(
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         phone: _fullPhone,
         password: _passwordController.text,
         role: _role,
         vehicleType: _role == 'LIVREUR' ? _vehicleType : null,
+        persistSession: false,
       );
 
-      // Upload de la photo juste après la création du compte (le token est
-      // déjà persisté). La photo est OBLIGATOIRE pour un livreur (CDC §2) :
-      // en cas d'échec, on boucle sur un dialog bloquant (réessayer / changer
-      // de photo) au lieu de continuer sans photo.
+      // Tant que la photo n'est pas réellement envoyée, on ne publie PAS la
+      // session locale. Cela évite toute sortie prématurée du flux d'inscription.
       if (_profilePhoto != null) {
-        var uploaded = await _uploadProfilePhoto(_profilePhoto!);
+        var uploaded = await _uploadProfilePhoto(
+          _profilePhoto!,
+          result.accessToken,
+        );
         while (!uploaded) {
           if (!mounted) return;
           final action = await showDialog<String>(
@@ -130,8 +134,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
             barrierDismissible: false,
             builder: (ctx) => AlertDialog(
               backgroundColor: const Color(0xFF122530),
-              title: const Text('Photo non envoyée',
-                  style: TextStyle(color: Colors.white)),
+              title: const Text(
+                'Photo non envoyée',
+                style: TextStyle(color: Colors.white),
+              ),
               content: const Text(
                 'La photo de profil est obligatoire pour les livreurs. '
                 'Vérifiez votre connexion puis réessayez, ou choisissez '
@@ -141,15 +147,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, 'change'),
-                  child: const Text('Changer de photo',
-                      style: TextStyle(color: Colors.white70)),
+                  child: const Text(
+                    'Changer de photo',
+                    style: TextStyle(color: Colors.white70),
+                  ),
                 ),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(ctx, 'retry'),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E90FA)),
-                  child: const Text('Réessayer',
-                      style: TextStyle(color: Colors.white)),
+                    backgroundColor: const Color(0xFF2E90FA),
+                  ),
+                  child: const Text(
+                    'Réessayer',
+                    style: TextStyle(color: Colors.white),
+                  ),
                 ),
               ],
             ),
@@ -159,17 +170,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
             await _pickProfilePhoto();
           }
           if (_profilePhoto != null) {
-            uploaded = await _uploadProfilePhoto(_profilePhoto!);
+            uploaded = await _uploadProfilePhoto(
+              _profilePhoto!,
+              result.accessToken,
+            );
           }
         }
         if (!mounted) return;
       }
 
+      await AuthService().persistSession(result);
       if (!mounted) return;
       // Redirect to the role-appropriate home, clearing the back-stack.
-      final user = await AuthService().getCurrentUser();
+      final user = result.user;
       if (!mounted) return;
-      context.go(AppRoutes.homeForRole(user?.role));
+      context.go(AppRoutes.homeForRole(user.role));
     } catch (e) {
       if (!mounted) return;
       showAdaptiveSnack(context, 'Inscription échouée : $e', isError: true);
@@ -186,7 +201,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text('Créer un compte', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Créer un compte',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
       ),
       body: Stack(
         children: [
@@ -219,14 +237,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     decoration: BoxDecoration(
                       color: const Color(0xFF122530).withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.1),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _buildInput(controller: _firstNameController, icon: Icons.person_outline, hint: 'Prénom'),
+                        _buildInput(
+                          controller: _firstNameController,
+                          icon: Icons.person_outline,
+                          hint: 'Prénom',
+                        ),
                         const SizedBox(height: 12),
-                        _buildInput(controller: _lastNameController, icon: Icons.person, hint: 'Nom'),
+                        _buildInput(
+                          controller: _lastNameController,
+                          icon: Icons.person,
+                          hint: 'Nom',
+                        ),
                         const SizedBox(height: 12),
                         PhoneField(
                           controller: _phoneController,
@@ -239,32 +267,67 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           hint: 'Mot de passe',
                           obscure: _obscure,
                           suffix: IconButton(
-                            icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility, color: Colors.white60),
-                            onPressed: () => setState(() => _obscure = !_obscure),
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.white60,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
                           ),
                         ),
                         const SizedBox(height: 20),
-                        const Text('Je suis :', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                        const Text(
+                          'Je suis :',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
-                            Expanded(child: _buildRoleOption('CLIENT', 'Client', Icons.person)),
+                            Expanded(
+                              child: _buildRoleOption(
+                                'CLIENT',
+                                'Client',
+                                Icons.person,
+                              ),
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(child: _buildRoleOption('LIVREUR', 'Livreur', Icons.motorcycle)),
+                            Expanded(
+                              child: _buildRoleOption(
+                                'LIVREUR',
+                                'Livreur',
+                                Icons.motorcycle,
+                              ),
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(child: _buildRoleOption('COMMERCANT', 'Commerçant', Icons.storefront)),
+                            Expanded(
+                              child: _buildRoleOption(
+                                'COMMERCANT',
+                                'Commerçant',
+                                Icons.storefront,
+                              ),
+                            ),
                           ],
                         ),
                         if (_role == 'LIVREUR') ...[
                           const SizedBox(height: 18),
-                          const Text('Type d’engin :', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          const Text(
+                            'Type d’engin :',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
                           const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             decoration: BoxDecoration(
                               color: Colors.white.withValues(alpha: 0.05),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.08),
+                              ),
                             ),
                             child: DropdownButton<String>(
                               value: _vehicleType,
@@ -272,18 +335,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               underline: const SizedBox(),
                               dropdownColor: const Color(0xFF122530),
                               iconEnabledColor: const Color(0xFF2E90FA),
-                              style: const TextStyle(color: Colors.white, fontSize: 16),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
                               items: const [
-                                DropdownMenuItem(value: 'MOTO', child: Text('Moto')),
-                                DropdownMenuItem(value: 'VOITURE', child: Text('Voiture')),
-                                DropdownMenuItem(value: 'TRICYCLE', child: Text('Tricycle')),
+                                DropdownMenuItem(
+                                  value: 'MOTO',
+                                  child: Text('Moto'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'VOITURE',
+                                  child: Text('Voiture'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'TRICYCLE',
+                                  child: Text('Tricycle'),
+                                ),
                               ],
-                              onChanged: (v) => setState(() => _vehicleType = v ?? 'MOTO'),
+                              onChanged: (v) =>
+                                  setState(() => _vehicleType = v ?? 'MOTO'),
                             ),
                           ),
                           const SizedBox(height: 18),
-                          const Text('Photo de profil (obligatoire) :',
-                              style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          const Text(
+                            'Photo de profil (obligatoire) :',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
                           const SizedBox(height: 8),
                           _buildProfilePhotoPicker(),
                         ],
@@ -292,9 +373,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           height: 58,
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(18),
-                            gradient: const LinearGradient(colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)]),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)],
+                            ),
                             boxShadow: [
-                              BoxShadow(color: const Color(0xFF2E90FA).withValues(alpha: 0.45), blurRadius: 20, offset: const Offset(0, 6)),
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF2E90FA,
+                                ).withValues(alpha: 0.45),
+                                blurRadius: 20,
+                                offset: const Offset(0, 6),
+                              ),
                             ],
                           ),
                           child: ElevatedButton(
@@ -302,13 +391,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               shadowColor: Colors.transparent,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
                             ),
                             child: _isLoading
                                 ? adaptiveLoader(color: Colors.white)
                                 : const Text(
                                     'Créer mon compte',
-                                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 0.4),
+                                    style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                      letterSpacing: 0.4,
+                                    ),
                                   ),
                           ),
                         ),
@@ -346,9 +442,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             CircleAvatar(
               radius: 26,
               backgroundColor: Colors.white.withValues(alpha: 0.08),
-              backgroundImage: photo != null ? FileImage(File(photo.path)) : null,
+              backgroundImage: photo != null
+                  ? FileImage(File(photo.path))
+                  : null,
               child: photo == null
-                  ? const Icon(Icons.add_a_photo_outlined, color: Color(0xFF2E90FA))
+                  ? const Icon(
+                      Icons.add_a_photo_outlined,
+                      color: Color(0xFF2E90FA),
+                    )
                   : null,
             ),
             const SizedBox(width: 12),
@@ -358,14 +459,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ? 'Photo sélectionnée — touchez pour changer'
                     : 'Ajouter ma photo de profil',
                 style: TextStyle(
-                  color: photo != null ? const Color(0xFF0FB271) : Colors.white70,
+                  color: photo != null
+                      ? const Color(0xFF0FB271)
+                      : Colors.white70,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
             ),
             if (photo != null)
-              const Icon(Icons.check_circle, color: Color(0xFF0FB271), size: 20),
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF0FB271),
+                size: 20,
+              ),
           ],
         ),
       ),
@@ -380,16 +487,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFF2E90FA).withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.04),
+          color: selected
+              ? const Color(0xFF2E90FA).withValues(alpha: 0.25)
+              : Colors.white.withValues(alpha: 0.04),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: selected ? const Color(0xFF2E90FA) : Colors.white.withValues(alpha: 0.08),
+            color: selected
+                ? const Color(0xFF2E90FA)
+                : Colors.white.withValues(alpha: 0.08),
             width: selected ? 1.5 : 1,
           ),
         ),
         child: Column(
           children: [
-            Icon(icon, color: selected ? const Color(0xFF2E90FA) : Colors.white60),
+            Icon(
+              icon,
+              color: selected ? const Color(0xFF2E90FA) : Colors.white60,
+            ),
             const SizedBox(height: 6),
             Text(
               label,
@@ -429,7 +543,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
           prefixIcon: Icon(icon, color: const Color(0xFF2E90FA)),
           suffixIcon: suffix,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 18,
+          ),
         ),
       ),
     );

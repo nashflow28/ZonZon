@@ -5,6 +5,7 @@ import { IsNull } from 'typeorm';
 import { ConversationsService } from './conversations.service';
 import { Conversation } from '../entities/conversation.entity';
 import { ConversationParticipant } from '../entities/conversation-participant.entity';
+import { DeliveryOrder } from '../entities/delivery-order.entity';
 
 const mockConversationsRepo = () => ({
   findOne: jest.fn(),
@@ -20,14 +21,20 @@ const mockParticipantsRepo = () => ({
   update: jest.fn(),
 });
 
+const mockOrdersRepo = () => ({
+  findOne: jest.fn(),
+});
+
 describe('ConversationsService', () => {
   let service: ConversationsService;
   let conversationsRepo: ReturnType<typeof mockConversationsRepo>;
   let participantsRepo: ReturnType<typeof mockParticipantsRepo>;
+  let ordersRepo: ReturnType<typeof mockOrdersRepo>;
 
   beforeEach(async () => {
     conversationsRepo = mockConversationsRepo();
     participantsRepo = mockParticipantsRepo();
+    ordersRepo = mockOrdersRepo();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -40,6 +47,10 @@ describe('ConversationsService', () => {
           provide: getRepositoryToken(ConversationParticipant),
           useValue: participantsRepo,
         },
+        {
+          provide: getRepositoryToken(DeliveryOrder),
+          useValue: ordersRepo,
+        },
       ],
     }).compile();
 
@@ -48,6 +59,15 @@ describe('ConversationsService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  beforeEach(() => {
+    ordersRepo.findOne.mockResolvedValue({
+      id: 'delivery-1',
+      client: { id: 'client-1' },
+      livreur: { id: 'driver-1' },
+      merchant: { id: 'merchant-1' },
+    });
   });
 
   describe('ensureConversation()', () => {
@@ -63,6 +83,13 @@ describe('ConversationsService', () => {
       expect(conversationsRepo.create).toHaveBeenCalledWith({
         deliveryId: 'delivery-1',
       });
+      expect(participantsRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          conversationId: 'conv-1',
+          userId: 'client-1',
+          role: 'CLIENT',
+        }),
+      );
       expect(result.id).toBe('conv-1');
       expect(result.deliveryId).toBe('delivery-1');
     });
@@ -75,6 +102,7 @@ describe('ConversationsService', () => {
 
       expect(result).toBe(existing);
       expect(conversationsRepo.save).not.toHaveBeenCalled();
+      expect(participantsRepo.save).toHaveBeenCalledTimes(3);
     });
 
     it('retombe sur la ligne existante si save() échoue (contrainte UNIQUE concurrente)', async () => {
@@ -82,18 +110,59 @@ describe('ConversationsService', () => {
       conversationsRepo.findOne
         .mockResolvedValueOnce(null) // premier check : pas encore là
         .mockResolvedValueOnce(existing); // fallback après échec de save()
-      conversationsRepo.save.mockRejectedValueOnce(
-        new Error('ER_DUP_ENTRY'),
-      );
+      conversationsRepo.save.mockRejectedValueOnce(new Error('ER_DUP_ENTRY'));
 
       const result = await service.ensureConversation('delivery-1');
 
       expect(result).toBe(existing);
     });
+
+    it('préserve le départ d’un participant cœur et corrige le rôle des actifs', async () => {
+      conversationsRepo.findOne.mockResolvedValueOnce({
+        id: 'conv-1',
+        deliveryId: 'delivery-1',
+      });
+      participantsRepo.findOne
+        .mockResolvedValueOnce({
+          id: 'p-client',
+          conversationId: 'conv-1',
+          userId: 'client-1',
+          role: 'CLIENT',
+          leftAt: new Date('2026-01-01'),
+        })
+        .mockResolvedValueOnce({
+          id: 'p-driver',
+          conversationId: 'conv-1',
+          userId: 'driver-1',
+          role: 'CLIENT',
+          leftAt: null,
+        })
+        .mockResolvedValueOnce({
+          id: 'p-merchant',
+          conversationId: 'conv-1',
+          userId: 'merchant-1',
+          role: 'MERCHANT',
+          leftAt: null,
+        });
+      participantsRepo.save.mockImplementation(async (entity: any) => entity);
+
+      await service.ensureConversation('delivery-1');
+
+      expect(participantsRepo.save).not.toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'p-client' }),
+      );
+      expect(participantsRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'p-driver',
+          role: 'LIVREUR',
+        }),
+      );
+    });
   });
 
   describe('addParticipant()', () => {
     it('crée le participant si absent (ensure + create)', async () => {
+      ordersRepo.findOne.mockResolvedValueOnce(null);
       conversationsRepo.findOne.mockResolvedValue({
         id: 'conv-1',
         deliveryId: 'delivery-1',
@@ -120,6 +189,7 @@ describe('ConversationsService', () => {
     });
 
     it('upsert idempotent : ré-ajouter un participant déjà actif ne duplique pas', async () => {
+      ordersRepo.findOne.mockResolvedValueOnce(null);
       conversationsRepo.findOne.mockResolvedValue({
         id: 'conv-1',
         deliveryId: 'delivery-1',
@@ -145,6 +215,7 @@ describe('ConversationsService', () => {
     });
 
     it('réactive un participant qui était parti (leftAt remis à null)', async () => {
+      ordersRepo.findOne.mockResolvedValueOnce(null);
       conversationsRepo.findOne.mockResolvedValue({
         id: 'conv-1',
         deliveryId: 'delivery-1',
@@ -200,9 +271,7 @@ describe('ConversationsService', () => {
         id: 'conv-1',
         deliveryId: 'delivery-1',
       });
-      const activeOnes = [
-        { id: 'part-1', userId: 'user-1', leftAt: null },
-      ];
+      const activeOnes = [{ id: 'part-1', userId: 'user-1', leftAt: null }];
       participantsRepo.find.mockResolvedValueOnce(activeOnes);
 
       const result = await service.listParticipants('delivery-1');
@@ -233,10 +302,7 @@ describe('ConversationsService', () => {
       });
       participantsRepo.findOne.mockResolvedValueOnce({ id: 'part-1' });
 
-      const result = await service.isActiveParticipant(
-        'delivery-1',
-        'user-1',
-      );
+      const result = await service.isActiveParticipant('delivery-1', 'user-1');
 
       expect(result).toBe(true);
     });
@@ -248,10 +314,7 @@ describe('ConversationsService', () => {
       });
       participantsRepo.findOne.mockResolvedValueOnce(null);
 
-      const result = await service.isActiveParticipant(
-        'delivery-1',
-        'user-1',
-      );
+      const result = await service.isActiveParticipant('delivery-1', 'user-1');
 
       expect(result).toBe(false);
     });

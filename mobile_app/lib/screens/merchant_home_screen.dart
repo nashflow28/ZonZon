@@ -99,7 +99,11 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   }
 
   Future<void> _openCreateDelivery() async {
-    await pushAdaptive<bool>(context, const CreateDeliveryScreen());
+    final created = await pushAdaptive<bool>(
+      context,
+      const CreateDeliveryScreen(),
+    );
+    if (created == true && mounted) await _refresh();
   }
 
   Future<void> _openMerchantOrders() async {
@@ -131,7 +135,9 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   }
 
   Future<void> _toggleAvailable(Product p) async {
-    final updated = await _shops.updateProduct(p.id, {'available': !p.available});
+    final updated = await _shops.updateProduct(p.id, {
+      'available': !p.available,
+    });
     if (updated != null && mounted) {
       setState(() {
         _products = _products
@@ -152,14 +158,22 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           children: [
             Icon(Icons.storefront, color: Color(0xFF0FB271)),
             SizedBox(width: 10),
-            Text('Espace commerçant',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text(
+              'Espace commerçant',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
         actions: [
           IconButton(
             tooltip: 'Profil',
-            icon: const Icon(Icons.account_circle_outlined, color: Colors.white70),
+            icon: const Icon(
+              Icons.account_circle_outlined,
+              color: Colors.white70,
+            ),
             onPressed: _openMerchantProfile,
           ),
           IconButton(
@@ -177,88 +191,88 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       body: _loading
           ? Center(child: adaptiveLoader(color: const Color(0xFF0FB271)))
           : _shop == null
-              ? ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _DeliveriesQuickActions(
-                      onCreate: _openCreateDelivery,
-                      onViewOrders: _openMerchantOrders,
-                      onViewDrivers: _openMerchantDrivers,
-                      stats: _orders,
-                    ),
-                    const SizedBox(height: 24),
-                    _OnboardingState(onCreate: _openShopForm),
-                  ],
-                )
-              : RefreshIndicator(
-                  color: const Color(0xFF0FB271),
-                  onRefresh: _refresh,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
+          ? ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                _DeliveriesQuickActions(
+                  onCreate: _openCreateDelivery,
+                  onViewOrders: _openMerchantOrders,
+                  onViewDrivers: _openMerchantDrivers,
+                  stats: _orders,
+                ),
+                const SizedBox(height: 24),
+                _OnboardingState(onCreate: _openShopForm),
+              ],
+            )
+          : RefreshIndicator(
+              color: const Color(0xFF0FB271),
+              onRefresh: _refresh,
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _DeliveriesQuickActions(
+                    onCreate: _openCreateDelivery,
+                    onViewOrders: _openMerchantOrders,
+                    onViewDrivers: _openMerchantDrivers,
+                    stats: _orders,
+                  ),
+                  const SizedBox(height: 24),
+                  _ShopHeaderCard(
+                    shop: _shop!,
+                    onEdit: _openShopForm,
+                    onPickLogo: _pickShopLogo,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _DeliveriesQuickActions(
-                        onCreate: _openCreateDelivery,
-                        onViewOrders: _openMerchantOrders,
-                        onViewDrivers: _openMerchantDrivers,
-                        stats: _orders,
-                      ),
-                      const SizedBox(height: 24),
-                      _ShopHeaderCard(
-                        shop: _shop!,
-                        onEdit: _openShopForm,
-                        onPickLogo: _pickShopLogo,
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Mes produits',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: () => _openProductForm(),
-                            icon: const Icon(Icons.add, color: Color(0xFF0FB271)),
-                            label: const Text(
-                              'Ajouter',
-                              style: TextStyle(color: Color(0xFF0FB271)),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      if (_products.isEmpty)
-                        _EmptyProducts(onAdd: () => _openProductForm())
-                      else
-                        ..._products.map(
-                          (p) => _ProductTile(
-                            product: p,
-                            onEdit: () => _openProductForm(edit: p),
-                            onToggle: () => _toggleAvailable(p),
-                            onDelete: () async {
-                              final ok = await showAdaptiveConfirmDialog(
-                                context,
-                                title: 'Supprimer ?',
-                                message:
-                                    'Le produit "${p.name}" sera retiré du catalogue.',
-                                confirmLabel: 'Supprimer',
-                                cancelLabel: 'Annuler',
-                                isDestructive: true,
-                              );
-                              if (ok != true) return;
-                              await _shops.deleteProduct(p.id);
-                              _refresh();
-                            },
-                          ),
+                      const Text(
+                        'Mes produits',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
-                      const SizedBox(height: 32),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _openProductForm(),
+                        icon: const Icon(Icons.add, color: Color(0xFF0FB271)),
+                        label: const Text(
+                          'Ajouter',
+                          style: TextStyle(color: Color(0xFF0FB271)),
+                        ),
+                      ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  if (_products.isEmpty)
+                    _EmptyProducts(onAdd: () => _openProductForm())
+                  else
+                    ..._products.map(
+                      (p) => _ProductTile(
+                        product: p,
+                        onEdit: () => _openProductForm(edit: p),
+                        onToggle: () => _toggleAvailable(p),
+                        onDelete: () async {
+                          final ok = await showAdaptiveConfirmDialog(
+                            context,
+                            title: 'Supprimer ?',
+                            message:
+                                'Le produit "${p.name}" sera retiré du catalogue.',
+                            confirmLabel: 'Supprimer',
+                            cancelLabel: 'Annuler',
+                            isDestructive: true,
+                          );
+                          if (ok != true) return;
+                          await _shops.deleteProduct(p.id);
+                          _refresh();
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
     );
   }
 }
@@ -282,8 +296,11 @@ class _OnboardingState extends StatelessWidget {
                 shape: BoxShape.circle,
                 color: const Color(0xFF0FB271).withValues(alpha: 0.15),
               ),
-              child: const Icon(Icons.add_business,
-                  color: Color(0xFF0FB271), size: 56),
+              child: const Icon(
+                Icons.add_business,
+                color: Color(0xFF0FB271),
+                size: 56,
+              ),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -299,7 +316,11 @@ class _OnboardingState extends StatelessWidget {
               'Créez votre boutique pour rejoindre la marketplace ZonZon. '
               'C’est gratuit, et vos premiers clients vous attendent.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+                height: 1.5,
+              ),
             ),
             const SizedBox(height: 32),
             SizedBox(
@@ -316,7 +337,8 @@ class _OnboardingState extends StatelessWidget {
                   backgroundColor: const Color(0xFF0FB271),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
@@ -350,7 +372,9 @@ class _DeliveriesQuickActions extends StatelessWidget {
           createdAt.day == today.day;
     }).length;
     final completed = stats.where((item) => item.status == 'COMPLETED').length;
-    final totalAmount = stats.fold<int>(0, (sum, item) => sum + (item.priceFcfa ?? 0));
+    final totalAmount = stats
+        .where((item) => item.status == 'COMPLETED')
+        .fold<int>(0, (sum, item) => sum + (item.priceFcfa ?? 0));
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -389,7 +413,8 @@ class _DeliveriesQuickActions extends StatelessWidget {
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -397,7 +422,11 @@ class _DeliveriesQuickActions extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: onViewOrders,
-                  icon: const Icon(Icons.receipt_long, size: 18, color: Color(0xFF2E90FA)),
+                  icon: const Icon(
+                    Icons.receipt_long,
+                    size: 18,
+                    color: Color(0xFF2E90FA),
+                  ),
                   label: const Text(
                     'Mes livraisons',
                     style: TextStyle(color: Color(0xFF2E90FA)),
@@ -406,7 +435,8 @@ class _DeliveriesQuickActions extends StatelessWidget {
                     side: const BorderSide(color: Color(0xFF2E90FA)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
@@ -417,7 +447,11 @@ class _DeliveriesQuickActions extends StatelessWidget {
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: onViewDrivers,
-              icon: const Icon(Icons.two_wheeler, size: 18, color: Color(0xFFFBBF24)),
+              icon: const Icon(
+                Icons.two_wheeler,
+                size: 18,
+                color: Color(0xFFFBBF24),
+              ),
               label: const Text(
                 'Mes livreurs',
                 style: TextStyle(color: Color(0xFFFBBF24)),
@@ -426,7 +460,8 @@ class _DeliveriesQuickActions extends StatelessWidget {
                 side: const BorderSide(color: Color(0xFFFBBF24)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -551,7 +586,8 @@ class _ShopHeaderCard extends StatelessWidget {
                       shape: BoxShape.circle,
                       color: Colors.white.withValues(alpha: 0.05),
                       border: Border.all(
-                          color: const Color(0xFF0FB271).withValues(alpha: 0.4)),
+                        color: const Color(0xFF0FB271).withValues(alpha: 0.4),
+                      ),
                       image: logoUrl != null
                           ? DecorationImage(
                               image: NetworkImage('$apiUrl$logoUrl'),
@@ -560,8 +596,11 @@ class _ShopHeaderCard extends StatelessWidget {
                           : null,
                     ),
                     child: logoUrl == null
-                        ? const Icon(Icons.add_a_photo,
-                            color: Color(0xFF0FB271), size: 28)
+                        ? const Icon(
+                            Icons.add_a_photo,
+                            color: Color(0xFF0FB271),
+                            size: 28,
+                          )
                         : null,
                   ),
                 ),
@@ -579,13 +618,19 @@ class _ShopHeaderCard extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      _StatusBadge(status: shop.status, reason: shop.rejectionReason),
+                      _StatusBadge(
+                        status: shop.status,
+                        reason: shop.rejectionReason,
+                      ),
                       if (shop.address.isNotEmpty) ...[
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            const Icon(Icons.place,
-                                color: Colors.white60, size: 14),
+                            const Icon(
+                              Icons.place,
+                              color: Colors.white60,
+                              size: 14,
+                            ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
@@ -593,7 +638,9 @@ class _ShopHeaderCard extends StatelessWidget {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    color: Colors.white60, fontSize: 12),
+                                  color: Colors.white60,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ],
@@ -614,7 +661,11 @@ class _ShopHeaderCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
               child: Text(
                 shop.description!,
-                style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
               ),
             ),
         ],
@@ -701,12 +752,19 @@ class _EmptyProducts extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const Icon(Icons.inventory_2_outlined,
-              color: Colors.white24, size: 48),
+          const Icon(
+            Icons.inventory_2_outlined,
+            color: Colors.white24,
+            size: 48,
+          ),
           const SizedBox(height: 12),
           const Text(
             'Aucun produit pour l’instant',
-            style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           const SizedBox(height: 4),
           const Text(
@@ -718,11 +776,15 @@ class _EmptyProducts extends StatelessWidget {
           OutlinedButton.icon(
             onPressed: onAdd,
             icon: const Icon(Icons.add, color: Color(0xFF0FB271)),
-            label: const Text('Ajouter un produit',
-                style: TextStyle(color: Color(0xFF0FB271))),
+            label: const Text(
+              'Ajouter un produit',
+              style: TextStyle(color: Color(0xFF0FB271)),
+            ),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: Color(0xFF0FB271)),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ],
@@ -826,13 +888,18 @@ class _ProductTile extends StatelessWidget {
               PopupMenuItem(
                 value: 'toggle',
                 child: Text(
-                  product.available ? 'Marquer indisponible' : 'Remettre en vente',
+                  product.available
+                      ? 'Marquer indisponible'
+                      : 'Remettre en vente',
                   style: const TextStyle(color: Colors.white),
                 ),
               ),
               const PopupMenuItem(
                 value: 'delete',
-                child: Text('Supprimer', style: TextStyle(color: Colors.redAccent)),
+                child: Text(
+                  'Supprimer',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
               ),
             ],
           ),

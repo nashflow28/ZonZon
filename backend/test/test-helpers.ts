@@ -530,6 +530,16 @@ export function approveLivreur(
   usersRepo._store.set(livreurId, user);
 }
 
+/** Simule une photo déjà déposée avant la validation admin. */
+export function setDriverProfilePhoto(
+  usersRepo: ReturnType<typeof makeInMemoryRepo<User>>,
+  livreurId: string,
+) {
+  const user = usersRepo._store.get(livreurId) as any;
+  user.profilePhotoUrl = `/uploads/test-${livreurId}.jpg`;
+  usersRepo._store.set(livreurId, user);
+}
+
 /** Bascule isAvailable directement dans le repo in-memory. */
 export function setAvailable(
   usersRepo: ReturnType<typeof makeInMemoryRepo<User>>,

@@ -43,6 +43,7 @@ class AuthService {
     required String password,
     required String role,
     String? vehicleType,
+    bool persistSession = true,
   }) async {
     final body = <String, dynamic>{
       'firstName': firstName,
@@ -62,11 +63,15 @@ class AuthService {
     if (res.statusCode == 200 || res.statusCode == 201) {
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       final result = AuthResult.fromJson(data);
-      await _persist(result);
+      if (persistSession) {
+        await _persist(result);
+      }
       return result;
     }
     throw Exception(_extractError(res));
   }
+
+  Future<void> persistSession(AuthResult result) => _persist(result);
 
   Future<void> logout() async {
     // Efface le token FCM côté serveur AVANT de perdre le JWT
@@ -104,7 +109,10 @@ class AuthService {
 
   Future<void> _persist(AuthResult result) async {
     await _storage.write(key: _tokenKey, value: result.accessToken);
-    await _storage.write(key: _userKey, value: jsonEncode(result.user.toJson()));
+    await _storage.write(
+      key: _userKey,
+      value: jsonEncode(result.user.toJson()),
+    );
     _sessionVersion.value++;
   }
 

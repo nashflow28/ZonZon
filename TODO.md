@@ -89,7 +89,7 @@
 
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)
 
-### Revue robustesse mobile (2026-07-10) — 7 constats, tous corrigés
+### Revue robustesse mobile (2026-07-10) — correctifs de la session 38 validés
 - [x] **P0 — Fuite inter-session client + push après 401** — `logout()` et `handleUnauthorized()` appellent désormais `ClientServices.reset()` (socket + commandes actives) ; sur 401, `PushService.invalidateLocalToken()` supprime le token FCM côté device (le serveur n'est plus joignable avec un JWT mort). *(2026-07-10)*
 - [x] **P0 — Paiement espèces inexécutable client↔livreur** — livreur : bouton « Paiement reçu (espèces) » dans le dialog de course + confirmation proposée au moment du COMPLETED (→ `CASH_ON_DELIVERY`) ; client : action « J'ai payé en espèces » dans le suivi (→ `PAID`). Les deux passent par `PATCH /orders/:id/payment-status` (déjà autorisé côté backend) et se propagent par socket. *(2026-07-10)*
 - [x] **P1 — Photo livreur contournable** — plus de « continue » silencieux : en cas d'échec d'upload après l'inscription, dialog bloquant (Réessayer / Changer de photo) jusqu'au succès. *(2026-07-10)*
@@ -97,6 +97,27 @@
 - [x] **P2 — Synchronisation FCM fragile** — `_syncedToken` n'est renseigné que sur 2xx ; échec réseau/HTTP → retry différé (45 s) guardé par l'existence d'une session. *(2026-07-10)*
 - [x] **P2 — Accusé de lecture groupe trompeur** — backend : `GET /orders/:id/messages` renvoie `readBy` (receipts par participant) ; mobile : `done_all` plein = lu par TOUS les destinataires connus (participants de la conversation), estompé = lu par une partie, `done` = envoyé. Fallback ancienne sémantique si participants inconnus. *(2026-07-10)*
 - [x] **P2 — Routes plates + socket à durcir** — redirect par rôle sur `/shops`, `/favorites`, `/history`, `/driver/profile` (« /notifications » reste multi-rôles) ; `OrderSocketController` a un flag `_disposed` qui empêche un `init()` non attendu de créer un socket orphelin après `dispose()`. *(2026-07-10)*
+
+### Revue post-correctifs (2026-07-10) — verdict FAIL
+- [x] **P0 — Encadrer le paiement espèces par la fin effective de course et une reprise** — backend verrouillé par acteur/statut (`COMPLETED` requis hors admin), actions prématurées retirées du mobile, reprise ajoutée dans l'historique/détail client/livreur. *(2026-07-10)*
+- [~] **P0 — Rendre la photo livreur atomique, contrôlée par le serveur et durable** — session mobile désormais publiée seulement après upload réussi ; backend bloque approbation/disponibilité/prise de course sans photo. **Reste ouvert** : migration `uploads/` vers un stockage persistant (R2/S3/Supabase ou volume Fly), car le disque Fly actuel reste éphémère.
+- [x] **P1 — Corriger le pre-prompt FCM** — `PushService` utilise maintenant la `rootNavigatorKey` du router pour le dialog de pré-permission. *(2026-07-10)*
+- [x] **P1 — Rendre les destinataires de chat canoniques** — `ensureConversation()` matérialise systématiquement client, livreur et commerçant dans les participants. *(2026-07-10)*
+- [x] **P1 — Protéger le cycle de vie de `ChatService`** — garde `_disposed` ajoutée autour du bootstrap async et du socket. *(2026-07-10)*
+- [x] **P1 — Rendre la description du colis obligatoire** — validation `trim().isNotEmpty` côté client + `IsNotEmpty` sur les DTO backend client/commerçant. *(2026-07-10)*
+- [~] **P2 — Couvrir les flux récents** — backend : **359 tests** verts; Flutter : toujours **11 widgets**. Ajouter plus tard des tests widget/intégration ciblés pour 401/logout, paiement espèces, inscription photo, FCM et chat groupe/terminal.
+- [x] **P2 — Formater le mobile** — fichiers touchés formatés pendant cette session. *(2026-07-10)*
+
+### Revue finale mobile/backend (2026-07-10) — verdict FAIL
+- [x] **P0 — Unifier l'éligibilité effective des livreurs** — `ACTIVE`, validation, disponibilité, photo et visibilité publique sont appliqués aux broadcasts Socket.IO, aux FCM (global + géolocalisé) et au radar. Un livreur privé ne voit/accepte que ses courses réservées. *(corrigé le 2026-07-10)*
+- [x] **P1 — Exclure les livreurs sans photo du choix manuel** — le sélecteur et la validation d'attribution manuelle excluent les profils sans photo, évitant les courses PENDING inacceptables. *(corrigé le 2026-07-10)*
+- [x] **P1 — Traiter `REFUNDED` comme un paiement réglé dans le suivi vivant** — helper mobile partagé et écrans client/livreur alignés sur le backend. *(corrigé le 2026-07-10)*
+- [x] **P1 — Valider les champs après trim côté backend** — adresses, description et messages exigent désormais au moins un caractère non blanc, avec tests de régression. *(corrigé le 2026-07-10)*
+- [x] **P1 — Réparer les e2e livreur après l'obligation de photo** — fixtures enrichies avec une photo avant validation et cas explicite de refus sans photo. E2e 56/56. *(corrigé le 2026-07-10)*
+- [x] **P2 — Rendre réellement fonctionnel « Quitter la conversation »** — la synchronisation de lecture préserve `leftAt`; seule une action explicite de rejoindre réactive un participant. *(corrigé le 2026-07-10)*
+- [x] **P2 — Compléter les écarts UX restants** — action « Refuser » explicite dans le radar (masquage transparent jusqu'au prochain rafraîchissement), dashboard rafraîchi après création et montant limité aux livraisons terminées. *(corrigé le 2026-07-10)*
+
+> **Historique remplacé par la revue ci-dessus :** les tâches non cochées qui suivent décrivent les constats antérieurs à `2f363dc`; elles ne doivent pas être traitées séparément. Les corrections initiales sont documentées comme terminées en Session 38 et les écarts encore ouverts sont ceux de la revue post-correctifs.
 
 ### Revue mobile vs CDC (2026-07-09) — verdict FAIL
 - [x] **Revue post-correctifs rejouée (2026-07-10)** — contrats mobile/backend inspectés ; backend 343/343 unitaires + build OK ; Flutter 11/11 + analyze sans erreur ; e2e 54/56 (2 fixtures obsolètes). Verdict : correctifs commerçant conformes, mais PASS CDC complet refusé à cause des findings ci-dessous.

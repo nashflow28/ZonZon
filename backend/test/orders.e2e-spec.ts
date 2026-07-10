@@ -27,6 +27,7 @@ import {
   TestAppBundle,
   buildTestApp,
   registerAndLogin,
+  setDriverProfilePhoto,
 } from './test-helpers';
 
 describe('Orders (e2e)', () => {
@@ -132,6 +133,8 @@ describe('Orders (e2e)', () => {
   });
 
   it('ADMIN approuve les deux livreurs puis ils passent disponibles', async () => {
+    setDriverProfilePhoto(bundle.usersRepo, livreurId);
+    setDriverProfilePhoto(bundle.usersRepo, secondLivreurId);
     await request(app.getHttpServer())
       .patch(`/users/${livreurId}/driver-approval`)
       .set('Authorization', `Bearer ${adminToken}`)

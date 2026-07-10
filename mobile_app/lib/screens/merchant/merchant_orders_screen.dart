@@ -707,13 +707,26 @@ class _MerchantOrderDetailsSheetState
   }
 
   Future<void> _editPaymentStatus() async {
+    final allowedStatuses =
+        MerchantOrdersService.allowedMerchantPaymentStatuses(
+          orderStatus: _item.status,
+          currentPaymentStatus: _item.paymentStatus,
+        );
+    if (allowedStatuses.isEmpty) {
+      showAdaptiveSnack(
+        context,
+        'Aucune mise à jour de paiement disponible pour ce statut.',
+        isError: true,
+      );
+      return;
+    }
     final selected = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: const Color(0xFF122530),
       builder: (context) => SafeArea(
         child: ListView(
           shrinkWrap: true,
-          children: MerchantOrdersService.paymentStatuses
+          children: allowedStatuses
               .map(
                 (status) => ListTile(
                   title: Text(

@@ -1,14 +1,18 @@
 import {
   IsLatitude,
   IsLongitude,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
 } from 'class-validator';
 
 export class CreateOrderDto {
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   @MaxLength(255)
   pickupAddress: string;
 
@@ -21,6 +25,8 @@ export class CreateOrderDto {
   pickupLng?: number;
 
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   @MaxLength(255)
   deliveryAddress: string;
 
@@ -33,6 +39,8 @@ export class CreateOrderDto {
   deliveryLng?: number;
 
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   @MaxLength(500)
   description: string;
 

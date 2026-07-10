@@ -18,9 +18,14 @@ import request = require('supertest');
 
 import { UserRole } from '../src/entities/user.entity';
 import { OrderStatus } from '../src/entities/delivery-order.entity';
-import { TestAppBundle, buildTestApp } from './test-helpers';
+import {
+  TestAppBundle,
+  buildTestApp,
+  setDriverProfilePhoto,
+} from './test-helpers';
 
 async function makeApprovedAvailableLivreur(
+  bundle: TestAppBundle,
   app: INestApplication,
   adminToken: string,
   phone: string,
@@ -39,6 +44,8 @@ async function makeApprovedAvailableLivreur(
     .expect(201);
   const token = res.body.access_token;
   const id = res.body.user.id;
+  // La validation admin exige une photo de profil opérationnelle.
+  setDriverProfilePhoto(bundle.usersRepo, id);
 
   await request(app.getHttpServer())
     .patch(`/users/${id}/driver-approval`)
@@ -104,6 +111,7 @@ describe('Propriété des ressources & attribution manuelle (e2e)', () => {
       clientToken = clientRes.body.access_token;
 
       const owner = await makeApprovedAvailableLivreur(
+        bundle,
         app,
         adminToken,
         '+22893000003',
@@ -112,6 +120,7 @@ describe('Propriété des ressources & attribution manuelle (e2e)', () => {
       ownerLivreurToken = owner.token;
 
       const stranger = await makeApprovedAvailableLivreur(
+        bundle,
         app,
         adminToken,
         '+22893000004',
@@ -308,6 +317,7 @@ describe('Propriété des ressources & attribution manuelle (e2e)', () => {
       clientToken = clientRes.body.access_token;
 
       const preferred = await makeApprovedAvailableLivreur(
+        bundle,
         app,
         adminToken,
         '+22893000021',
@@ -317,6 +327,7 @@ describe('Propriété des ressources & attribution manuelle (e2e)', () => {
       preferredLivreurId = preferred.id;
 
       const other = await makeApprovedAvailableLivreur(
+        bundle,
         app,
         adminToken,
         '+22893000022',

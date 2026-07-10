@@ -79,6 +79,7 @@ class AppRoutes {
 final GlobalKey<NavigatorState> _rootNavKey = GlobalKey<NavigatorState>(
   debugLabel: 'root',
 );
+GlobalKey<NavigatorState> get rootNavigatorKey => _rootNavKey;
 final GlobalKey<NavigatorState> _clientHomeNavKey = GlobalKey<NavigatorState>(
   debugLabel: 'clientHome',
 );

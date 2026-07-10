@@ -318,6 +318,7 @@ class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
   Future<void> _submitOrder() async {
     final pickup = _pickup;
     final delivery = _delivery;
+    final description = _descController.text.trim();
     if (pickup == null) {
       showAdaptiveSnack(context, 'Sélectionnez un point de départ');
       return;
@@ -335,6 +336,10 @@ class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
       );
       return;
     }
+    if (description.isEmpty) {
+      showAdaptiveSnack(context, 'Décrivez le colis à livrer.', isError: true);
+      return;
+    }
 
     setState(() => isLoading = true);
 
@@ -348,7 +353,7 @@ class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
           'deliveryAddress': delivery.displayName,
           'deliveryLat': delivery.location.latitude,
           'deliveryLng': delivery.location.longitude,
-          'description': _descController.text,
+          'description': description,
           if (_pickupZoneId != null && _pickupZoneId!.isNotEmpty)
             'pickupZoneId': _pickupZoneId,
           if (_destinationZoneId != null && _destinationZoneId!.isNotEmpty)

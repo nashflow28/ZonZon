@@ -120,6 +120,7 @@ describe('UsersService', () => {
     const pendingLivreur = () => ({
       id: 'livreur-1',
       role: UserRole.LIVREUR,
+      profilePhotoUrl: '/uploads/livreur.jpg',
       driverApprovalStatus: DriverApprovalStatus.PENDING,
       driverRejectionReason: null,
       isAvailable: false,
@@ -206,7 +207,9 @@ describe('UsersService', () => {
     // ── §14.1 : notification au livreur à l'approbation/refus ─────────────
 
     it('APPROVED : envoie une notification "Compte validé" au livreur (@Optional)', async () => {
-      const notifications = { sendToUser: jest.fn().mockResolvedValue(undefined) };
+      const notifications = {
+        sendToUser: jest.fn().mockResolvedValue(undefined),
+      };
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           UsersService,
@@ -237,7 +240,9 @@ describe('UsersService', () => {
     });
 
     it('REJECTED avec reason : envoie une notification "Compte refusé" avec la raison en body', async () => {
-      const notifications = { sendToUser: jest.fn().mockResolvedValue(undefined) };
+      const notifications = {
+        sendToUser: jest.fn().mockResolvedValue(undefined),
+      };
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           UsersService,
@@ -291,6 +296,7 @@ describe('UsersService', () => {
       usersRepository.findOne.mockResolvedValue({
         id: 'livreur-1',
         role: UserRole.LIVREUR,
+        profilePhotoUrl: '/uploads/livreur.jpg',
         driverApprovalStatus: DriverApprovalStatus.APPROVED,
         isAvailable: false,
       });
@@ -360,8 +366,8 @@ describe('UsersService', () => {
   describe('findEligibleLivreurIds', () => {
     it('renvoie les ids des livreurs APPROVED + isAvailable + isPublic', async () => {
       usersRepository.find.mockResolvedValue([
-        { id: 'l1' },
-        { id: 'l2' },
+        { id: 'l1', profilePhotoUrl: '/uploads/l1.jpg' },
+        { id: 'l2', profilePhotoUrl: '/uploads/l2.jpg' },
       ]);
 
       const result = await service.findEligibleLivreurIds();
@@ -374,6 +380,7 @@ describe('UsersService', () => {
             driverApprovalStatus: DriverApprovalStatus.APPROVED,
             isAvailable: true,
             isPublic: true,
+            status: UserStatus.ACTIVE,
           },
         }),
       );
@@ -483,9 +490,7 @@ describe('UsersService', () => {
       usersRepository.findOne.mockResolvedValue(activeUser());
       usersRepository.save.mockImplementation(async (u: any) => u);
 
-      await expect(
-        service.suspend('user-1', 'admin-1'),
-      ).resolves.toEqual(
+      await expect(service.suspend('user-1', 'admin-1')).resolves.toEqual(
         expect.objectContaining({ status: UserStatus.SUSPENDED }),
       );
     });

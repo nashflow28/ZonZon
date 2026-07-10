@@ -298,10 +298,7 @@ class _DriverScreenState extends State<DriverScreen> {
         orElse: () => null,
       );
       if (active is! Map || !mounted) return;
-      _showActiveOrderDialog(
-        Map<String, dynamic>.from(active),
-        restored: true,
-      );
+      _showActiveOrderDialog(Map<String, dynamic>.from(active), restored: true);
     } catch (_) {
       // Hors-ligne au boot : rien à restaurer pour l'instant.
     }
@@ -358,7 +355,9 @@ class _DriverScreenState extends State<DriverScreen> {
       });
       showAdaptiveSnack(
         context,
-        effective ? 'Vous êtes maintenant disponible' : 'Vous êtes maintenant indisponible',
+        effective
+            ? 'Vous êtes maintenant disponible'
+            : 'Vous êtes maintenant indisponible',
       );
       // Si on vient de passer disponible et que le radar n'avait jamais été
       // chargé (ex. compte validé entre-temps), on rafraîchit la liste.
@@ -367,7 +366,11 @@ class _DriverScreenState extends State<DriverScreen> {
       }
     } catch (e) {
       if (mounted) {
-        showAdaptiveSnack(context, e.toString().replaceFirst('Exception: ', ''), isError: true);
+        showAdaptiveSnack(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _togglingAvailability = false);
@@ -543,15 +546,15 @@ class _DriverScreenState extends State<DriverScreen> {
       accuracy: LocationAccuracy.high,
       distanceFilter: 25, // ne re-broadcast que tous les 25 m parcourus
     );
-    _positionSub =
-        Geolocator.getPositionStream(locationSettings: settings).listen(
-      (pos) {
-        _emitPosition(pos);
-      },
-      onError: (_) {
-        // on ignore : le heartbeat continuera à pousser la dernière position
-      },
-    );
+    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
+        .listen(
+          (pos) {
+            _emitPosition(pos);
+          },
+          onError: (_) {
+            // on ignore : le heartbeat continuera à pousser la dernière position
+          },
+        );
 
     // Heartbeat de fallback : si rien n'a été émis depuis 90 s, on re-pousse
     // la dernière position connue pour rassurer le client.
@@ -594,9 +597,25 @@ class _DriverScreenState extends State<DriverScreen> {
       }
     } catch (e) {
       if (mounted) {
-        showAdaptiveSnack(context, 'Désolé, cette course a déjà été prise !', isError: true);
+        showAdaptiveSnack(
+          context,
+          'Désolé, cette course a déjà été prise !',
+          isError: true,
+        );
       }
     }
+  }
+
+  void _declineOrder(String orderId) {
+    setState(() {
+      availableOrders.removeWhere(
+        (order) => order['id']?.toString() == orderId,
+      );
+    });
+    showAdaptiveSnack(
+      context,
+      'Course refusée. Elle est masquée jusqu’au prochain rafraîchissement.',
+    );
   }
 
   /// Statuts de paiement considérés « réglés » — plus rien à confirmer.
@@ -605,11 +624,15 @@ class _DriverScreenState extends State<DriverScreen> {
     'RECEIVED_BY_LIVREUR',
     'RECEIVED_BY_MERCHANT',
     'CASH_ON_DELIVERY',
+    'REFUNDED',
   };
 
   /// PATCH /orders/:id/payment-status — retourne `true` si accepté.
   /// Le backend autorise le livreur assigné (paiement espèces, CDC §4).
-  Future<bool> _updatePaymentStatus(String orderId, String paymentStatus) async {
+  Future<bool> _updatePaymentStatus(
+    String orderId,
+    String paymentStatus,
+  ) async {
     try {
       final res = await _api.patch(
         '/orders/$orderId/payment-status',
@@ -636,8 +659,10 @@ class _DriverScreenState extends State<DriverScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF122530),
-        title: const Text('Paiement en espèces',
-            style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Paiement en espèces',
+          style: TextStyle(color: Colors.white),
+        ),
         content: const Text(
           'Avez-vous reçu le paiement en espèces du client ?',
           style: TextStyle(color: Colors.white70),
@@ -645,15 +670,20 @@ class _DriverScreenState extends State<DriverScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Plus tard',
-                style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Plus tard',
+              style: TextStyle(color: Colors.white70),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0FB271)),
-            child:
-                const Text('Oui, reçu', style: TextStyle(color: Colors.white)),
+              backgroundColor: const Color(0xFF0FB271),
+            ),
+            child: const Text(
+              'Oui, reçu',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -675,7 +705,10 @@ class _DriverScreenState extends State<DriverScreen> {
   /// Retourne `true` si la mise à jour a réussi.
   Future<bool> _updateStatus(String orderId, String status) async {
     try {
-      final res = await _api.patch('/orders/$orderId/status', body: {'status': status});
+      final res = await _api.patch(
+        '/orders/$orderId/status',
+        body: {'status': status},
+      );
       if (res.statusCode == 200 || res.statusCode == 201) {
         if (mounted) {
           showAdaptiveSnack(context, 'Statut mis à jour : $status');
@@ -699,16 +732,20 @@ class _DriverScreenState extends State<DriverScreen> {
     final phone = client?['phone']?.toString();
     if (phone == null || phone.trim().isEmpty) {
       if (mounted) {
-        showAdaptiveSnack(context, 'Numéro du client indisponible.', isError: true);
+        showAdaptiveSnack(
+          context,
+          'Numéro du client indisponible.',
+          isError: true,
+        );
       }
       return;
     }
     final shortId = orderData['id'].toString().substring(
-          0,
-          orderData['id'].toString().length < 6
-              ? orderData['id'].toString().length
-              : 6,
-        );
+      0,
+      orderData['id'].toString().length < 6
+          ? orderData['id'].toString().length
+          : 6,
+    );
     final message =
         'Bonjour, je suis votre livreur ZonZon pour la course #$shortId. J’arrive bientôt.';
     await WhatsappService.openChat(phone: phone, message: message);
@@ -905,8 +942,10 @@ class _DriverScreenState extends State<DriverScreen> {
 
           return AlertDialog(
             backgroundColor: const Color(0xFF122530),
-            title: Text(restored ? 'Course en cours 🚴' : 'Course Acceptée ! 🎉',
-                style: const TextStyle(color: Colors.white)),
+            title: Text(
+              restored ? 'Course en cours 🚴' : 'Course Acceptée ! 🎉',
+              style: const TextStyle(color: Colors.white),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -948,22 +987,28 @@ class _DriverScreenState extends State<DriverScreen> {
                       onPressed: dialogProcessing
                           ? null
                           : () => pushAdaptive<void>(
-                                dlgCtx,
-                                ChatScreen(
-                                  orderId: orderId,
-                                  otherPartyName:
-                                      clientName.isEmpty ? 'Client' : clientName,
-                                  otherPartyPhone: client?['phone']?.toString(),
-                                  otherPartyRole: 'CLIENT',
-                                  orderStatus: dialogStatus,
-                                ),
+                              dlgCtx,
+                              ChatScreen(
+                                orderId: orderId,
+                                otherPartyName: clientName.isEmpty
+                                    ? 'Client'
+                                    : clientName,
+                                otherPartyPhone: client?['phone']?.toString(),
+                                otherPartyRole: 'CLIENT',
+                                orderStatus: dialogStatus,
                               ),
-                      icon: const Icon(Icons.chat_bubble_outline,
-                          color: Colors.white),
-                      label: const Text('Discuter avec le client',
-                          style: TextStyle(color: Colors.white)),
+                            ),
+                      icon: const Icon(
+                        Icons.chat_bubble_outline,
+                        color: Colors.white,
+                      ),
+                      label: const Text(
+                        'Discuter avec le client',
+                        style: TextStyle(color: Colors.white),
+                      ),
                       style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2E90FA)),
+                        backgroundColor: const Color(0xFF2E90FA),
+                      ),
                     ),
                   ),
                   // ── WhatsApp ───────────────────────────────────────────
@@ -975,12 +1020,14 @@ class _DriverScreenState extends State<DriverScreen> {
                         onPressed: dialogProcessing
                             ? null
                             : () => _openWhatsappToClient(orderData),
-                        icon:
-                            const Icon(Icons.message, color: Colors.white),
-                        label: const Text('Contacter par WhatsApp',
-                            style: TextStyle(color: Colors.white)),
+                        icon: const Icon(Icons.message, color: Colors.white),
+                        label: const Text(
+                          'Contacter par WhatsApp',
+                          style: TextStyle(color: Colors.white),
+                        ),
                         style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF25D366)),
+                          backgroundColor: const Color(0xFF25D366),
+                        ),
                       ),
                     ),
                   ],
@@ -992,7 +1039,8 @@ class _DriverScreenState extends State<DriverScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
                       child: CircularProgressIndicator(
-                          color: Color(0xFF0FB271)),
+                        color: Color(0xFF0FB271),
+                      ),
                     )
                   else ...[
                     // ── Progression granulaire : bouton "étape suivante"
@@ -1007,10 +1055,13 @@ class _DriverScreenState extends State<DriverScreen> {
                         child: ElevatedButton.icon(
                           onPressed: () => doTransition(next.targetStatus),
                           icon: Icon(next.icon, color: Colors.white),
-                          label: Text(next.label,
-                              style: const TextStyle(color: Colors.white)),
+                          label: Text(
+                            next.label,
+                            style: const TextStyle(color: Colors.white),
+                          ),
                           style: ElevatedButton.styleFrom(
-                              backgroundColor: next.color),
+                            backgroundColor: next.color,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -1026,54 +1077,19 @@ class _DriverScreenState extends State<DriverScreen> {
                         width: double.infinity,
                         child: OutlinedButton.icon(
                           onPressed: () => doTransition('COMPLETED'),
-                          icon: const Icon(Icons.done_all,
-                              color: Color(0xFF0FB271)),
-                          label: const Text('Livré directement',
-                              style: TextStyle(color: Color(0xFF0FB271))),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(
-                                color: Color(0xFF0FB271), width: 1.2),
+                          icon: const Icon(
+                            Icons.done_all,
+                            color: Color(0xFF0FB271),
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-
-                    // Paiement espèces (CDC §4) : le livreur confirme la
-                    // réception. Visible tant que la course est active et
-                    // que le paiement n'est pas réglé.
-                    if (_canFail(dialogStatus) &&
-                        !_settledPayments.contains(
-                            data['paymentStatus']?.toString() ?? '')) ...[
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () async {
-                            setDialogState(() => dialogProcessing = true);
-                            final ok = await _updatePaymentStatus(
-                                orderId, 'CASH_ON_DELIVERY');
-                            if (ok) {
-                              data['paymentStatus'] = 'CASH_ON_DELIVERY';
-                            } else {
-                              _messengerKey.currentState?.showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      'Impossible d’enregistrer le paiement.'),
-                                  backgroundColor: Color(0xFFF0453D),
-                                ),
-                              );
-                            }
-                            if (dlgCtx.mounted) {
-                              setDialogState(() => dialogProcessing = false);
-                            }
-                          },
-                          icon: const Icon(Icons.payments_outlined,
-                              color: Color(0xFFEAB308)),
-                          label: const Text('Paiement reçu (espèces)',
-                              style: TextStyle(color: Color(0xFFEAB308))),
+                          label: const Text(
+                            'Livré directement',
+                            style: TextStyle(color: Color(0xFF0FB271)),
+                          ),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(
-                                color: Color(0xFFEAB308), width: 1.2),
+                              color: Color(0xFF0FB271),
+                              width: 1.2,
+                            ),
                           ),
                         ),
                       ),
@@ -1088,11 +1104,14 @@ class _DriverScreenState extends State<DriverScreen> {
                         width: double.infinity,
                         child: TextButton.icon(
                           onPressed: () => doTransition('FAILED'),
-                          icon: const Icon(Icons.error_outline,
-                              color: Colors.orangeAccent),
-                          label: const Text('Signaler un échec',
-                              style:
-                                  TextStyle(color: Colors.orangeAccent)),
+                          icon: const Icon(
+                            Icons.error_outline,
+                            color: Colors.orangeAccent,
+                          ),
+                          label: const Text(
+                            'Signaler un échec',
+                            style: TextStyle(color: Colors.orangeAccent),
+                          ),
                         ),
                       ),
                     ],
@@ -1103,11 +1122,14 @@ class _DriverScreenState extends State<DriverScreen> {
                         width: double.infinity,
                         child: TextButton.icon(
                           onPressed: () => doTransition('CANCELLED'),
-                          icon: const Icon(Icons.cancel,
-                              color: Colors.redAccent),
-                          label: const Text('Annuler la course',
-                              style:
-                                  TextStyle(color: Colors.redAccent)),
+                          icon: const Icon(
+                            Icons.cancel,
+                            color: Colors.redAccent,
+                          ),
+                          label: const Text(
+                            'Annuler la course',
+                            style: TextStyle(color: Colors.redAccent),
+                          ),
                         ),
                       ),
                   ],
@@ -1192,10 +1214,7 @@ class _DriverScreenState extends State<DriverScreen> {
           selectedItemColor: const Color(0xFF0FB271),
           unselectedItemColor: Colors.white60,
           items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.radar),
-              label: 'Radar',
-            ),
+            BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'Radar'),
             BottomNavigationBarItem(
               icon: Icon(Icons.receipt_long_outlined),
               activeIcon: Icon(Icons.receipt_long),
@@ -1237,16 +1256,18 @@ class _DriverScreenState extends State<DriverScreen> {
   /// Bandeau affiché tant que le compte livreur n'est pas `APPROVED`.
   Widget _buildApprovalBanner() {
     final isRejected = _driverApprovalStatus == 'REJECTED';
-    final color = isRejected ? const Color(0xFFF0453D) : const Color(0xFFFF9E1B);
+    final color = isRejected
+        ? const Color(0xFFF0453D)
+        : const Color(0xFFFF9E1B);
     final title = isRejected
         ? 'Votre compte livreur a été refusé'
         : 'Compte en attente de validation';
     final subtitle = isRejected
         ? (_driverRejectionReason?.trim().isNotEmpty == true
-            ? _driverRejectionReason!
-            : 'Contactez le support pour plus de détails.')
+              ? _driverRejectionReason!
+              : 'Contactez le support pour plus de détails.')
         : 'Votre compte est en attente de validation par un administrateur. '
-            'Vous pourrez accepter des courses une fois validé.';
+              'Vous pourrez accepter des courses une fois validé.';
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -1259,15 +1280,28 @@ class _DriverScreenState extends State<DriverScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(isRejected ? Icons.error_outline : Icons.hourglass_top, color: color),
+          Icon(
+            isRejected ? Icons.error_outline : Icons.hourglass_top,
+            color: color,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 15)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                ),
               ],
             ),
           ),
@@ -1296,7 +1330,11 @@ class _DriverScreenState extends State<DriverScreen> {
           Expanded(
             child: Text(
               _isAvailable ? 'Disponible' : 'Indisponible',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
             ),
           ),
           if (_togglingAvailability)
@@ -1329,11 +1367,19 @@ class _DriverScreenState extends State<DriverScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.pause_circle_outline, color: Colors.white38, size: 48),
+              const Icon(
+                Icons.pause_circle_outline,
+                color: Colors.white38,
+                size: 48,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Vous êtes indisponible.',
-                style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -1355,7 +1401,10 @@ class _DriverScreenState extends State<DriverScreen> {
               children: [
                 adaptiveLoader(color: const Color(0xFF0FB271)),
                 const SizedBox(height: 20),
-                const Text('En attente de nouvelles courses...', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                const Text(
+                  'En attente de nouvelles courses...',
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                ),
               ],
             ),
           )
@@ -1367,7 +1416,9 @@ class _DriverScreenState extends State<DriverScreen> {
               return Card(
                 color: const Color(0xFF122530),
                 margin: const EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -1376,27 +1427,93 @@ class _DriverScreenState extends State<DriverScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('${order['priceFcfa']} FCFA', style: const TextStyle(color: Color(0xFF0FB271), fontSize: 22, fontWeight: FontWeight.bold)),
-                          Text('${order['distanceKm']} km', style: const TextStyle(color: Colors.white54, fontSize: 14)),
+                          Text(
+                            '${order['priceFcfa']} FCFA',
+                            style: const TextStyle(
+                              color: Color(0xFF0FB271),
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            '${order['distanceKm']} km',
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 12),
-                      Row(children: [const Icon(Icons.my_location, color: Colors.blue, size: 20), const SizedBox(width: 8), Expanded(child: Text('${order['pickupAddress']}', style: const TextStyle(color: Colors.white)))]),
-                      const SizedBox(height: 8),
-                      Row(children: [const Icon(Icons.location_on, color: Colors.red, size: 20), const SizedBox(width: 8), Expanded(child: Text('${order['deliveryAddress']}', style: const TextStyle(color: Colors.white)))]),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: () => _acceptOrder(order['id'].toString()),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E90FA),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.my_location,
+                            color: Colors.blue,
+                            size: 20,
                           ),
-                          child: const Text('Accepter la course', style: TextStyle(fontSize: 18, color: Colors.white)),
-                        ),
-                      )
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${order['pickupAddress']}',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '${order['deliveryAddress']}',
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () =>
+                                  _declineOrder(order['id'].toString()),
+                              child: const Text('Refuser'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: SizedBox(
+                              height: 50,
+                              child: ElevatedButton(
+                                onPressed: () =>
+                                    _acceptOrder(order['id'].toString()),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2E90FA),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Accepter la course',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),

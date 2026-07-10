@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Repository } from 'typeorm';
 import { Conversation } from '../entities/conversation.entity';
+import { DeliveryOrder } from '../entities/delivery-order.entity';
 import {
   ConversationParticipant,
   ConversationParticipantRole,
@@ -22,7 +23,51 @@ export class ConversationsService {
     private readonly conversationsRepo: Repository<Conversation>,
     @InjectRepository(ConversationParticipant)
     private readonly participantsRepo: Repository<ConversationParticipant>,
+    @InjectRepository(DeliveryOrder)
+    private readonly ordersRepo: Repository<DeliveryOrder>,
   ) {}
+
+  private async syncCoreParticipants(
+    deliveryId: string,
+    conversationId: string,
+  ): Promise<void> {
+    const order = await this.ordersRepo.findOne({
+      where: { id: deliveryId },
+      relations: ['client', 'livreur', 'merchant'],
+    });
+    if (!order) return;
+
+    const coreParticipants: Array<{
+      userId?: string;
+      role: ConversationParticipantRole;
+    }> = [
+      { userId: order.client?.id, role: 'CLIENT' as const },
+      { userId: order.livreur?.id, role: 'LIVREUR' as const },
+      { userId: order.merchant?.id, role: 'MERCHANT' as const },
+    ].filter((participant) => !!participant.userId);
+
+    for (const participant of coreParticipants) {
+      const existing = await this.participantsRepo.findOne({
+        where: { conversationId, userId: participant.userId },
+      });
+      if (existing) {
+        // La synchronisation à la lecture ne doit pas annuler un départ.
+        if (existing.leftAt === null && existing.role !== participant.role) {
+          existing.role = participant.role;
+          await this.participantsRepo.save(existing);
+        }
+        continue;
+      }
+      await this.participantsRepo.save(
+        this.participantsRepo.create({
+          conversationId,
+          userId: participant.userId,
+          role: participant.role,
+          leftAt: null,
+        }),
+      );
+    }
+  }
 
   /**
    * Get-or-create idempotent sur `deliveryId` (colonne UNIQUE). En cas de
@@ -34,16 +79,24 @@ export class ConversationsService {
     const existing = await this.conversationsRepo.findOne({
       where: { deliveryId },
     });
-    if (existing) return existing;
+    if (existing) {
+      await this.syncCoreParticipants(deliveryId, existing.id);
+      return existing;
+    }
 
     try {
       const created = this.conversationsRepo.create({ deliveryId });
-      return await this.conversationsRepo.save(created);
+      const saved = await this.conversationsRepo.save(created);
+      await this.syncCoreParticipants(deliveryId, saved.id);
+      return saved;
     } catch (err) {
       const fallback = await this.conversationsRepo.findOne({
         where: { deliveryId },
       });
-      if (fallback) return fallback;
+      if (fallback) {
+        await this.syncCoreParticipants(deliveryId, fallback.id);
+        return fallback;
+      }
       throw err;
     }
   }

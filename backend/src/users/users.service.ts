@@ -36,6 +36,17 @@ export class UsersService {
     private notifications?: NotificationsService,
   ) {}
 
+  private ensureDriverHasOperationalProfile(user: User) {
+    if (
+      user.role === UserRole.LIVREUR &&
+      (!user.profilePhotoUrl || user.profilePhotoUrl.trim().length === 0)
+    ) {
+      throw new BadRequestException(
+        'Une photo de profil est obligatoire avant validation ou prise de course',
+      );
+    }
+  }
+
   async createWithPassword(data: {
     firstName: string;
     lastName: string;
@@ -75,6 +86,9 @@ export class UsersService {
     const user = await this.findOne(id);
     if (user.role !== UserRole.LIVREUR) {
       throw new BadRequestException("Cet utilisateur n'est pas un livreur");
+    }
+    if (status === 'APPROVED') {
+      this.ensureDriverHasOperationalProfile(user);
     }
 
     user.driverApprovalStatus =
@@ -138,6 +152,7 @@ export class UsersService {
         'Votre compte livreur est en attente de validation',
       );
     }
+    this.ensureDriverHasOperationalProfile(user);
     user.isAvailable = available;
     await this.usersRepository.save(user);
     return { isAvailable: available };
@@ -213,10 +228,11 @@ export class UsersService {
         driverApprovalStatus: DriverApprovalStatus.APPROVED,
         isAvailable: true,
         isPublic: true,
+        status: UserStatus.ACTIVE,
       },
-      select: ['id'],
+      select: ['id', 'profilePhotoUrl'],
     });
-    return eligible.map((u) => u.id);
+    return eligible.filter((u) => !!u.profilePhotoUrl?.trim()).map((u) => u.id);
   }
 
   /**
@@ -353,16 +369,19 @@ export class UsersService {
    * mémoire dans le gateway, pas persistées). À ajouter quand la persistance
    * des positions sera en place (cf. TODO.md).
    */
-  findLivreursWithFcmToken(): Promise<User[]> {
-    return this.usersRepository.find({
+  async findLivreursWithFcmToken(): Promise<User[]> {
+    const drivers = await this.usersRepository.find({
       where: {
         role: UserRole.LIVREUR,
         fcmToken: Not(IsNull()),
         driverApprovalStatus: DriverApprovalStatus.APPROVED,
         isAvailable: true,
+        isPublic: true,
+        status: UserStatus.ACTIVE,
       },
-      select: ['id', 'firstName', 'fcmToken'],
+      select: ['id', 'firstName', 'fcmToken', 'profilePhotoUrl'],
     });
+    return drivers.filter((driver) => !!driver.profilePhotoUrl?.trim());
   }
 
   /**
@@ -371,14 +390,16 @@ export class UsersService {
    * `GET /orders/available-drivers` (enrichi ensuite avec distance/
    * affiliation côté OrdersService).
    */
-  findAvailableDrivers(): Promise<User[]> {
-    return this.usersRepository.find({
+  async findAvailableDrivers(): Promise<User[]> {
+    const drivers = await this.usersRepository.find({
       where: {
         role: UserRole.LIVREUR,
         driverApprovalStatus: DriverApprovalStatus.APPROVED,
         isAvailable: true,
+        status: UserStatus.ACTIVE,
       },
       relations: ['vehicle'],
     });
+    return drivers.filter((driver) => !!driver.profilePhotoUrl?.trim());
   }
 }

@@ -13,8 +13,15 @@ import { INestApplication } from '@nestjs/common';
 import request = require('supertest');
 
 import { UserRole } from '../src/entities/user.entity';
-import { OrderStatus, PaymentStatus } from '../src/entities/delivery-order.entity';
-import { TestAppBundle, buildTestApp } from './test-helpers';
+import {
+  OrderStatus,
+  PaymentStatus,
+} from '../src/entities/delivery-order.entity';
+import {
+  TestAppBundle,
+  buildTestApp,
+  setDriverProfilePhoto,
+} from './test-helpers';
 
 describe('Historique & traçabilité (e2e)', () => {
   let bundle: TestAppBundle;
@@ -72,6 +79,7 @@ describe('Historique & traçabilité (e2e)', () => {
       .expect(201);
     livreurToken = livreurRes.body.access_token;
     livreurId = livreurRes.body.user.id;
+    setDriverProfilePhoto(bundle.usersRepo, livreurId);
 
     await request(app.getHttpServer())
       .patch(`/users/${livreurId}/driver-approval`)
@@ -281,6 +289,12 @@ describe('Historique & traçabilité (e2e)', () => {
         })
         .expect(201);
       orderId = orderRes.body.id;
+
+      // Le client ne peut confirmer un paiement qu'après livraison terminée.
+      // Ce scénario cible l'historique de paiement, pas le workflow de course.
+      await bundle.ordersRepo.update(orderId, {
+        status: OrderStatus.COMPLETED,
+      });
 
       await request(app.getHttpServer())
         .patch(`/orders/${orderId}/payment-status`)

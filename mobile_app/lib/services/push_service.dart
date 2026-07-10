@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import '../router/app_router.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
 import '../utils/platform_adapter.dart';
@@ -238,8 +239,7 @@ class PushService {
   /// Retourne null si l'arbre n'est pas monté (cas extrême : init très tôt).
   BuildContext? _prePromptContext() {
     try {
-      final element = WidgetsBinding.instance.rootElement;
-      return element;
+      return rootNavigatorKey.currentContext;
     } catch (_) {
       return null;
     }

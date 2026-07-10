@@ -45,15 +45,23 @@ class ChatService {
 
   Timer? _typingDebounce;
   bool _typingEmitted = false;
+  bool _disposed = false;
 
   ChatService(this.orderId);
 
   Future<void> init() async {
     final user = await _auth.getCurrentUser();
+    if (_disposed) return;
     _myId = user?.id;
 
     await _loadHistory();
+    if (_disposed) return;
     await _connectSocket();
+    if (_disposed) {
+      _socket?.dispose();
+      _socket = null;
+      return;
+    }
     // Marquer comme lu dès l'ouverture (les messages déjà reçus)
     unawaited(markRead());
     // Non bloquant : les destinataires servent uniquement à affiner
@@ -91,7 +99,9 @@ class ChatService {
         if (data is List) {
           _messages
             ..clear()
-            ..addAll(data.map((j) => ChatMessage.fromJson(j as Map<String, dynamic>)));
+            ..addAll(
+              data.map((j) => ChatMessage.fromJson(j as Map<String, dynamic>)),
+            );
           _emit();
         }
       }
@@ -119,7 +129,7 @@ class ChatService {
       if (data['orderId']?.toString() != orderId) return;
       final raw = data['message'];
       if (raw is! Map) return;
-      final incoming = ChatMessage.fromJson(Map<String, dynamic>.from(raw as Map));
+      final incoming = ChatMessage.fromJson(Map<String, dynamic>.from(raw));
 
       // Déduplication : le socket est dans 2 rooms (user: et order::chat),
       // le même événement arrive donc potentiellement deux fois. On ignore
@@ -156,6 +166,7 @@ class ChatService {
       if (data is! Map) return;
       if (data['orderId']?.toString() != orderId) return;
       if (data['userId']?.toString() == _myId) return;
+      if (_typingCtrl.isClosed) return;
       _typingCtrl.add(data['isTyping'] == true);
     });
 
@@ -169,7 +180,8 @@ class ChatService {
       _recipients.add(readerId);
       // Tous mes messages envoyés avant le timestamp sont lus PAR CE lecteur
       // (readBy) ; readAt garde la sémantique « lu par au moins un ».
-      final readAt = DateTime.tryParse(data['at']?.toString() ?? '') ?? DateTime.now();
+      final readAt =
+          DateTime.tryParse(data['at']?.toString() ?? '') ?? DateTime.now();
       var changed = false;
       for (var i = 0; i < _messages.length; i++) {
         final m = _messages[i];
@@ -207,6 +219,7 @@ class ChatService {
   }
 
   Future<void> _send(String content, {required String type}) async {
+    if (_disposed) return;
     final localId = 'local-${DateTime.now().microsecondsSinceEpoch}';
     final optimistic = ChatMessage(
       id: localId,
@@ -286,6 +299,7 @@ class ChatService {
   }
 
   Future<void> dispose() async {
+    _disposed = true;
     _typingDebounce?.cancel();
     _socket?.emit('chat:leave', {'orderId': orderId});
     _socket?.dispose();

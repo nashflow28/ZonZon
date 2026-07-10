@@ -68,8 +68,7 @@ const mockRepo = () => {
   repo.manager = {
     transaction: jest.fn(async (cb: any) =>
       cb({
-        getRepository: (entity: any) =>
-          entity === User ? userLockRepo : repo,
+        getRepository: (entity: any) => (entity === User ? userLockRepo : repo),
       }),
     ),
   };
@@ -102,9 +101,11 @@ const livreurUser = {
   firstName: 'Bob',
   lastName: 'Livreur',
   phone: '+22890000002',
+  profilePhotoUrl: '/uploads/livreur.jpg',
   driverApprovalStatus: 'APPROVED',
   isAvailable: true,
   status: UserStatus.ACTIVE,
+  isPublic: true,
 };
 const adminUser = {
   id: 'admin-1',
@@ -719,6 +720,11 @@ describe('OrdersService', () => {
           { livreurId: 'driver-far', lat: 6.6, lng: 1.22 },
           { livreurId: 'driver-online', lat: 6.131, lng: 1.221 },
         ]);
+        usersService.findEligibleLivreurIds.mockResolvedValue([
+          'driver-near',
+          'driver-far',
+          'driver-online',
+        ]);
         gateway.isUserConnected.mockImplementation(
           (id: string) => id === 'driver-online',
         );
@@ -961,6 +967,7 @@ describe('OrdersService', () => {
         firstName: 'Carl',
         lastName: 'Livreur2',
         phone: '+22890000004',
+        profilePhotoUrl: '/uploads/livreur2.jpg',
         driverApprovalStatus: 'APPROVED',
         isAvailable: true,
         status: UserStatus.ACTIVE,
@@ -2054,7 +2061,7 @@ describe('OrdersService', () => {
   describe('updatePaymentStatus', () => {
     const buildPaymentOrder = () => ({
       id: 'o',
-      status: OrderStatus.ACCEPTED,
+      status: OrderStatus.COMPLETED,
       paymentStatus: PaymentStatus.UNPAID,
       client: { id: clientUser.id },
       livreur: { id: livreurUser.id },
@@ -2080,15 +2087,18 @@ describe('OrdersService', () => {
 
       const result = await service.updatePaymentStatus(
         'o',
-        PaymentStatus.RECEIVED_BY_LIVREUR,
+        PaymentStatus.CASH_ON_DELIVERY,
         livreurUser,
       );
 
-      expect(result.paymentStatus).toBe(PaymentStatus.RECEIVED_BY_LIVREUR);
+      expect(result.paymentStatus).toBe(PaymentStatus.CASH_ON_DELIVERY);
     });
 
     it('autorisé pour le COMMERCANT créateur (merchant)', async () => {
-      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildPaymentOrder(),
+        paymentStatus: PaymentStatus.CASH_ON_DELIVERY,
+      });
       ordersRepository.save.mockImplementation(async (o: any) => o);
 
       const result = await service.updatePaymentStatus(
@@ -2795,7 +2805,7 @@ describe('OrdersService', () => {
   describe('historisation — PaymentStatusHistory', () => {
     const buildPaymentOrder = () => ({
       id: 'o',
-      status: OrderStatus.ACCEPTED,
+      status: OrderStatus.COMPLETED,
       paymentStatus: PaymentStatus.UNPAID,
       client: { id: clientUser.id },
       livreur: { id: livreurUser.id },
@@ -2820,7 +2830,10 @@ describe('OrdersService', () => {
     });
 
     it('accepte les nouvelles valeurs CASH_ON_DELIVERY et REFUNDED', async () => {
-      ordersRepository.findOne.mockResolvedValue(buildPaymentOrder());
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildPaymentOrder(),
+        status: OrderStatus.COMPLETED,
+      });
       ordersRepository.save.mockImplementation(async (o: any) => o);
 
       const result = await service.updatePaymentStatus(
@@ -2840,6 +2853,47 @@ describe('OrdersService', () => {
         adminUser,
       );
       expect(refunded.paymentStatus).toBe(PaymentStatus.REFUNDED);
+    });
+
+    it('refuse un paiement cash confirmé avant la fin de course', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildPaymentOrder(),
+        status: OrderStatus.ACCEPTED,
+      });
+
+      await expect(
+        service.updatePaymentStatus(
+          'o',
+          PaymentStatus.CASH_ON_DELIVERY,
+          livreurUser,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuse au client de marquer payé avant COMPLETED', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildPaymentOrder(),
+        status: OrderStatus.ACCEPTED,
+      });
+
+      await expect(
+        service.updatePaymentStatus('o', PaymentStatus.PAID, clientUser),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuse au commerçant les statuts de paiement arbitraires', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildPaymentOrder(),
+        status: OrderStatus.COMPLETED,
+      });
+
+      await expect(
+        service.updatePaymentStatus(
+          'o',
+          PaymentStatus.CASH_ON_DELIVERY,
+          merchantUser,
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('ne bloque pas updatePaymentStatus si l’insertion de l’historique échoue', async () => {

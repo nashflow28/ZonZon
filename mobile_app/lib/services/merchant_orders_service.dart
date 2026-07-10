@@ -57,6 +57,24 @@ class MerchantOrdersService {
     'REFUNDED',
   ];
 
+  static List<String> allowedMerchantPaymentStatuses({
+    required String orderStatus,
+    String? currentPaymentStatus,
+  }) {
+    if (orderStatus != 'COMPLETED') return const [];
+    final current = currentPaymentStatus ?? 'UNPAID';
+    final allowed = <String>[];
+    if (current == 'PAID' ||
+        current == 'CASH_ON_DELIVERY' ||
+        current == 'RECEIVED_BY_LIVREUR') {
+      allowed.add('RECEIVED_BY_MERCHANT');
+    }
+    if (current != 'REFUNDED' && current != 'UNPAID') {
+      allowed.add('REFUNDED');
+    }
+    return allowed;
+  }
+
   /// Crée une livraison pour un client.
   ///
   /// Il faut fournir [clientId] OU [clientPhone] (le backend répond 400

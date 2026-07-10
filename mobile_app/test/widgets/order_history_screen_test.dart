@@ -15,8 +15,9 @@ void _installPluginMocks() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
   // flutter_secure_storage : tous les reads renvoient null, writes sont noop.
-  const secureStorageChannel =
-      MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  const secureStorageChannel = MethodChannel(
+    'plugins.it_nomads.com/flutter_secure_storage',
+  );
   messenger.setMockMethodCallHandler(secureStorageChannel, (call) async {
     switch (call.method) {
       case 'read':
@@ -38,8 +39,9 @@ void _installPluginMocks() {
 void _clearPluginMocks() {
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  const secureStorageChannel =
-      MethodChannel('plugins.it_nomads.com/flutter_secure_storage');
+  const secureStorageChannel = MethodChannel(
+    'plugins.it_nomads.com/flutter_secure_storage',
+  );
   messenger.setMockMethodCallHandler(secureStorageChannel, null);
 }
 
@@ -49,33 +51,38 @@ void main() {
 
   group('OrderHistoryScreen', () {
     testWidgets(
-        'état de chargement initial — un loader (CircularProgressIndicator '
-        'ou CupertinoActivityIndicator) est visible avant que les données '
-        'arrivent',
-        (tester) async {
-      // Pump le widget : à cette frame, `_bootstrap()` vient juste d'être
-      // déclenché par initState, mais aucun await n'a encore résolu.
-      await tester.pumpWidget(const MaterialApp(home: OrderHistoryScreen()));
+      'état de chargement initial — un loader (CircularProgressIndicator '
+      'ou CupertinoActivityIndicator) est visible avant que les données '
+      'arrivent',
+      (tester) async {
+        // Pump le widget : à cette frame, `_bootstrap()` vient juste d'être
+        // déclenché par initState, mais aucun await n'a encore résolu.
+        await tester.pumpWidget(const MaterialApp(home: OrderHistoryScreen()));
 
-      // L'AppBar est rendue.
-      expect(find.text('Historique des courses'), findsOneWidget);
+        // L'AppBar est rendue.
+        expect(find.text('Historique des courses'), findsOneWidget);
 
-      // Et un loader natif (`adaptiveLoader`) est centré dans le body.
-      // Sur Android/Linux/web → CircularProgressIndicator, sur iOS/macOS →
-      // CupertinoActivityIndicator. On accepte les deux.
-      final hasMaterialLoader =
-          find.byType(CircularProgressIndicator).evaluate().isNotEmpty;
-      final hasCupertinoLoader =
-          find.byType(ProgressIndicator).evaluate().isNotEmpty;
-      expect(
-        hasMaterialLoader || hasCupertinoLoader,
-        isTrue,
-        reason: 'Un loader doit être affiché au build initial',
-      );
+        // Et un loader natif (`adaptiveLoader`) est centré dans le body.
+        // Sur Android/Linux/web → CircularProgressIndicator, sur iOS/macOS →
+        // CupertinoActivityIndicator. On accepte les deux.
+        final hasMaterialLoader = find
+            .byType(CircularProgressIndicator)
+            .evaluate()
+            .isNotEmpty;
+        final hasCupertinoLoader = find
+            .byType(ProgressIndicator)
+            .evaluate()
+            .isNotEmpty;
+        expect(
+          hasMaterialLoader || hasCupertinoLoader,
+          isTrue,
+          reason: 'Un loader doit être affiché au build initial',
+        );
 
-      // ⚠️ On NE pumpe PAS jusqu'à settle() ici : `_load()` lance un
-      // `http.get` réel qui partira potentiellement vers l'URL de prod.
-      // Le test se limite à l'état initial.
-    });
+        // ⚠️ On NE pumpe PAS jusqu'à settle() ici : `_load()` lance un
+        // `http.get` réel qui partira potentiellement vers l'URL de prod.
+        // Le test se limite à l'état initial.
+      },
+    );
   });
 }

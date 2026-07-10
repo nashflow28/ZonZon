@@ -103,6 +103,15 @@ class OrderStatusUtils {
 class PaymentStatusUtils {
   const PaymentStatusUtils._();
 
+  /// Un paiement réglé ne doit plus proposer d'action de confirmation.
+  static bool isSettled(String? status) => const {
+    'PAID',
+    'RECEIVED_BY_LIVREUR',
+    'RECEIVED_BY_MERCHANT',
+    'CASH_ON_DELIVERY',
+    'REFUNDED',
+  }.contains(status);
+
   static String label(String? status) {
     switch (status) {
       case 'UNPAID':

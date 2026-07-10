@@ -16,7 +16,12 @@ import { INestApplication } from '@nestjs/common';
 import request = require('supertest');
 
 import { UserRole } from '../src/entities/user.entity';
-import { TestAppBundle, buildTestApp, registerAndLogin } from './test-helpers';
+import {
+  TestAppBundle,
+  buildTestApp,
+  registerAndLogin,
+  setDriverProfilePhoto,
+} from './test-helpers';
 
 describe('P2 — visibilité livreur & zones enrichies (e2e)', () => {
   let bundle: TestAppBundle;
@@ -70,6 +75,7 @@ describe('P2 — visibilité livreur & zones enrichies (e2e)', () => {
       });
       livreurToken = livreurAuth.token;
       livreurId = livreurAuth.id;
+      setDriverProfilePhoto(bundle.usersRepo, livreurId);
 
       await request(app.getHttpServer())
         .patch(`/users/${livreurId}/driver-approval`)

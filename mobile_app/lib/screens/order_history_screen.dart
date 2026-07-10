@@ -216,21 +216,22 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
             child: Column(
               children: [
-                const Icon(Icons.error_outline,
-                    color: Color(0xFFF0453D), size: 48),
+                const Icon(
+                  Icons.error_outline,
+                  color: Color(0xFFF0453D),
+                  size: 48,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'Impossible de charger l\'historique.',
-                  style: const TextStyle(
-                      color: Colors.white, fontSize: 16),
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                   textAlign: TextAlign.center,
                 ),
                 if (_errorMessage != null) ...[
                   const SizedBox(height: 6),
                   Text(
                     _errorMessage!,
-                    style: const TextStyle(
-                        color: Colors.white54, fontSize: 12),
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -256,8 +257,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       final emptyMessage = _filter == _HistoryFilter.all
           ? 'Aucune course terminée pour le moment.'
           : _filter == _HistoryFilter.active
-              ? 'Aucune course en cours.'
-              : 'Aucune course terminée pour le moment.';
+          ? 'Aucune course en cours.'
+          : 'Aucune course terminée pour le moment.';
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: [
@@ -265,14 +266,12 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             padding: const EdgeInsets.fromLTRB(24, 100, 24, 24),
             child: Column(
               children: [
-                const Icon(Icons.history,
-                    color: Colors.white24, size: 56),
+                const Icon(Icons.history, color: Colors.white24, size: 56),
                 const SizedBox(height: 16),
                 Text(
                   emptyMessage,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: Colors.white70, fontSize: 15),
+                  style: const TextStyle(color: Colors.white70, fontSize: 15),
                 ),
               ],
             ),
@@ -304,8 +303,31 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         item: item,
         viewerRole: viewerRole,
         formatDate: _formatDate,
+        onPaymentStatusChanged: _handlePaymentStatusChanged,
       ),
     );
+  }
+
+  Future<void> _handlePaymentStatusChanged(
+    OrderHistoryItem item,
+    String paymentStatus,
+  ) async {
+    final res = await _api.patch(
+      '/orders/${item.id}/payment-status',
+      body: {'paymentStatus': paymentStatus},
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('Erreur ${res.statusCode}');
+    }
+    final decoded = jsonDecode(res.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Réponse inattendue du serveur.');
+    }
+    final updated = OrderHistoryItem.fromJson(decoded);
+    if (!mounted) return;
+    setState(() {
+      _items = _items.map((it) => it.id == updated.id ? updated : it).toList();
+    });
   }
 
   /// Format français : `24 avril 2026 à 14h32`. Pas de package `intl` dans ce
@@ -370,8 +392,9 @@ class _OrderHistoryCard extends StatelessWidget {
       final first = (l['firstName'] ?? '').toString().trim();
       final last = (l['lastName'] ?? '').toString().trim();
       if (first.isEmpty && last.isEmpty) return null;
-      final lastInitial =
-          last.isEmpty ? '' : '${last.substring(0, 1).toUpperCase()}.';
+      final lastInitial = last.isEmpty
+          ? ''
+          : '${last.substring(0, 1).toUpperCase()}.';
       return 'Livreur : ${first.isEmpty ? '?' : first} $lastInitial'.trim();
     }
     if (viewerRole == 'LIVREUR') {
@@ -380,8 +403,9 @@ class _OrderHistoryCard extends StatelessWidget {
       final first = (c['firstName'] ?? '').toString().trim();
       final last = (c['lastName'] ?? '').toString().trim();
       if (first.isEmpty && last.isEmpty) return null;
-      final lastInitial =
-          last.isEmpty ? '' : '${last.substring(0, 1).toUpperCase()}.';
+      final lastInitial = last.isEmpty
+          ? ''
+          : '${last.substring(0, 1).toUpperCase()}.';
       return 'Client : ${first.isEmpty ? '?' : first} $lastInitial'.trim();
     }
     return null;
@@ -435,9 +459,7 @@ class _OrderHistoryCard extends StatelessWidget {
                 _AddressLine(
                   icon: Icons.my_location,
                   color: const Color(0xFF2E90FA),
-                  text: item.pickupAddress.isEmpty
-                      ? '—'
-                      : item.pickupAddress,
+                  text: item.pickupAddress.isEmpty ? '—' : item.pickupAddress,
                 ),
                 const SizedBox(height: 6),
                 _AddressLine(
@@ -462,10 +484,7 @@ class _OrderHistoryCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     otherParty,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
                 ],
               ],
@@ -567,12 +586,32 @@ class _OrderDetailsSheet extends StatelessWidget {
   final OrderHistoryItem item;
   final String viewerRole;
   final String Function(DateTime?) formatDate;
+  final Future<void> Function(OrderHistoryItem item, String paymentStatus)
+  onPaymentStatusChanged;
 
   const _OrderDetailsSheet({
     required this.item,
     required this.viewerRole,
     required this.formatDate,
+    required this.onPaymentStatusChanged,
   });
+
+  bool get _paymentSettled {
+    const settled = {
+      'PAID',
+      'RECEIVED_BY_LIVREUR',
+      'RECEIVED_BY_MERCHANT',
+      'CASH_ON_DELIVERY',
+      'REFUNDED',
+    };
+    return settled.contains(item.paymentStatus);
+  }
+
+  bool get _canDriverConfirmCash =>
+      viewerRole == 'LIVREUR' && item.status == 'COMPLETED' && !_paymentSettled;
+
+  bool get _canClientConfirmPaid =>
+      viewerRole == 'CLIENT' && item.status == 'COMPLETED' && !_paymentSettled;
 
   String _formatPrice(int? p) {
     if (p == null) return '-';
@@ -611,9 +650,7 @@ class _OrderDetailsSheet extends StatelessWidget {
           decoration: const BoxDecoration(
             color: Color(0xFF122530),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border(
-              top: BorderSide(color: Color(0xFF22414D)),
-            ),
+            border: Border(top: BorderSide(color: Color(0xFF22414D))),
           ),
           child: ListView(
             controller: scrollController,
@@ -683,8 +720,10 @@ class _OrderDetailsSheet extends StatelessWidget {
                   children: [
                     _kv([
                       if (item.distanceKm != null)
-                        ('Distance',
-                            '${item.distanceKm!.toStringAsFixed(1)} km'),
+                        (
+                          'Distance',
+                          '${item.distanceKm!.toStringAsFixed(1)} km',
+                        ),
                       if (item.priceFcfa != null)
                         ('Prix', _formatPrice(item.priceFcfa)),
                     ]),
@@ -732,6 +771,22 @@ class _OrderDetailsSheet extends StatelessWidget {
                     if ((item.cancellationReason ?? '').trim().isNotEmpty)
                       ('Raison', item.cancellationReason!.trim()),
                   ]),
+                ),
+              ],
+              if (_canDriverConfirmCash || _canClientConfirmPaid) ...[
+                const SizedBox(height: 12),
+                _HistoryPaymentAction(
+                  item: item,
+                  label: _canDriverConfirmCash
+                      ? 'Confirmer paiement espèces reçu'
+                      : 'J’ai payé en espèces',
+                  paymentStatus: _canDriverConfirmCash
+                      ? 'CASH_ON_DELIVERY'
+                      : 'PAID',
+                  successMessage: _canDriverConfirmCash
+                      ? 'Paiement espèces enregistré.'
+                      : 'Paiement enregistré.',
+                  onPaymentStatusChanged: onPaymentStatusChanged,
                 ),
               ],
               const SizedBox(height: 24),
@@ -789,8 +844,10 @@ class _OrderDetailsSheet extends StatelessWidget {
 
   Widget _kv(List<(String, String)> entries) {
     if (entries.isEmpty) {
-      return const Text('—',
-          style: TextStyle(color: Colors.white54, fontSize: 13));
+      return const Text(
+        '—',
+        style: TextStyle(color: Colors.white54, fontSize: 13),
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -812,6 +869,83 @@ class _OrderDetailsSheet extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _HistoryPaymentAction extends StatefulWidget {
+  final OrderHistoryItem item;
+  final String label;
+  final String paymentStatus;
+  final String successMessage;
+  final Future<void> Function(OrderHistoryItem item, String paymentStatus)
+  onPaymentStatusChanged;
+
+  const _HistoryPaymentAction({
+    required this.item,
+    required this.label,
+    required this.paymentStatus,
+    required this.successMessage,
+    required this.onPaymentStatusChanged,
+  });
+
+  @override
+  State<_HistoryPaymentAction> createState() => _HistoryPaymentActionState();
+}
+
+class _HistoryPaymentActionState extends State<_HistoryPaymentAction> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _busy
+            ? null
+            : () async {
+                setState(() => _busy = true);
+                try {
+                  await widget.onPaymentStatusChanged(
+                    widget.item,
+                    widget.paymentStatus,
+                  );
+                  if (!context.mounted) return;
+                  showAdaptiveSnack(context, widget.successMessage);
+                  Navigator.of(context).pop();
+                } catch (e) {
+                  if (!context.mounted) return;
+                  showAdaptiveSnack(
+                    context,
+                    e.toString().replaceFirst('Exception: ', ''),
+                    isError: true,
+                  );
+                } finally {
+                  if (mounted) {
+                    setState(() => _busy = false);
+                  }
+                }
+              },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF0FB271),
+          foregroundColor: const Color(0xFF06140F),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        icon: _busy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.payments_outlined),
+        label: Text(
+          widget.label,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
     );
   }
 }

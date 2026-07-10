@@ -2,6 +2,7 @@ import {
   IsInt,
   IsLatitude,
   IsLongitude,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -12,6 +13,8 @@ import {
 
 export class CreateMerchantOrderDto {
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   @MaxLength(255)
   pickupAddress: string;
 
@@ -24,6 +27,8 @@ export class CreateMerchantOrderDto {
   pickupLng?: number;
 
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   @MaxLength(255)
   deliveryAddress: string;
 
@@ -36,6 +41,8 @@ export class CreateMerchantOrderDto {
   deliveryLng?: number;
 
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   @MaxLength(500)
   description: string;
 

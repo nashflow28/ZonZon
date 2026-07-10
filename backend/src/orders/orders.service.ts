@@ -116,6 +116,14 @@ const ACTIVE_DELIVERY_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.NEAR_CLIENT,
 ]);
 
+const SETTLED_PAYMENT_STATUSES: ReadonlySet<PaymentStatus> = new Set([
+  PaymentStatus.PAID,
+  PaymentStatus.RECEIVED_BY_LIVREUR,
+  PaymentStatus.RECEIVED_BY_MERCHANT,
+  PaymentStatus.CASH_ON_DELIVERY,
+  PaymentStatus.REFUNDED,
+]);
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -522,6 +530,11 @@ export class OrdersService {
         'Le livreur sélectionné est suspendu ou inactif',
       );
     }
+    if (!driver.profilePhotoUrl || driver.profilePhotoUrl.trim().length === 0) {
+      throw new BadRequestException(
+        'Le livreur sélectionné doit ajouter une photo de profil avant de recevoir une course',
+      );
+    }
     if (!driver.isAvailable) {
       throw new BadRequestException(
         "Le livreur sélectionné n'est pas disponible actuellement",
@@ -616,6 +629,7 @@ export class OrdersService {
     }
 
     const { distanceKm, priceFcfa } = await this.buildOrderPricing(dto);
+    const description = dto.description.trim();
 
     const order = this.ordersRepository.create({
       client,
@@ -625,7 +639,7 @@ export class OrdersService {
       deliveryAddress: dto.deliveryAddress,
       deliveryLat: dto.deliveryLat,
       deliveryLng: dto.deliveryLng,
-      description: dto.description,
+      description,
       distanceKm,
       priceFcfa,
       estimatedPrice: priceFcfa,
@@ -733,6 +747,7 @@ export class OrdersService {
     const computed = await this.buildOrderPricing(dto);
     const distanceKm = computed.distanceKm;
     const estimatedPrice = computed.priceFcfa;
+    const description = dto.description.trim();
     const manuallyAdjusted =
       dto.priceFcfa !== undefined && dto.priceFcfa !== estimatedPrice;
     const priceFcfa =
@@ -749,7 +764,7 @@ export class OrdersService {
       deliveryAddress: dto.deliveryAddress,
       deliveryLat: dto.deliveryLat,
       deliveryLng: dto.deliveryLng,
-      description: dto.description,
+      description,
       distanceKm,
       priceFcfa,
       estimatedPrice,
@@ -823,7 +838,11 @@ export class OrdersService {
 
       // Cas 1 : on a des positions récentes ET les coordonnées pickup → filtre géo actif
       if (recentPositions.length > 0 && hasPickupCoords) {
+        const eligibleIds = new Set(
+          await this.usersService.findEligibleLivreurIds(),
+        );
         const candidates = recentPositions.filter((p) => {
+          if (!eligibleIds.has(p.livreurId)) return false;
           // Skip si le livreur est connecté au WS (déjà notifié par newOrderAvailable)
           if (this.ordersGateway.isUserConnected(p.livreurId)) return false;
           // Filtre distance
@@ -961,8 +980,27 @@ export class OrdersService {
         'Votre compte livreur est en attente de validation par un administrateur',
       );
     }
+    if (u.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('Compte suspendu');
+    }
+    if (!u.profilePhotoUrl || u.profilePhotoUrl.trim().length === 0) {
+      throw new ForbiddenException(
+        'Ajoutez votre photo de profil avant de recevoir des courses',
+      );
+    }
     if (!u.isAvailable) {
       return [];
+    }
+    if (u.isPublic === false) {
+      return this.ordersRepository.find({
+        where: {
+          status: OrderStatus.PENDING,
+          livreur: IsNull(),
+          preferredLivreur: { id: u.id },
+        },
+        relations: ['client'],
+        order: { createdAt: 'DESC' },
+      });
     }
     // Exclut les courses réservées à un AUTRE livreur (attribution manuelle,
     // Priorité 3 Lot 3 item 1). Une course sans preferredLivreurId reste
@@ -1023,6 +1061,14 @@ export class OrdersService {
         'Votre compte livreur est en attente de validation',
       );
     }
+    if (
+      !livreur.profilePhotoUrl ||
+      livreur.profilePhotoUrl.trim().length === 0
+    ) {
+      throw new ForbiddenException(
+        'Ajoutez votre photo de profil avant de prendre une course',
+      );
+    }
     if (!livreur.isAvailable) {
       throw new ForbiddenException(
         'Vous êtes indisponible — passez disponible pour accepter une course',
@@ -1076,6 +1122,14 @@ export class OrdersService {
         'Cette course est réservée à un autre livreur',
       );
     }
+    if (
+      livreur.isPublic === false &&
+      existing.preferredLivreur?.id !== livreurId
+    ) {
+      throw new ForbiddenException(
+        'Votre profil privé ne peut accepter que les courses qui vous sont réservées',
+      );
+    }
 
     // 2) Transaction avec verrou pessimiste sur la ligne `users` du livreur :
     //    sérialise les acceptations concurrentes d'un MÊME livreur sur deux
@@ -1090,14 +1144,12 @@ export class OrdersService {
           lock: { mode: 'pessimistic_write' },
         });
 
-        const concurrentActive = await em.getRepository(DeliveryOrder).findOne(
-          {
-            where: {
-              livreur: { id: livreurId },
-              status: In([...ACTIVE_DELIVERY_STATUSES]),
-            },
+        const concurrentActive = await em.getRepository(DeliveryOrder).findOne({
+          where: {
+            livreur: { id: livreurId },
+            status: In([...ACTIVE_DELIVERY_STATUSES]),
           },
-        );
+        });
         if (concurrentActive) {
           throw new ConflictException(
             "Vous avez déjà une course active. Terminez-la avant d'en accepter une autre.",
@@ -1477,6 +1529,65 @@ export class OrdersService {
       throw new ForbiddenException(
         'Vous ne pouvez pas modifier le statut de paiement de cette course',
       );
+    }
+
+    if (!isAdmin) {
+      if (isLivreur) {
+        if (paymentStatus !== PaymentStatus.CASH_ON_DELIVERY) {
+          throw new ForbiddenException(
+            'Le livreur ne peut confirmer que le paiement en espèces reçu',
+          );
+        }
+        if (order.status !== OrderStatus.COMPLETED) {
+          throw new BadRequestException(
+            'Le paiement en espèces ne peut être confirmé qu’après la livraison',
+          );
+        }
+        if (SETTLED_PAYMENT_STATUSES.has(order.paymentStatus)) {
+          throw new BadRequestException('Le paiement est déjà réglé');
+        }
+      } else if (isClient) {
+        if (paymentStatus !== PaymentStatus.PAID) {
+          throw new ForbiddenException(
+            'Le client ne peut confirmer que son paiement effectué',
+          );
+        }
+        if (order.status !== OrderStatus.COMPLETED) {
+          throw new BadRequestException(
+            'Le paiement ne peut être confirmé qu’après la livraison',
+          );
+        }
+        if (SETTLED_PAYMENT_STATUSES.has(order.paymentStatus)) {
+          throw new BadRequestException('Le paiement est déjà réglé');
+        }
+      } else if (isMerchant) {
+        const allowedForMerchant = new Set<PaymentStatus>([
+          PaymentStatus.RECEIVED_BY_MERCHANT,
+          PaymentStatus.REFUNDED,
+        ]);
+        if (!allowedForMerchant.has(paymentStatus)) {
+          throw new ForbiddenException(
+            'Le commerçant ne peut confirmer que les fonds reçus ou un remboursement',
+          );
+        }
+        if (order.status !== OrderStatus.COMPLETED) {
+          throw new BadRequestException(
+            'Le statut de paiement commerçant ne peut évoluer qu’après la livraison',
+          );
+        }
+        if (
+          paymentStatus === PaymentStatus.RECEIVED_BY_MERCHANT &&
+          ![
+            PaymentStatus.PAID,
+            PaymentStatus.CASH_ON_DELIVERY,
+            PaymentStatus.RECEIVED_BY_LIVREUR,
+          ].includes(order.paymentStatus)
+        ) {
+          throw new BadRequestException(
+            'Le commerçant ne peut confirmer les fonds qu’après encaissement',
+          );
+        }
+      }
     }
 
     const previousPaymentStatus = order.paymentStatus;

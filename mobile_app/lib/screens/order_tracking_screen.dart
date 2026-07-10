@@ -175,67 +175,67 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _driverPosSub = _socketCtrl.driverPosition$
         .where((e) => e.orderId == widget.orderId)
         .listen((evt) {
-      if (!mounted) return;
-      setState(() {
-        _driverPosition = evt.location;
-        _driverPositionAt = evt.receivedAt;
-      });
-      _refreshEta();
-    });
+          if (!mounted) return;
+          setState(() {
+            _driverPosition = evt.location;
+            _driverPositionAt = evt.receivedAt;
+          });
+          _refreshEta();
+        });
 
     _orderAcceptedSub = _socketCtrl.orderAccepted$
         .where((e) => e.orderId == widget.orderId)
         .listen((_) async {
-      if (!mounted) return;
-      await _refreshDetails();
-      _startEtaPolling();
-    });
+          if (!mounted) return;
+          await _refreshDetails();
+          _startEtaPolling();
+        });
 
     _statusSub = _socketCtrl.statusUpdates$
         .where((e) => e.orderId == widget.orderId)
         .listen((evt) {
-      if (!mounted) return;
-      setState(() {
-        _activeOrderStatus = evt.status;
-        if (evt.status == 'COMPLETED' ||
-            evt.status == 'CANCELLED' ||
-            evt.status == 'FAILED') {
-          _driverPosition = null;
-          _driverPositionAt = null;
-        }
-      });
-      if (evt.status == 'ACCEPTED' ||
-          evt.status == 'EN_ROUTE_PICKUP' ||
-          evt.status == 'AT_PICKUP' ||
-          evt.status == 'IN_PROGRESS' ||
-          evt.status == 'NEAR_CLIENT') {
-        _refreshEta();
-      } else if (evt.status == 'COMPLETED' ||
-          evt.status == 'CANCELLED' ||
-          evt.status == 'FAILED') {
-        _stopEtaPolling();
-      }
-      if (evt.status == 'COMPLETED') {
-        hapticSuccess();
-        _promptRating();
-      }
-    });
+          if (!mounted) return;
+          setState(() {
+            _activeOrderStatus = evt.status;
+            if (evt.status == 'COMPLETED' ||
+                evt.status == 'CANCELLED' ||
+                evt.status == 'FAILED') {
+              _driverPosition = null;
+              _driverPositionAt = null;
+            }
+          });
+          if (evt.status == 'ACCEPTED' ||
+              evt.status == 'EN_ROUTE_PICKUP' ||
+              evt.status == 'AT_PICKUP' ||
+              evt.status == 'IN_PROGRESS' ||
+              evt.status == 'NEAR_CLIENT') {
+            _refreshEta();
+          } else if (evt.status == 'COMPLETED' ||
+              evt.status == 'CANCELLED' ||
+              evt.status == 'FAILED') {
+            _stopEtaPolling();
+          }
+          if (evt.status == 'COMPLETED') {
+            hapticSuccess();
+            _promptRating();
+          }
+        });
 
     // P1 : reflète en direct un changement de paiement fait par le livreur,
     // le commerçant ou un admin (sans devoir recharger l'écran).
     _paymentSub = _socketCtrl.paymentUpdates$
         .where((e) => e.orderId == widget.orderId)
         .listen((evt) {
-      if (!mounted) return;
-      setState(() => _paymentStatus = evt.paymentStatus);
-    });
+          if (!mounted) return;
+          setState(() => _paymentStatus = evt.paymentStatus);
+        });
 
     _chatMsgSub = _socketCtrl.newChatMessage$
         .where((e) => e.orderId == widget.orderId)
         .listen((_) {
-      if (!mounted) return;
-      setState(() => _unreadChatCount++);
-    });
+          if (!mounted) return;
+          setState(() => _unreadChatCount++);
+        });
   }
 
   /// Recharge les détails à jour de la commande depuis `GET /orders/mine`.
@@ -371,15 +371,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   /// Le client peut déclarer un paiement en espèces tant que celui-ci n'est
   /// pas réglé (CDC §4 : règlement en espèces au livreur en fin de course).
   bool get _canMarkPaid {
-    const settled = {
-      'PAID',
-      'RECEIVED_BY_LIVREUR',
-      'RECEIVED_BY_MERCHANT',
-      'CASH_ON_DELIVERY',
-    };
     final payment = _paymentStatus;
-    if (payment == null || settled.contains(payment)) return false;
-    return true;
+    if (payment == null || PaymentStatusUtils.isSettled(payment)) return false;
+    return _activeOrderStatus == 'COMPLETED';
   }
 
   Future<void> _markPaidCash() async {
@@ -387,8 +381,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF122530),
-        title: const Text('Paiement en espèces',
-            style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Paiement en espèces',
+          style: TextStyle(color: Colors.white),
+        ),
         content: const Text(
           'Confirmez-vous avoir remis le paiement en espèces au livreur ?',
           style: TextStyle(color: Colors.white70),
@@ -396,15 +392,20 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child:
-                const Text('Annuler', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Annuler',
+              style: TextStyle(color: Colors.white70),
+            ),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0FB271)),
-            child: const Text('Oui, payé',
-                style: TextStyle(color: Colors.white)),
+              backgroundColor: const Color(0xFF0FB271),
+            ),
+            child: const Text(
+              'Oui, payé',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -420,13 +421,19 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         setState(() => _paymentStatus = 'PAID');
         showAdaptiveSnack(context, 'Paiement enregistré, merci !');
       } else {
-        showAdaptiveSnack(context, 'Impossible d’enregistrer le paiement.',
-            isError: true);
+        showAdaptiveSnack(
+          context,
+          'Impossible d’enregistrer le paiement.',
+          isError: true,
+        );
       }
     } catch (_) {
       if (mounted) {
-        showAdaptiveSnack(context, 'Impossible d’enregistrer le paiement.',
-            isError: true);
+        showAdaptiveSnack(
+          context,
+          'Impossible d’enregistrer le paiement.',
+          isError: true,
+        );
       }
     }
   }
@@ -452,10 +459,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              message,
-              style: const TextStyle(color: Colors.white70),
-            ),
+            Text(message, style: const TextStyle(color: Colors.white70)),
             const SizedBox(height: 16),
             TextField(
               controller: reasonController,
@@ -482,9 +486,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(
-                    color: Color(0xFF2E90FA),
-                  ),
+                  borderSide: const BorderSide(color: Color(0xFF2E90FA)),
                 ),
               ),
             ),
@@ -815,7 +817,11 @@ class _TrackingHeader extends StatelessWidget {
               child: const SizedBox(
                 width: 40,
                 height: 40,
-                child: Icon(Icons.flag_outlined, color: Colors.white70, size: 18),
+                child: Icon(
+                  Icons.flag_outlined,
+                  color: Colors.white70,
+                  size: 18,
+                ),
               ),
             ),
           ),

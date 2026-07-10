@@ -244,6 +244,53 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 42 (2026-07-10) — Correctifs complets après revue finale
+- **Éligibilité livreur unifiée** : `UsersService` impose désormais `ACTIVE` + APPROVED + disponible + photo non vide + `isPublic=true` pour les broadcasts Socket.IO et FCM. Le fallback FCM géolocalisé utilise la même liste; le fallback global la filtre aussi. Un livreur privé n'obtient que les courses qui lui sont réservées et ne peut pas accepter une course publique.
+- **Attribution et validation** : les livreurs sans photo sont exclus de `available-drivers` et rejetés lors d'une attribution manuelle. Les DTO de commande client/commerçant et de message rejettent les contenus composés uniquement d'espaces avant le `trim()` des services.
+- **Mobile et conversations** : `REFUNDED` est réglé dans le suivi client/livreur; le dashboard commerçant se rafraîchit après création et ne compte que les courses COMPLETED; le radar dispose d'un refus explicite, clairement limité au masquage jusqu'au prochain rafraîchissement. La synchronisation de conversation ne réactive plus implicitement un participant sorti.
+- **Tests** : tests backend ciblés **182/182**, e2e **56/56**, build NestJS **OK**, Flutter **12/12**. `flutter analyze --no-pub` conserve 9 alertes préexistantes/non bloquantes (APIs Flutter dépréciées, un switch exhaustif, style de préfixe/import).
+- **Limite infra inchangée** : les photos restent stockées dans `uploads/` sur le disque éphémère Fly.io. La validation métier est correcte, mais il faut toujours brancher un stockage persistant avant un usage production durable.
+
+### Session 41 (2026-07-10) — Revue finale mobile/backend post-correctifs (aucune modification applicative)
+- **Verdict : FAIL.** Les correctifs annoncés pour l'affiliation, la création commerçant, les statuts, le paiement cash, la photo, le chat et le FCM sont majoritairement présents, mais le code ne passe pas encore une revue CDC complète.
+- **P0 confirmé — éligibilité livreur incohérente** : `GET /orders/available` ne vérifie ni `status=ACTIVE` ni `isPublic`, donc un livreur suspendu peut encore voir les courses et un livreur privé peut charger/accepter les courses publiques. Le fallback FCM global (`findLivreursWithFcmToken`) oublie également `isPublic`, `status` et la photo, ce qui contourne le choix de visibilité et notifie des comptes non opérationnels.
+- **P1 confirmés** : le sélecteur manuel (`GET /orders/available-drivers` / `assertValidPreferredLivreur`) peut réserver un livreur sans photo, qui sera ensuite refusé par `acceptOrder`; `REFUNDED` manque des sets mobile de paiements réglés (actions client/livreur trompeuses); les DTO `IsNotEmpty`/`MinLength(1)` acceptent les espaces puis les services enregistrent une chaîne vide après `trim()`.
+- **P2 confirmés** : le bouton commerçant « Quitter la conversation » est annulé par le prochain `GET` qui réactive les participants principaux; le radar n'a toujours pas de refus explicite; le dashboard commerçant ne se rafraîchit pas après création et son montant inclut aussi les courses non terminées.
+- **Tests / qualité** : `npm run build` **OK**; tests unitaires backend **359/359 OK**; sous-ensemble commandes/messages/conversations/affiliation **184/184 OK**; Flutter **11/11 OK**. Mais `npm run test:e2e -- --runInBand` est **FAIL (26/56 passent, 30 échouent)** : les fixtures tentent d'approuver des livreurs sans photo, désormais correctement rejetés. `flutter analyze --no-pub` : 9 alertes sans erreur. `dart format --output=none --set-exit-if-changed lib test` : 39 fichiers non formatés (préexistants ou hors fichiers touchés).
+- **Limite infra toujours ouverte** : les uploads restent sur le disque éphémère Fly.io; la photo peut être validée en base mais disparaître au redéploiement tant qu'un stockage persistant n'est pas branché.
+
+### Session 40 (2026-07-10) — Correctifs finaux revue mobile/backend (paiement, photo, chat, FCM, validation)
+- **Verdict fonctionnel : PASS ciblé sur les findings de la Session 39.** Les écarts applicatifs signalés par la revue indépendante ont été corrigés côté backend et mobile. Le seul résiduel important est désormais **infra** : les uploads restent servis depuis `uploads/` sur Fly, donc non durables tant qu'un stockage persistant n'est pas branché.
+- **Paiement espèces verrouillé de bout en bout** :
+  - backend `OrdersService.updatePaymentStatus` limite désormais les transitions par acteur et par statut : client → `PAID`, livreur → `CASH_ON_DELIVERY`, commerçant → `RECEIVED_BY_MERCHANT` / `REFUNDED`, avec garde `status === COMPLETED` hors admin ;
+  - mobile client : l'action « J'ai payé en espèces » n'apparaît plus avant `COMPLETED` ;
+  - mobile livreur : suppression du bouton prématuré dans le dialog actif ; ajout d'un point de reprise persistant dans l'historique/détail pour confirmer le paiement après la course ;
+  - mobile commerçant : la feuille de choix n'expose plus de statuts de paiement arbitraires.
+- **Photo livreur durcie** :
+  - mobile `RegisterScreen` n'expose plus la session avant l'upload effectif de la photo ; l'inscription livreur devient atomique côté app ;
+  - backend : approbation admin, disponibilité et prise/visibilité des courses refusent maintenant un livreur sans `profilePhotoUrl`.
+  - **Limite restante** : la photo reste stockée sur le disque Fly éphémère tant qu'un volume/R2/S3 n'est pas configuré.
+- **Chat groupe / cycle de vie / FCM / validation** :
+  - `ConversationsService.ensureConversation()` matérialise désormais automatiquement client, livreur et commerçant dans les participants canoniques ;
+  - `ChatService` a un garde `_disposed` sur son cycle async pour éviter un socket tardif après fermeture ;
+  - `PushService` utilise la `rootNavigatorKey` du router au lieu de `WidgetsBinding.instance.rootElement` pour le pre-prompt ;
+  - description colis obligatoire côté mobile et DTO backend (`IsNotEmpty` + trim).
+- **Qualité / vérifications** :
+  - backend : `npm run build` **OK**, `npm test -- --runInBand` **359/359 OK** ;
+  - mobile : `flutter test --no-pub` **11/11 OK** ;
+  - mobile : `flutter analyze --no-pub` **9 alertes non bloquantes**, aucune erreur ;
+  - formatage appliqué sur les fichiers touchés Flutter et NestJS.
+
+### Session 39 (2026-07-10) — Revue indépendante après le commit `2f363dc`
+- **Verdict : FAIL.** Les sept corrections annoncées par la Session 38 sont bien présentes dans le code (purge de session/401, guards de routes, statut chat vivant, socket client dispose-safe, paiement visible, FCM conditionné au 2xx et reçus de lecture par participant), mais elles ne suffisent pas pour un PASS CDC complet.
+- **P0 confirmés — paiement espèces** : l'action client est disponible avant la fin de la course (`OrderTrackingScreen._canMarkPaid` ne contrôle pas le statut), l'action livreur est visible sur toute course active, et le backend accepte toute valeur de paiement à tout statut. Cela permet de marquer une course payée avant remise des espèces. Après `COMPLETED`, choisir « Plus tard » ou subir une erreur ne laisse aucun point d'entrée dans l'historique, malgré le message qui conseille de réessayer depuis celui-ci.
+- **P0 confirmés — photo livreur** : la session est persistée avant l'upload, ce qui laisse `GoRouter` quitter l'inscription avant la boucle bloquante; le backend/approbation admin accepte toujours un livreur sans photo. En plus, l'upload reste dans `uploads/` sur Fly sans volume, donc une photo réussie disparaît après redéploiement/redémarrage.
+- **P1 confirmés — groupe et cycle de vie chat** : les participants client/livreur ne sont matérialisés qu'à leur premier envoi, alors qu'ils reçoivent déjà les messages. Le mobile peut donc afficher « lu par tous » après lecture du seul commerçant. `ChatService` n'a pas le garde `_disposed` ajouté à `OrderSocketController` : une sortie rapide peut créer un socket tardif et écrire dans des streams fermés.
+- **P1 confirmé — description colis** : le client peut vider le champ puis créer une commande; le mobile ne valide pas `trim().isNotEmpty` et les deux DTO backend ne posent pas de minimum de longueur.
+- **P1 probable — pre-prompt FCM** : `PushService` passe `WidgetsBinding.instance.rootElement` à `showDialog`. Ce contexte est au-dessus du `Navigator` de `MaterialApp`, donc le premier pre-prompt peut lever une erreur et empêcher la demande de permission.
+- **Qualité/tests** : `npm test -- --runInBand` passe **355/355** (19 suites), le sous-ensemble commandes/messages/conversations passe **161/161**, et `flutter test --no-pub` passe **11/11**. `flutter analyze --no-pub` garde 10 alertes sans erreur. `dart format --output=none --set-exit-if-changed lib test` signalerait 49 fichiers à formater. Aucun test Flutter ne couvre les nouveaux flux session, paiement, photo, FCM ou chat groupe.
+- **Documentation** : `TODO.md` est aligné sur ce verdict; les anciennes tâches dupliquées de la revue précédente sont signalées comme historiques.
+
 ### Session 38 (2026-07-10) — Revue robustesse mobile : 7 constats corrigés (session/push, paiement espèces, chat, FCM, routes)
 - **P0 fuite inter-session + push après 401** : `AuthService.logout()` et `handleUnauthorized()` libèrent `ClientServices` (socket partagé + store des commandes actives) — un autre compte reconnecté dans le même processus ne revoit plus l'état du précédent. Sur 401, nouveau `PushService.invalidateLocalToken()` : `FirebaseMessaging.deleteToken()` local (le JWT mort interdit le nettoyage serveur) → les pushs de l'ancien compte n'atteignent plus l'appareil, resync complète au login suivant.
 - **P0 paiement espèces client↔livreur** : le backend autorisait déjà client/livreur sur `PATCH /orders/:id/payment-status` mais AUCUNE UI ne l'appelait hors commerçant. Livreur : bouton « Paiement reçu (espèces) » dans le dialog de course active + prompt de confirmation au COMPLETED (→ `CASH_ON_DELIVERY`). Client : « J'ai payé en espèces » sous le badge paiement du suivi (→ `PAID`, avec confirmation). Propagation temps réel via `orderPaymentUpdated` (session 36).
@@ -263,7 +310,7 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 - **Vérifications** : `flutter analyze --no-pub lib` → 10 alertes préexistantes, 0 nouvelle ; `flutter test` → 11/11 OK.
 - **Conclusion de cette session** : les écarts alors connus étaient marqués clos. Cette conclusion est invalidée par la revue indépendante de la Session 38, qui a identifié des cas d'échec et de cycle de session non couverts.
 
-### Session 38 (2026-07-10) — Revue indépendante mobile vs CDC après les correctifs
+### Session 38-a (2026-07-10) — Revue indépendante avant le commit `2f363dc` (historique)
 - **Verdict : FAIL / pas prêt pour un PASS CDC complet.** Les correctifs annoncés côté commerçant sont bien présents : statut d'affiliation réel, accept/refus livreur, recherche client, prix manuel, statuts/paiement commerçant, profil commerçant, conversation du commerçant et statistiques. Le tarif 200 FCFA/km, le GPS limité à la course active et la visibilité du paiement client sont aussi cohérents avec le CDC.
 - **P0 confirmés** :
   - `AuthService.handleUnauthorized()` efface seulement les credentials. Le registre statique `ClientServices` (socket + `ActiveOrdersStore`) n'est réinitialisé que par le logout volontaire du profil client. Après un 401 puis une connexion client dans le même processus, le nouveau client peut réutiliser le socket et les commandes actives du précédent. Le token FCM n'est pas non plus supprimé localement lors de ce logout forcé.
