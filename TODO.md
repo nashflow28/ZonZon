@@ -13,6 +13,7 @@
 ## 🎯 BACKLOG V1 — Cahier des charges (2026-07-05)
 
 > Architecture V1 confirmée : **Flutter** (client/livreur/commerçant) + **Angular** (admin). Pas de réécriture PWA maintenant.
+> **Décision distribution (2026-07-10)** : Android = app Flutter native (APK, déjà réalisée — **pas de PWA Android**) ; iOS = **PWA à développer après la V1 Android** (évite compte développeur Apple + macOS). Voir CDC §5.
 > Analyse d'écart complète : voir `PROGRESS.md` (section « Analyse d'écart CDC V1 »).
 > **Contrainte absolue : ne rien casser** — tracking GPS, Socket.IO, FCM, messagerie client↔livreur, admin dashboard.
 > Ordre d'exécution : **backend d'abord**, puis fronts (Flutter, Angular).
@@ -107,8 +108,9 @@
 - [x] **P1 — Sécuriser la réassignation** — `PATCH /orders/:id/assign` vérifie désormais le commerçant propriétaire (ou admin).
 - [x] **P2 — Sécuriser le chat multi-participants** — fermeture aussi sur `FAILED`, `chat:typing` autorisé seulement après contrôle d'appartenance, conversation commerçant réellement exploitable côté mobile.
 - [~] **P2 — Couvrir les flux récents** — backend couvert (171 tests commandes/gateway/messages OK), mais il manque encore des tests widget/intégration Flutter dédiés pour affiliation invite/accept, création commerçant, notification tap et conversation multi-participants.
-- [ ] **CDC source — inscription livreur** — si la photo de profil doit être obligatoire dès l'inscription, l'ajouter au flux `RegisterScreen` ; aujourd'hui elle est seulement complétable après création du compte.
-- [ ] **Décision PO — tarif CDC** — résoudre la contradiction entre le document source (150 FCFA/km) et le backlog V1 actuel/config backend (200 FCFA/km).
+- [x] **CDC source — inscription livreur** — photo de profil OBLIGATOIRE dans `RegisterScreen` pour le rôle LIVREUR (sélecteur avec aperçu, blocage du submit sans photo, upload `POST /users/me/photo` juste après la création du compte, fallback non bloquant si l'upload échoue). *(2026-07-10)*
+- [x] **Décision PO — tarif CDC** — tranché : **200 FCFA/km** conservé. CDC source mis à jour (§4, note de décision du 2026-07-10) ; config backend (`PricingConfig` défaut 200) déjà alignée, tarif ajustable par l'admin. *(2026-07-10)*
+- [ ] **PWA iOS (après V1 Android)** — développer une PWA pour les utilisateurs iOS (décision du 2026-07-10, CDC §5). Pas de PWA Android (l'app Flutter couvre déjà la plateforme). Périmètre à définir : au minimum flux client (commande + suivi) ; livreur/commerçant à arbitrer.
 
 ### Audit codex (2026-07-04) — 8/9 findings corrigés
 > Audit par triangulation des 3 stacks. Verdict initial FAIL. Correctifs via 3 agents parallèles + manuels. Détail complet : `PROGRESS.md` Session 22.

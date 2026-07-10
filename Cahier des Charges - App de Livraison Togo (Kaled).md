@@ -28,7 +28,7 @@ L'objectif est de déployer une solution mobile et web de livraison, initialemen
 
 L'application repose sur un modèle de tarification à la distance et un système de commissionnement différé :
 
-* **Grille Tarifaire :** 150 FCFA par kilomètre parcouru (ex: 300 FCFA pour 2 km) \[cite: 53, 54\].  
+* **Grille Tarifaire :** 200 FCFA par kilomètre parcouru (ex: 400 FCFA pour 2 km). *Décision produit du 2026-07-10 : le tarif initial de 150 FCFA/km \[cite: 53, 54\] est remplacé par 200 FCFA/km, aligné sur la configuration V1. Le tarif reste modifiable à tout moment par l'administrateur (écran Tarifs), avec possibilité de tarif de base et de surcharge par zone.*  
 * **Mode de Paiement :** Les transactions se font exclusivement en **espèces** directement entre le client et le livreur à la fin de la course \[cite: 54, 55\].  
 * **Gestion des Commissions :** Les livreurs reversent entre **35 % et 40 %** de leurs bénéfices hebdomadaires à la plateforme, sur la base des archives de courses enregistrées \[cite: 55, 57, 58, 59\].
 
@@ -39,6 +39,11 @@ Au vu de votre profil de développeur, la pile technologique suivante est recomm
 * **Application Mobile :** Flutter (pour une base de code unique iOS/Android).  
 * **Dashboard Admin :** Angular 21 (migration de vos projets actuels).  
 * **Backend :** Node.js ou Kotlin avec intégration de l'API Google Maps pour le calcul des distances.
+
+*Décision produit du 2026-07-10 — distribution par plateforme :*
+
+* **Android :** application Flutter native (APK), déjà réalisée — elle couvre l'intégralité des fonctionnalités du présent cahier des charges. **Aucune PWA n'est nécessaire pour Android.**  
+* **iOS :** une **PWA** (Progressive Web App) sera développée pour les utilisateurs iOS, afin d'éviter les contraintes de distribution App Store (compte développeur Apple, matériel macOS). Périmètre à planifier après la V1 Android.
 
 ## **6\. Archives et Suivi**
 

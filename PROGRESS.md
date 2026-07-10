@@ -28,6 +28,8 @@
 ## Analyse d'écart — Cahier des charges V1 (2026-07-05)
 
 > Décision : architecture V1 **conservée** — Flutter (client/livreur/commerçant) + Angular (admin). Pas de réécriture PWA maintenant (le CDC demande une PWA ; écart assumé pour la V1). Backlog priorisé dans [`TODO.md`](TODO.md) (section « BACKLOG V1 »).
+>
+> **Mise à jour distribution (2026-07-10)** : Android = app Flutter native (APK) — **aucune PWA Android nécessaire**. iOS = **PWA à développer après la V1 Android** (contourne compte développeur Apple + macOS). Tarif tranché : **200 FCFA/km** (CDC source §4 mis à jour, config backend déjà alignée).
 
 **Déjà couvert** : auth 4 rôles · livraison à la demande client→livreur (Type 2) · suivi GPS temps réel (Socket.IO + positions persistées + ETA + géofencing) · messagerie par livraison (client↔livreur) · 5 statuts de commande · notifications FCM · historique client/livreur · tarification à la distance · dashboards client/livreur/admin · véhicule moto/voiture/tricycle. Bonus au-delà du V1 : notation étoiles, favoris boutiques, catégories/produits, commissions/reports, audit log, soft-delete, CI/CD, Sentry.
 
@@ -241,6 +243,14 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 ---
 
 ## Historique des sessions
+
+### Session 37 (2026-07-10) — Clôture des derniers écarts CDC : photo inscription livreur, tarif 200, décision PWA iOS
+- **Photo de profil obligatoire à l'inscription livreur (CDC §2)** : `RegisterScreen` affiche pour le rôle LIVREUR un sélecteur de photo (aperçu circulaire, `image_picker`) ; le submit est bloqué tant qu'aucune photo n'est choisie ; après `POST /auth/register`, la photo est envoyée sur `POST /users/me/photo` avec le token fraîchement persisté. Si l'upload échoue (réseau), le compte reste créé et un message invite à compléter la photo depuis le profil (non bloquant).
+- **Tarif tranché : 200 FCFA/km conservé** (décision PO du 2026-07-10). Le CDC source (§4 Grille tarifaire) est mis à jour avec une note de décision ; aucun changement de code nécessaire (`PricingConfig` défaut 200, fallback `PRICE_PER_KM = 200`, tarif ajustable par l'admin + overrides par zone).
+- **Décision distribution / PWA** documentée (CDC §5, TODO, ce fichier) : Android = app Flutter native (APK), qui couvre tout le CDC — pas de PWA Android ; iOS = PWA à développer après la V1 Android (évite compte développeur Apple + macOS). Item backlog ajouté dans `TODO.md`.
+- **Fichiers touchés** : `mobile_app/lib/screens/register_screen.dart`, `Cahier des Charges - App de Livraison Togo (Kaled).md`, `TODO.md`, `PROGRESS.md`.
+- **Vérifications** : `flutter analyze --no-pub lib` → 10 alertes préexistantes, 0 nouvelle ; `flutter test` → 11/11 OK.
+- **État de conformité mobile vs CDC après cette session : 100 % des écarts fonctionnels connus sont clos** (restent les items qualité : tests widget/intégration Flutter des flux récents, et le backlog « après V1 » dont la PWA iOS).
 
 ### Session 36 (2026-07-10) — Correction des 8 findings de la revue Session 35 (P0/P1/P2)
 - **Les 7 findings + les fixtures e2e sont corrigés.** Détail :

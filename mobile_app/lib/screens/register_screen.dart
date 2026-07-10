@@ -1,6 +1,11 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:image_picker/image_picker.dart';
+import '../config/env.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../utils/platform_adapter.dart';
@@ -25,6 +30,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _obscure = true;
 
+  /// Photo de profil, OBLIGATOIRE pour le rôle LIVREUR (CDC §2 : le coursier
+  /// s'enregistre avec nom, prénoms, téléphone, type d'engin ET photo de
+  /// profil). Optionnelle pour les autres rôles (non demandée dans l'UI).
+  final ImagePicker _picker = ImagePicker();
+  XFile? _profilePhoto;
+
   @override
   void dispose() {
     _firstNameController.dispose();
@@ -34,12 +45,64 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
+  Future<void> _pickProfilePhoto() async {
+    final picked = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 800,
+      imageQuality: 80,
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _profilePhoto = picked);
+  }
+
+  /// Envoie la photo de profil sur `POST /users/me/photo` (le token vient
+  /// d'être persisté par `register`). Retourne `true` si l'upload a réussi.
+  Future<bool> _uploadProfilePhoto(XFile photo) async {
+    try {
+      final token = await AuthService().getToken();
+      MediaType mimeFromPath(String p) {
+        final ext = p.toLowerCase().split('.').last;
+        return switch (ext) {
+          'png' => MediaType('image', 'png'),
+          'webp' => MediaType('image', 'webp'),
+          _ => MediaType('image', 'jpeg'),
+        };
+      }
+
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
+      )
+        ..headers['Authorization'] = 'Bearer $token'
+        ..files.add(await http.MultipartFile.fromPath(
+          'file',
+          photo.path,
+          contentType: mimeFromPath(photo.path),
+        ));
+
+      final response = await request.send();
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _submit() async {
     if (_firstNameController.text.trim().isEmpty ||
         _lastNameController.text.trim().isEmpty ||
         _phoneController.text.trim().isEmpty ||
         _passwordController.text.isEmpty) {
       showAdaptiveSnack(context, 'Veuillez remplir tous les champs.');
+      return;
+    }
+    // CDC §2 : la photo de profil fait partie des prérequis d'inscription
+    // du coursier (avec nom, prénoms, téléphone et type d'engin).
+    if (_role == 'LIVREUR' && _profilePhoto == null) {
+      showAdaptiveSnack(
+        context,
+        'La photo de profil est obligatoire pour les livreurs.',
+        isError: true,
+      );
       return;
     }
 
@@ -53,6 +116,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
         role: _role,
         vehicleType: _role == 'LIVREUR' ? _vehicleType : null,
       );
+
+      // Upload de la photo juste après la création du compte (le token est
+      // déjà persisté). En cas d'échec réseau, le compte existe : on informe
+      // que la photo reste à compléter dans le profil plutôt que de bloquer.
+      if (_profilePhoto != null) {
+        final uploaded = await _uploadProfilePhoto(_profilePhoto!);
+        if (!uploaded && mounted) {
+          showAdaptiveSnack(
+            context,
+            'Compte créé, mais l’envoi de la photo a échoué — '
+            'ajoutez-la depuis votre profil.',
+            isError: true,
+          );
+        }
+      }
+
       if (!mounted) return;
       // Redirect to the role-appropriate home, clearing the back-stack.
       final user = await AuthService().getCurrentUser();
@@ -169,6 +248,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               onChanged: (v) => setState(() => _vehicleType = v ?? 'MOTO'),
                             ),
                           ),
+                          const SizedBox(height: 18),
+                          const Text('Photo de profil (obligatoire) :',
+                              style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          const SizedBox(height: 8),
+                          _buildProfilePhotoPicker(),
                         ],
                         const SizedBox(height: 28),
                         Container(
@@ -203,6 +287,54 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Sélecteur de photo de profil livreur : aperçu circulaire + bouton.
+  /// La validation d'obligation est faite dans [_submit].
+  Widget _buildProfilePhotoPicker() {
+    final photo = _profilePhoto;
+    return GestureDetector(
+      onTap: _isLoading ? null : _pickProfilePhoto,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: photo != null
+                ? const Color(0xFF0FB271)
+                : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: Colors.white.withValues(alpha: 0.08),
+              backgroundImage: photo != null ? FileImage(File(photo.path)) : null,
+              child: photo == null
+                  ? const Icon(Icons.add_a_photo_outlined, color: Color(0xFF2E90FA))
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                photo != null
+                    ? 'Photo sélectionnée — touchez pour changer'
+                    : 'Ajouter ma photo de profil',
+                style: TextStyle(
+                  color: photo != null ? const Color(0xFF0FB271) : Colors.white70,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (photo != null)
+              const Icon(Icons.check_circle, color: Color(0xFF0FB271), size: 20),
+          ],
+        ),
       ),
     );
   }
