@@ -265,6 +265,7 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 - **Chat aligné sur le même correctif d'auth** : `mobile_app/lib/services/chat_service.dart` applique le même handshake robuste (JWT obligatoire, `auth` + header Bearer), rejoint à nouveau la room au reconnect et relance `markRead()` après reconnexion.
 - **Race de handshake éliminée** : les listeners Socket.IO sont enregistrés avant `connect()` pour ne pas manquer une connexion rapide ou la resynchronisation qui la suit.
 - **Tests Flutter ciblés** : nouveaux tests `mobile_app/test/services/socket_auth_options_test.dart` (options Socket.IO + refus sans token) et `mobile_app/test/services/driver_radar_sync_test.dart` (normalisation/upsert du radar). Validation locale exécutée : `dart format` sur les fichiers touchés puis `flutter test` → **25/25 verts**. `flutter analyze` ne relève aucune erreur nouvelle, seulement 11 avertissements préexistants.
+- **APK corrigée** : build release généré (`app-release.apk`, 57,9 MB) et installé via ADB sur le téléphone connecté `R58MA7HBBQT`. La validation live du socket est en attente : le téléphone était verrouillé au lancement, donc aucune session livreur ne pouvait se reconnecter à ce stade.
 
 ### Session 49 (2026-07-11) — Déploiement local sans GitHub Actions
 - **Backend** : image `deployment-01KX8JSF0BQV3W6P4MWF3P9HXB` déployée sur Fly.io ; health check `GET /` valide et machine version 19 active.
