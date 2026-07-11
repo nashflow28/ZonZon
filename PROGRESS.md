@@ -230,7 +230,7 @@ flyctl logs --app zonzon-backend --no-tail
 | Problème | Statut | Solution |
 |----------|--------|---------|
 | Nouveaux médias publics | ✅ Stockés dans Cloudflare R2 | Bucket `zonzon-media` via les secrets `OBJECT_STORAGE_*`; les anciens chemins `/uploads/*` restent compatibles mais ne sont pas migrés automatiquement |
-| Déploiements CI/CD GitHub | 🔴 Bloqués côté compte GitHub | Les workflows échouent avant toute étape : paiement récent échoué ou plafond GitHub Actions à augmenter (annotation du run `29152333436`) |
+| Déploiements CI/CD GitHub | ✅ Manuels uniquement | Les cinq workflows sont limités à `workflow_dispatch` pour ne plus consommer de minutes sur push/PR/tag ; tests et déploiements sont effectués depuis le poste local |
 | Mode développeur Windows requis pour Flutter | ✅ Activé | Paramètres → Pour les développeurs |
 | Windows Defender bloque le build Flutter | ✅ Résolu | Dossiers `build/` et `.gradle` exclus |
 | APK buildé sans `--dart-define` → URL localhost | ✅ Corrigé | `env.dart` pointe maintenant sur prod par défaut |
@@ -257,6 +257,10 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 ---
 
 ## Historique des sessions
+
+### Session 48 (2026-07-11) — Désactivation des Actions automatiques
+- Les workflows GitHub `ci`, `backend-ci`, `admin-ci`, `flutter-ci` et `deploy` ne sont plus déclenchés automatiquement. Ils restent exécutables manuellement depuis GitHub si besoin.
+- Motif : le compte GitHub Free a consommé ses 2 000 minutes Actions incluses de juillet et le budget Actions est fixé à `$0` avec arrêt automatique. Le déploiement manuel local est retenu pour éviter des frais récurrents.
 
 ### Session 47 (2026-07-11) — Activation du stockage R2 public des médias
 - **Bucket public** : `zonzon-media` est créé sur R2 avec l'URL publique de développement `https://pub-15fc91f9ec6c4eed8ab820c19d1ae0da.r2.dev`. Il sert uniquement aux avatars, logos et images de produits; le bucket des pièces d'identité reste privé et séparé.

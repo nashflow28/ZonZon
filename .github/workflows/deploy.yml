@@ -5,9 +5,9 @@
 # release tag (vX.Y.Z) does not currently trigger any real deployment.
 name: Deploy
 
+# Ce squelette ne doit pas consommer de minutes lors de la création d'un tag.
 on:
-  push:
-    tags: ['v*.*.*']
+  workflow_dispatch:
 
 jobs:
   deploy:

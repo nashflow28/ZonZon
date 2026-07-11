@@ -1,13 +1,7 @@
 name: Admin CI/CD
 
+# Les builds et déploiements sont lancés manuellement pour éviter les coûts Actions.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'admin-dashboard/**'
-  pull_request:
-    paths:
-      - 'admin-dashboard/**'
   workflow_dispatch:
 
 jobs:

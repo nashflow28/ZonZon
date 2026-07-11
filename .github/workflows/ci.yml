@@ -1,9 +1,8 @@
 name: CI
 
+# Vérification globale manuelle pour éviter le doublon avec les workflows spécialisés.
 on:
-  push:
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   backend:

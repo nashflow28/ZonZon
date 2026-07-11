@@ -1,13 +1,7 @@
 name: Backend CI/CD
 
+# Les tests et déploiements sont lancés manuellement pour éviter les coûts Actions.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'backend/**'
-  pull_request:
-    paths:
-      - 'backend/**'
   workflow_dispatch:
 
 jobs:
