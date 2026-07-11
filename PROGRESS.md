@@ -258,6 +258,32 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 51 (2026-07-11) — Corrections après simulation réelle multi-rôles
+
+#### Constats production
+- La course de simulation `197b6bf3-6124-4f90-833e-bf661edfa9d5` était bien persistée `COMPLETED`, assignée au livreur attendu, à `664 FCFA`; aucune note n'avait été créée. Le problème d'historique était donc un état Flutter figé, non une perte de données backend.
+
+#### Correctifs livrés
+- **Notation** : suppression du flux qui demandait au livreur de noter le client. `OrderTrackingScreen` demande la notation uniquement au client; son rechargement `GET /orders/mine` déclenche aussi la demande si l'événement Socket.IO terminal a été manqué.
+- **Historique et gains livreur** : les onglets persistants « Mes courses » et « Profil » sont recréés au retour et après une finalisation, afin de relire la course terminée. L'historique affiche désormais un encart cumulant les courses `COMPLETED` et leurs gains bruts; le profil garde son encart de gains estimés.
+- **Suivi client** : confirmé dans le code. `OrderTrackingScreen` écoute `driverPosition$` et `OrderMapWidget` affiche le marqueur live du livreur pendant les statuts actifs. Le GPS livreur est émis uniquement pendant une course active.
+- **Téléphones commerçant** : `UsersService.findByPhone()` accepte désormais les numéros `+22890123456`, `+228 90 12 34 56` et `90 12 34 56`. La réponse `POST /merchants/me/drivers` retourne maintenant le vrai profil du livreur avec le statut d'invitation. Le champ téléphone du destinataire lance aussi la recherche/sélection de client existant.
+- **Navigation livreur** : nouvel écran `DriverNavigationScreen`, accessible depuis la course active avec carte intégrée, marqueurs retrait/livraison/position GPS et cadrage sur la prochaine destination. Les actions de progression restent accessibles dans l'écran de course.
+
+#### Fichiers importants
+- `backend/src/users/users.service.ts`, `backend/src/merchant-drivers/merchant-drivers.controller.ts`
+- `mobile_app/lib/driver_screen.dart`, `mobile_app/lib/screens/driver_navigation_screen.dart`
+- `mobile_app/lib/screens/order_tracking_screen.dart`, `mobile_app/lib/screens/order_history_screen.dart`
+- `mobile_app/lib/screens/merchant/create_delivery_screen.dart`
+
+#### Vérifications et déploiement
+- `npm test -- --runInBand` : **365/365** backend.
+- `npm run build` : backend OK.
+- `flutter test` : **26/26** mobile, dont test widget de l'écran navigation.
+- `flutter analyze` : 11 diagnostics préexistants, aucun nouveau.
+- Backend déployé sur Fly.io le 2026-07-11 et health check HTTP OK.
+- APK release généré : `mobile_app/build/app/outputs/flutter-apk/app-release.apk` (57.9 MB). Aucun appareil ADB n'était connecté au moment de l'installation.
+
 ### Session 50 (2026-07-11) — Correctif mobile socket/radar après incident prod
 - **JWT Socket.IO durci** : `mobile_app/lib/controllers/order_socket_controller.dart` ne crée plus de socket sans jeton exploitable, envoie désormais le JWT à la fois via `auth.token` et via l'en-tête `Authorization: Bearer ...`, et active des paramètres explicites de reconnexion (`reconnectionAttempts=8`, délai progressif, timeout 8 s).
 - **État temps réel exploitable** : `OrderSocketController` et `ChatService` exposent maintenant un flux `SocketLifecycleEvent` (connexion, déconnexion, tentative de reconnexion, échec) pour diagnostiquer les incidents réseau et le rejet d'authentification sans s'appuyer sur des logs implicites.

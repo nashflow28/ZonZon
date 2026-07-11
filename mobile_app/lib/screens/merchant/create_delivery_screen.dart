@@ -316,7 +316,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
           PhoneField(
             controller: _clientPhoneLocal,
             hint: 'Téléphone du client (si pas de compte)',
-            onFullNumberChanged: (value) => _clientPhoneFull = value,
+            onFullNumberChanged: _onClientPhoneChanged,
           ),
           const SizedBox(height: 12),
           _input(
@@ -526,6 +526,15 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         });
       }
     });
+  }
+
+  void _onClientPhoneChanged(String fullPhone) {
+    _clientPhoneFull = fullPhone;
+    final localDigits = _clientPhoneLocal.text.replaceAll(RegExp(r'\D'), '');
+    if (localDigits.length < 8) return;
+    // The phone field is also a client lookup: merchants should not have to
+    // retype a known number in the search box to select its ZonZon account.
+    _clientSearch.text = fullPhone;
   }
 
   void _selectClient(MerchantClientSearchResult client) {

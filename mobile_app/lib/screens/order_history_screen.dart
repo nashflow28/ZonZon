@@ -124,6 +124,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         ? Center(child: adaptiveLoader())
         : Column(
             children: [
+              if (_currentUserRole == 'LIVREUR') _buildDriverEarningsCard(),
               _buildFilterChips(),
               Expanded(
                 child: RefreshIndicator(
@@ -163,6 +164,53 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           _filterChip('En cours', _HistoryFilter.active),
           const SizedBox(width: 8),
           _filterChip('Terminées', _HistoryFilter.finished),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDriverEarningsCard() {
+    final completed = _items.where((item) => item.status == 'COMPLETED');
+    final total = completed.fold<int>(
+      0,
+      (sum, item) => sum + (item.priceFcfa ?? 0),
+    );
+    final count = completed.length;
+    final formatted = total.toString().replaceAllMapped(
+      RegExp(r'(?=(\d{3})+(?!\d))'),
+      (_) => ' ',
+    );
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0FB271).withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF0FB271).withValues(alpha: 0.4),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.account_balance_wallet_outlined,
+            color: Color(0xFF0FB271),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '$formatted FCFA',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Text(
+            '$count course${count > 1 ? 's' : ''} terminée${count > 1 ? 's' : ''}',
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
         ],
       ),
     );

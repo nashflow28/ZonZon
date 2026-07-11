@@ -343,8 +343,26 @@ export class UsersService {
     return this.findOne(userId);
   }
 
-  findByPhone(phone: string) {
-    return this.usersRepository.findOne({ where: { phone } });
+  /** Resolves international and local phone input to the same account. */
+  async findByPhone(phone: string): Promise<User | null> {
+    const raw = phone.trim();
+    const digits = raw.replace(/[^0-9]/g, '');
+    if (!raw || !digits) return null;
+
+    const normalizedColumn =
+      "REPLACE(REPLACE(REPLACE(REPLACE(user.phone, '+', ''), ' ', ''), '-', ''), '.', '')";
+    const qb = this.usersRepository
+      .createQueryBuilder('user')
+      .where('user.phone = :raw', { raw })
+      .orWhere(`${normalizedColumn} = :digits`, { digits });
+
+    // A local number (such as 90123456) must find its +228 counterpart.
+    if (digits.length <= 10) {
+      qb.orWhere(`${normalizedColumn} LIKE :localSuffix`, {
+        localSuffix: `%${digits}`,
+      });
+    }
+    return qb.getOne();
   }
 
   async searchClients(query: string, limit = 8): Promise<User[]> {

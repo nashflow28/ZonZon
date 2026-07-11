@@ -260,6 +260,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         }
       });
       _setPickupDeliveryFromRaw(Map<String, dynamic>.from(mine));
+      // HTTP refresh is the fallback when the terminal socket event was missed.
+      if (_activeOrderStatus == 'COMPLETED') {
+        _stopEtaPolling();
+        _promptRating();
+      }
     } catch (_) {}
   }
 
@@ -312,6 +317,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   Future<void> _promptRating() async {
     if (_ratingPrompted) return;
+    if (_assignedLivreur == null) return;
     _ratingPrompted = true;
     final livreur = _assignedLivreur;
     final livreurName = livreur != null

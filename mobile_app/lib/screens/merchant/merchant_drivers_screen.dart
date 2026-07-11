@@ -67,15 +67,17 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF122530),
-        title: const Text('Ajouter un livreur',
-            style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Ajouter un livreur',
+          style: TextStyle(color: Colors.white),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
           keyboardType: TextInputType.phone,
           style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(
-            hintText: 'Numéro de téléphone du livreur',
+            hintText: 'Ex. +228 90 12 34 56 ou 90 12 34 56',
             hintStyle: TextStyle(color: Colors.white54),
             enabledBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: Colors.white24),
@@ -195,7 +197,11 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: Colors.redAccent, size: 44),
+              const Icon(
+                Icons.error_outline,
+                color: Colors.redAccent,
+                size: 44,
+              ),
               const SizedBox(height: 12),
               Text(
                 _errorMessage ?? 'Une erreur est survenue.',
@@ -310,7 +316,10 @@ class _DriverTile extends StatelessWidget {
           ),
           IconButton(
             tooltip: 'Retirer',
-            icon: const Icon(Icons.person_remove_outlined, color: Colors.redAccent),
+            icon: const Icon(
+              Icons.person_remove_outlined,
+              color: Colors.redAccent,
+            ),
             onPressed: onRemove,
           ),
         ],

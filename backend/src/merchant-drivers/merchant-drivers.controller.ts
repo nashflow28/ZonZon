@@ -69,7 +69,14 @@ export class MerchantDriversController {
       driverId = found.id;
     }
 
-    return this.merchantDriversService.addAffiliation(merchantId!, driverId);
+    const affiliation = await this.merchantDriversService.addAffiliation(
+      merchantId!,
+      driverId,
+    );
+    // The mobile service expects a driver record carrying the invitation
+    // status, not the raw affiliation row.
+    const driver = await this.usersService.findOne(affiliation.driverId);
+    return { ...driver, status: affiliation.status };
   }
 
   @Delete(':driverId')

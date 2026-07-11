@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
 import 'controllers/order_socket_controller.dart';
 import 'models/user.dart';
 import 'services/api_client.dart';
@@ -9,7 +10,7 @@ import 'services/auth_service.dart';
 import 'services/driver_service.dart';
 import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
-import 'screens/rating_screen.dart';
+import 'screens/driver_navigation_screen.dart';
 import 'screens/driver_profile_screen.dart';
 import 'screens/order_history_screen.dart';
 import 'utils/order_status_utils.dart';
@@ -305,6 +306,8 @@ class _DriverScreenState extends State<DriverScreen> {
 
   bool _hasSeenRealtimeConnection = false;
   bool _radarSyncInFlight = false;
+  int _historyVersion = 0;
+  int _profileVersion = 0;
 
   @override
   void initState() {
@@ -578,6 +581,7 @@ class _DriverScreenState extends State<DriverScreen> {
     _lastKnownPosition = pos;
     _lastEmittedAt = DateTime.now();
     _checkPickupGeofence(pos.latitude, pos.longitude);
+    _refreshActiveDialog?.call();
   }
 
   /// Vérifie si la position actuelle se trouve dans le rayon du pickup
@@ -889,26 +893,6 @@ class _DriverScreenState extends State<DriverScreen> {
     await WhatsappService.openChat(phone: phone, message: message);
   }
 
-  /// Présente l'écran de notation du client après que le livreur a marqué
-  /// la course COMPLETED.
-  Future<void> _promptRatingForClient(dynamic orderData) async {
-    final orderId = orderData?['id']?.toString();
-    if (orderId == null) return;
-    final client = orderData['client'] as Map<String, dynamic>?;
-    final clientName = client != null
-        ? '${client['firstName'] ?? ''} ${client['lastName'] ?? ''}'.trim()
-        : '';
-    if (!mounted) return;
-    await pushAdaptive<void>(
-      context,
-      RatingScreen(
-        orderId: orderId,
-        otherPartyName: clientName,
-        otherPartyRole: 'CLIENT',
-      ),
-    );
-  }
-
   /// Affiche un Snackbar (par-dessus le dialog via [_messengerKey]) quand la
   /// course active a été clôturée à distance (annulation client/admin, etc.).
   void _notifyRemoteTermination(String status) {
@@ -1003,7 +987,12 @@ class _DriverScreenState extends State<DriverScreen> {
               if (dlgCtx.mounted) Navigator.pop(dlgCtx);
               if (targetStatus == 'COMPLETED') {
                 await _promptCashPaymentIfNeeded(data, orderId);
-                await _promptRatingForClient(orderData);
+                if (mounted) {
+                  setState(() {
+                    _historyVersion++;
+                    _profileVersion++;
+                  });
+                }
               }
             } else {
               // IN_PROGRESS (et tout statut atteint après) via le dialog
@@ -1056,6 +1045,12 @@ class _DriverScreenState extends State<DriverScreen> {
                 navigator.pop();
               }
               _notifyRemoteTermination(newStatus);
+              if (mounted) {
+                setState(() {
+                  _historyVersion++;
+                  _profileVersion++;
+                });
+              }
               return;
             }
             if (!dlgCtx.mounted) return;
@@ -1119,6 +1114,48 @@ class _DriverScreenState extends State<DriverScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // ── Bouton Chat ────────────────────────────────────────
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: dialogProcessing
+                          ? null
+                          : () => pushAdaptive<void>(
+                              dlgCtx,
+                              DriverNavigationScreen(
+                                status: dialogStatus,
+                                pickupAddress:
+                                    orderData['pickupAddress']?.toString() ??
+                                    '',
+                                deliveryAddress:
+                                    orderData['deliveryAddress']?.toString() ??
+                                    '',
+                                pickupLat: (orderData['pickupLat'] as num?)
+                                    ?.toDouble(),
+                                pickupLng: (orderData['pickupLng'] as num?)
+                                    ?.toDouble(),
+                                deliveryLat: (orderData['deliveryLat'] as num?)
+                                    ?.toDouble(),
+                                deliveryLng: (orderData['deliveryLng'] as num?)
+                                    ?.toDouble(),
+                                driverPosition: _lastKnownPosition == null
+                                    ? null
+                                    : LatLng(
+                                        _lastKnownPosition!.latitude,
+                                        _lastKnownPosition!.longitude,
+                                      ),
+                              ),
+                            ),
+                      icon: const Icon(Icons.map_outlined, color: Colors.white),
+                      label: const Text(
+                        'Ouvrir la carte de navigation',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0FB271),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -1341,14 +1378,23 @@ class _DriverScreenState extends State<DriverScreen> {
           index: _currentTab,
           children: [
             _buildRadar(),
-            const OrderHistoryScreen(embedInTab: true),
-            const DriverProfileScreen(),
+            OrderHistoryScreen(
+              key: ValueKey('driver-history-$_historyVersion'),
+              embedInTab: true,
+            ),
+            DriverProfileScreen(
+              key: ValueKey('driver-profile-$_profileVersion'),
+            ),
           ],
         ),
         bottomNavigationBar: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
           currentIndex: _currentTab,
-          onTap: (i) => setState(() => _currentTab = i),
+          onTap: (i) => setState(() {
+            if (i == 1 && _currentTab != 1) _historyVersion++;
+            if (i == 2 && _currentTab != 2) _profileVersion++;
+            _currentTab = i;
+          }),
           backgroundColor: const Color(0xFF122530),
           selectedItemColor: const Color(0xFF0FB271),
           unselectedItemColor: Colors.white60,
