@@ -262,7 +262,7 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 - **Backend** : image `deployment-01KX8JSF0BQV3W6P4MWF3P9HXB` déployée sur Fly.io ; health check `GET /` valide et machine version 19 active.
 - **Admin** : build Angular publié sur Cloudflare Pages. URL de déploiement : `https://20ae89f4.zonzon-admin.pages.dev` ; l'URL de production `https://zonzon-admin.pages.dev` est mise à jour par Pages.
 - **Automatisation locale** : `deploy.bat` est désormais le point d'entrée de release. Il arrête la chaîne au premier échec et ne dépend pas de GitHub Actions.
-- **APK** : la tentative de build release depuis cette session a dépassé la limite de temps locale et n'a pas produit d'APK ; les processus Flutter/Gradle orphelins ont été arrêtés. Le backend et l'admin restent déployés avec succès.
+- **APK** : après une première tentative interrompue par la limite de temps locale, le build release a été relancé avec succès (`app-release.apk`, 57,8 MB) et installé via ADB sur le téléphone Android connecté. Le paquet `com.example.mobile_app` est présent dans le profil principal.
 
 ### Session 48 (2026-07-11) — Désactivation des Actions automatiques
 - Les workflows GitHub `ci`, `backend-ci`, `admin-ci`, `flutter-ci` et `deploy` ne sont plus déclenchés automatiquement. Ils restent exécutables manuellement depuis GitHub si besoin.
