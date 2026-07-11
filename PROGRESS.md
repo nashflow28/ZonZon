@@ -258,6 +258,14 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 52 (2026-07-11) — Itinéraire routier dans la carte livreur
+
+- La première version de `DriverNavigationScreen` reliait les marqueurs par une polyline de deux points, ce qui produisait un trait à travers les bâtiments (visible lors du test réel).
+- L'écran charge maintenant `POST /orders/estimate` via `EstimateService` depuis la position GPS actuelle du livreur vers le retrait ou la livraison selon le statut. La polyline retournée par OpenRouteService suit les voies routières.
+- Si la position GPS n'est pas encore disponible ou si le moteur d'itinéraire ne répond pas, aucun faux trait direct n'est affiché; l'écran conserve les marqueurs et explique que l'itinéraire est indisponible temporairement.
+- `flutter analyze` : 11 diagnostics préexistants, aucun nouveau. `flutter test` : **26/26**.
+- APK release régénéré : `mobile_app/build/app/outputs/flutter-apk/app-release.apk` (57.9 MB). Aucun appareil ADB n'était connecté après le build, donc pas d'installation dans cette session.
+
 ### Session 51 (2026-07-11) — Corrections après simulation réelle multi-rôles
 
 #### Constats production

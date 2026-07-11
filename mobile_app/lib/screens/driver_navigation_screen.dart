@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/place.dart';
+import '../services/estimate_service.dart';
 import '../widgets/order_map_widget.dart';
 
 /// Full-screen map used by a driver while an active delivery is in progress.
@@ -36,6 +37,10 @@ class DriverNavigationScreen extends StatefulWidget {
 
 class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
   final MapController _mapController = MapController();
+  final EstimateService _estimateService = EstimateService();
+  List<LatLng> _routePolyline = const [];
+  bool _loadingRoute = false;
+  bool _routeUnavailable = false;
 
   bool get _headingToDelivery =>
       widget.status == 'IN_PROGRESS' || widget.status == 'NEAR_CLIENT';
@@ -60,6 +65,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    _loadRoadRoute();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final target = _headingToDelivery
           ? _delivery?.location
@@ -79,6 +85,38 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
     });
   }
 
+  Future<void> _loadRoadRoute() async {
+    final start = widget.driverPosition;
+    final target = _headingToDelivery ? _delivery?.location : _pickup?.location;
+    // Without an actual driver GPS point, a pickup-to-delivery segment would
+    // be misleading. Keep only the markers until the driver opens the map
+    // after their position has been acquired.
+    if (start == null || target == null) {
+      setState(() => _routeUnavailable = true);
+      return;
+    }
+
+    setState(() => _loadingRoute = true);
+    final estimate = await _estimateService.estimate(
+      lat1: start.latitude,
+      lng1: start.longitude,
+      lat2: target.latitude,
+      lng2: target.longitude,
+    );
+    if (!mounted) return;
+    setState(() {
+      _loadingRoute = false;
+      _routePolyline = estimate?.polyline ?? const [];
+      _routeUnavailable = _routePolyline.length < 2;
+    });
+  }
+
+  @override
+  void dispose() {
+    _estimateService.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final targetAddress = _headingToDelivery
@@ -86,11 +124,6 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
         : widget.pickupAddress;
     final pickup = _pickup;
     final delivery = _delivery;
-    final polyline = <LatLng>[
-      if (pickup != null) pickup.location,
-      if (delivery != null) delivery.location,
-    ];
-
     return Scaffold(
       backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
@@ -107,7 +140,7 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
             child: OrderMapWidget(
               pickup: pickup,
               delivery: delivery,
-              polyline: polyline,
+              polyline: _routePolyline,
               driverPosition: widget.driverPosition,
               mapController: _mapController,
             ),
@@ -145,6 +178,25 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
                               : targetAddress,
                           style: const TextStyle(color: Colors.white),
                         ),
+                        if (_loadingRoute) ...[
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Calcul de l’itinéraire routier…',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ] else if (_routeUnavailable) ...[
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Itinéraire routier indisponible pour le moment.',
+                            style: TextStyle(
+                              color: Colors.white60,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
