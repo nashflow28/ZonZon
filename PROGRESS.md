@@ -47,7 +47,7 @@
 
 | Service | URL / Détail | Status |
 |---------|-------------|--------|
-| **Backend** | `https://zonzon-backend.fly.dev` | ⏸️ Suspendu (scale 0 depuis 2026-06-02 — réactiver avec `flyctl scale count 1 --app zonzon-backend`) |
+| **Backend** | `https://zonzon-backend.fly.dev` | ✅ Live (machine Fly active) |
 | **Admin** | `https://zonzon-admin.pages.dev` | ✅ Live |
 | **Base de données** | TiDB Serverless, cluster `zonzon-db`, AWS Frankfurt | ✅ Active |
 | **Firebase** | Projet `zonzon-4eb31`, compte `koreinnovation28@gmail.com` | ✅ Configuré |
@@ -102,6 +102,19 @@ NOTIFY_RADIUS_KM=5
 FRONTEND_URLS=https://zonzon-admin.pages.dev
 FRONTEND_URL_PATTERNS=^https://[a-z0-9-]+\.zonzon-admin\.pages\.dev$  (optionnel, regex pour previews Cloudflare)
 FIREBASE_CREDENTIALS_JSON=*** (contenu du fichier firebase-adminsdk.json)
+OBJECT_STORAGE_ENDPOINT=https://004d946c5f3886bb2afba3d14d422c66.r2.cloudflarestorage.com
+OBJECT_STORAGE_BUCKET=zonzon-media
+OBJECT_STORAGE_ACCESS_KEY_ID=***
+OBJECT_STORAGE_SECRET_ACCESS_KEY=***
+OBJECT_STORAGE_PUBLIC_URL=https://pub-15fc91f9ec6c4eed8ab820c19d1ae0da.r2.dev
+OBJECT_STORAGE_REGION=auto
+IDENTITY_UPLOAD_DIR=private_uploads/identity
+IDENTITY_STORAGE_ENDPOINT=https://004d946c5f3886bb2afba3d14d422c66.r2.cloudflarestorage.com
+IDENTITY_STORAGE_BUCKET=zonzon-identity-private
+IDENTITY_STORAGE_ACCESS_KEY_ID=***
+IDENTITY_STORAGE_SECRET_ACCESS_KEY=***
+IDENTITY_STORAGE_REGION=auto
+IDENTITY_STORAGE_FORCE_PATH_STYLE=false
 ```
 
 ---
@@ -216,7 +229,7 @@ flyctl logs --app zonzon-backend --no-tail
 
 | Problème | Statut | Solution |
 |----------|--------|---------|
-| Photos uploads éphémères sur Fly.io | ⚠️ À corriger | Ajouter un volume Fly ou migrer vers Cloudflare R2 / Supabase Storage |
+| Nouveaux médias publics | ✅ Stockés dans Cloudflare R2 | Bucket `zonzon-media` via les secrets `OBJECT_STORAGE_*`; les anciens chemins `/uploads/*` restent compatibles mais ne sont pas migrés automatiquement |
 | Mode développeur Windows requis pour Flutter | ✅ Activé | Paramètres → Pour les développeurs |
 | Windows Defender bloque le build Flutter | ✅ Résolu | Dossiers `build/` et `.gradle` exclus |
 | APK buildé sans `--dart-define` → URL localhost | ✅ Corrigé | `env.dart` pointe maintenant sur prod par défaut |
@@ -243,6 +256,39 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 ---
 
 ## Historique des sessions
+
+### Session 47 (2026-07-11) — Activation du stockage R2 public des médias
+- **Bucket public** : `zonzon-media` est créé sur R2 avec l'URL publique de développement `https://pub-15fc91f9ec6c4eed8ab820c19d1ae0da.r2.dev`. Il sert uniquement aux avatars, logos et images de produits; le bucket des pièces d'identité reste privé et séparé.
+- **Accès limité** : une clé S3 `zonzon-media-fly` limitée en lecture/écriture à ce bucket a été créée. Ses valeurs sont uniquement conservées comme secrets Fly `OBJECT_STORAGE_ACCESS_KEY_ID` et `OBJECT_STORAGE_SECRET_ACCESS_KEY`.
+- **Production validée** : les six secrets `OBJECT_STORAGE_*` sont appliqués, le déploiement roulant Fly est terminé, `GET https://zonzon-backend.fly.dev/` retourne `ok` et l'URL publique R2 est joignable (404 attendu sur une clé inexistante).
+- **Vérification des anciens fichiers** : aucun fichier n'a été trouvé dans `backend/uploads` ni `backend/private_uploads` ; aucune migration historique n'est nécessaire.
+- **Validation finale avant commit** : backend `npm test -- --runInBand` (365/365), Flutter `flutter test` (18/18) et dashboard `npm run build -- --configuration production` passent. Le build Angular conserve uniquement trois avertissements préexistants (deux `NG8107` et budget initial de 610 kB).
+- **À prévoir** : remplacer l'URL `r2.dev` par un domaine personnalisé avant une forte montée en charge.
+
+### Session 46 (2026-07-11) — Activation du stockage R2 privé des pièces d'identité
+- **Cloudflare R2** : bucket privé `zonzon-identity-private` créé et aucun accès public n'est configuré.
+- **Fly.io** : les six secrets `IDENTITY_STORAGE_*` sont configurés (endpoint R2, bucket, identifiants S3, région `auto`, path style désactivé). Les identifiants ne sont stockés ni dans le dépôt ni dans ce journal.
+- **Production** : le déploiement roulant Fly a redémarré correctement la machine `zonzon-backend`; `GET https://zonzon-backend.fly.dev/` est opérationnel.
+- **Limite** : les anciens fichiers éventuellement présents dans le dossier éphémère Fly ne sont pas persistants. Le premier nouvel upload de pièce est désormais envoyé vers R2; un test métier complet exige un compte livreur authentifié et une pièce de test.
+
+### Session 45 (2026-07-11) — Protection complète des pièces d'identité R2
+- **Stockage privé distinct** : les pièces d'identité ne passent plus par le bucket média public. Le backend persiste désormais une clé opaque `identity/<filename>` dans `users.idCardPhotoUrl` (colonne réutilisée avec `select: false`, sans migration) et stocke les fichiers dans un dossier privé local `private_uploads/identity` ou dans le bucket R2 privé via `IDENTITY_STORAGE_*`.
+- **Accès sécurisé** : nouveau `GET /v1/users/:id/id-card-photo`, authentifié, autorisé uniquement pour le propriétaire ou un `ADMIN`. Le backend sert un flux binaire (`StreamableFile`) et gère aussi les anciens chemins `/uploads/identity/*` ou URL legacy si présents.
+- **Fronts adaptés** : l'admin charge la pièce via `HttpClient` en blob puis génère un `objectURL`; Flutter charge le binaire authentifié et l'affiche via `Image.memory`. Les médias publics (avatars, logos, produits) restent inchangés.
+- **Configuration/documentation** : `.env.example` documente `IDENTITY_UPLOAD_DIR` + `IDENTITY_STORAGE_*`. `main.ts` ne recrée plus `uploads/identity` public. `flyctl secrets set IDENTITY_UPLOAD_DIR=private_uploads/identity --app zonzon-backend` a bien été appliqué.
+- **Tests/validation** : backend `nest build` ✅, `users.service.spec.ts` 27/27 ✅, admin `ng build --configuration production` ✅, Flutter `flutter test test/` ✅, health check `GET /` ✅, endpoint protégé `GET /v1/users/:id/id-card-photo` sans auth → `401`.
+- **Limite** : aucun bucket R2 privé n'a pu être créé depuis cette session, faute d'accès Cloudflare non-interactif local (`wrangler` non installé/local auth absent, aucun `CLOUDFLARE_API_TOKEN` disponible). L'inventaire local n'a trouvé aucun fichier sous `backend/uploads/**/identity`; il n'y avait donc rien à migrer ni à supprimer. Si un bucket R2 est fourni plus tard, le backend pourra basculer sans changement de code.
+
+### Session 44 (2026-07-11) — Uniformisation des URLs média R2 côté mobile
+- **Correctif ciblé affichage** : les écrans `favorites_screen.dart`, `shop_list_screen.dart` et `driver_profile_screen.dart` utilisent désormais `mediaUrl(...)` pour les logos boutique et la pièce d'identité. Les concaténations directes `$apiUrl$logo` et `$apiUrl$idCardUrl` ont été supprimées pour conserver la compatibilité avec les chemins legacy `/uploads/*` et les URLs absolues du stockage objet.
+- **Tests** : `dart format` exécuté sur les 3 fichiers touchés ; `flutter test test/utils/media_url_test.dart` ✅.
+- **Limite** : aucun autre écran n'a été modifié, conformément au scope demandé.
+
+### Session 43 (2026-07-10) — Fiabilisation session/mobile et stockage persistant
+- **Session, chat et FCM vérifiés** : le code déjà livré purge correctement une session sur `401` (`ClientServices.reset`, token FCM local, credentials), ferme le composer du chat sur statut terminal et confirme le token FCM seulement après une réponse 2xx avec reprise différée après échec. Le backlog a été réaligné sur cet état réel.
+- **Stockage objet prêt pour Cloudflare R2/S3** : nouveau `ObjectStorageService` S3-compatible. Les avatars, pièces d'identité, logos boutiques et photos produits sont envoyés vers le bucket quand les variables `OBJECT_STORAGE_*` sont renseignées; sinon le développement local conserve `/uploads`. Les clients Flutter et Angular savent désormais afficher une URL absolue R2 ou un chemin legacy local.
+- **Configuration production requise** : créer un bucket R2 public (ou domaine personnalisé), puis définir les six secrets `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `OBJECT_STORAGE_PUBLIC_URL`, `OBJECT_STORAGE_REGION=auto` avant le prochain déploiement Fly. Aucune clé n'est stockée dans le dépôt.
+- **Tests** : backend ciblé stockage/utilisateurs/boutiques **47/47** et build NestJS OK; admin production build OK; Flutter : widgets existants + tests utilitaires exécutés avec succès, incluant URL média absolue/legacy et statuts terminaux. `flutter analyze --no-pub` ne contient aucune erreur, seulement alertes de style/dépréciation préexistantes.
 
 ### Session 42 (2026-07-10) — Correctifs complets après revue finale
 - **Éligibilité livreur unifiée** : `UsersService` impose désormais `ACTIVE` + APPROVED + disponible + photo non vide + `isPublic=true` pour les broadcasts Socket.IO et FCM. Le fallback FCM géolocalisé utilise la même liste; le fallback global la filtre aussi. Un livreur privé n'obtient que les courses qui lui sont réservées et ne peut pas accepter une course publique.

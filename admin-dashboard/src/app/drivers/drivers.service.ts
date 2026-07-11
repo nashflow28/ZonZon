@@ -29,7 +29,6 @@ export interface PendingDriver {
   driverRejectionReason?: string | null;
   vehicle?: DriverVehicle | null;
   profilePhotoUrl?: string | null;
-  idCardPhotoUrl?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -43,14 +42,20 @@ export class DriversService {
 
   approveDriver(id: string): Observable<PendingDriver> {
     return this.http.patch<PendingDriver>(`${this.baseUrl}/${id}/driver-approval`, {
-      status: 'APPROVED'
+      status: 'APPROVED',
     });
   }
 
   rejectDriver(id: string, reason?: string): Observable<PendingDriver> {
     return this.http.patch<PendingDriver>(`${this.baseUrl}/${id}/driver-approval`, {
       status: 'REJECTED',
-      reason
+      reason,
+    });
+  }
+
+  getDriverIdCardPhoto(id: string): Observable<Blob> {
+    return this.http.get(`${this.baseUrl}/${id}/id-card-photo`, {
+      responseType: 'blob',
     });
   }
 }

@@ -17,7 +17,7 @@ export const profilePhotoStorage = diskStorage({
  * avatars, cf. pattern `makeStorage` de shops/upload.config.ts.
  */
 export const idCardPhotoStorage = diskStorage({
-  destination: `${process.env.UPLOAD_DIR || 'uploads'}/identity`,
+  destination: process.env.IDENTITY_UPLOAD_DIR || 'private_uploads/identity',
   filename: (_req, file, cb) => {
     const ext = extname(file.originalname).toLowerCase();
     cb(null, `${randomUUID()}${ext}`);

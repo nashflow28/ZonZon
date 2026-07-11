@@ -110,7 +110,7 @@ export class ShopsController {
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.shopsService.setMyShopLogo(this.toActor(user), file.filename);
+    return this.shopsService.setMyShopLogo(this.toActor(user), file);
   }
 
   // ── Merchant : produits ──────────────────────────────────────────────
@@ -154,11 +154,7 @@ export class ShopsController {
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.shopsService.setProductPhoto(
-      this.toActor(user),
-      id,
-      file.filename,
-    );
+    return this.shopsService.setProductPhoto(this.toActor(user), id, file);
   }
 
   @Roles(UserRole.COMMERCANT)
@@ -214,9 +210,7 @@ export class ShopsController {
 
   @Get('favorites')
   listFavorites(@CurrentUser() user: AuthenticatedUser) {
-    return this.shopsService.listFavorites(
-      (user.id ?? user.sub) as string,
-    );
+    return this.shopsService.listFavorites((user.id ?? user.sub) as string);
   }
 
   @Post(':id/favorite')
@@ -224,10 +218,7 @@ export class ShopsController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.shopsService.addFavorite(
-      (user.id ?? user.sub) as string,
-      id,
-    );
+    return this.shopsService.addFavorite((user.id ?? user.sub) as string, id);
   }
 
   @Delete(':id/favorite')

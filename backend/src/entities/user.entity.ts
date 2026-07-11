@@ -60,11 +60,12 @@ export class User {
   profilePhotoUrl: string;
 
   /**
-   * Photo de la pièce d'identité du livreur (CNI, passeport...), exigée par
-   * le cahier des charges V1 pour la validation admin. Stockée dans un
-   * sous-dossier dédié `identity` (données sensibles, séparées des avatars).
+   * Clé opaque de la pièce d'identité du livreur (ex: `identity/<uuid>.jpg`).
+   * `select: false` évite toute exposition accidentelle dans les réponses
+   * usuelles ; l'accès se fait uniquement via `GET /users/:id/id-card-photo`
+   * pour le propriétaire ou un ADMIN.
    */
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true, select: false })
   idCardPhotoUrl: string | null;
 
   /**

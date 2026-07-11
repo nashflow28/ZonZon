@@ -15,9 +15,16 @@ import {
 
 function ensureUploadDirs() {
   const root = process.env.UPLOAD_DIR || 'uploads';
-  for (const sub of ['shops', 'products', 'avatars', 'identity']) {
+  for (const sub of ['shops', 'products', 'avatars']) {
     fs.mkdirSync(path.join(process.cwd(), root, sub), { recursive: true });
   }
+  fs.mkdirSync(
+    path.join(
+      process.cwd(),
+      process.env.IDENTITY_UPLOAD_DIR || 'private_uploads/identity',
+    ),
+    { recursive: true },
+  );
 }
 
 async function bootstrap() {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/message.dart';
 import '../services/chat_service.dart';
+import '../utils/order_status_utils.dart';
 import '../utils/platform_adapter.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -157,10 +158,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final closed =
-        _orderStatus == 'COMPLETED' ||
-        _orderStatus == 'CANCELLED' ||
-        _orderStatus == 'FAILED';
+    final closed = OrderStatusUtils.isTerminal(_orderStatus);
     return Scaffold(
       backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(

@@ -81,13 +81,19 @@
 - [ ] **Fallback auto livreur public** si affiliés indisponibles (attribution auto avancée — classé « après V1 » dans le CDC, à planifier)
 
 ### 🟢 Profil livreur complet (conformité CDC)
-- [x] **Photo de pièce d'identité** — `User.idCardPhotoUrl`, `POST /users/me/id-card-photo` (storage dédié `uploads/identity/`). Mobile : upload/aperçu dans l'écran Profil livreur. Admin : vignette + alerte « non fournie » dans l'écran de validation. *(2026-07-05)*
+- [x] **Photo de pièce d'identité** — clé opaque `User.idCardPhotoUrl` (stockage privé `private_uploads/identity` / bucket privé `IDENTITY_STORAGE_*`), `POST /users/me/id-card-photo`, `GET /users/:id/id-card-photo` pour l'accès autorisé. Mobile : upload/aperçu dans l'écran Profil livreur. Admin : vignette chargée en blob authentifié + alerte si absente. *(2026-07-05, durci le 2026-07-11)*
 - [x] **Zone habituelle** — `Vehicle.usualZone` (FK `Zone`), `usualZoneId` sur `PUT /vehicles/me`. Mobile : dropdown zones actives. Admin : affichée à côté du véhicule dans la validation. *(2026-07-05)*
 - Vérifs : backend jest 221/221 (15 suites) ; admin build prod OK ; mobile analyze 10 (préexistantes) / test 10/10.
 
 ---
 
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)
+
+### Sécurité médias privés (2026-07-11)
+- [x] **P0 — Pièces d'identité privées R2 / streaming authentifié** — stockage privé distinct `IDENTITY_STORAGE_*`, clé opaque persistée dans `users.idCardPhotoUrl` (`select: false`), endpoint `GET /users/:id/id-card-photo` réservé au propriétaire ou ADMIN, affichage admin/mobile en blob authentifié. Bucket R2 privé `zonzon-identity-private` et secrets Fly configurés. Aucun média public (avatars/logos/produits) n'a été modifié. *(2026-07-11)*
+
+### Correction ciblée mobile (2026-07-11)
+- [x] **P2 — Uniformiser les URLs média R2 dans les écrans favoris / boutiques / profil livreur** — `favorites_screen.dart`, `shop_list_screen.dart` et `driver_profile_screen.dart` utilisent maintenant `mediaUrl(...)` au lieu des concaténations directes `$apiUrl$logo` et `$apiUrl$idCardUrl`. Compatibilité conservée avec les URLs absolues et les chemins legacy `/uploads/*`. *(2026-07-11)*
 
 ### Revue robustesse mobile (2026-07-10) — correctifs de la session 38 validés
 - [x] **P0 — Fuite inter-session client + push après 401** — `logout()` et `handleUnauthorized()` appellent désormais `ClientServices.reset()` (socket + commandes actives) ; sur 401, `PushService.invalidateLocalToken()` supprime le token FCM côté device (le serveur n'est plus joignable avec un JWT mort). *(2026-07-10)*
@@ -100,7 +106,7 @@
 
 ### Revue post-correctifs (2026-07-10) — verdict FAIL
 - [x] **P0 — Encadrer le paiement espèces par la fin effective de course et une reprise** — backend verrouillé par acteur/statut (`COMPLETED` requis hors admin), actions prématurées retirées du mobile, reprise ajoutée dans l'historique/détail client/livreur. *(2026-07-10)*
-- [~] **P0 — Rendre la photo livreur atomique, contrôlée par le serveur et durable** — session mobile désormais publiée seulement après upload réussi ; backend bloque approbation/disponibilité/prise de course sans photo. **Reste ouvert** : migration `uploads/` vers un stockage persistant (R2/S3/Supabase ou volume Fly), car le disque Fly actuel reste éphémère.
+- [x] **P0 — Rendre la photo livreur atomique, contrôlée par le serveur et durable** — session mobile publiée seulement après upload réussi ; backend bloque approbation/disponibilité/prise de course sans photo. Stockage S3-compatible/R2 branché pour avatars, pièce, logo et produit; configuration des secrets Fly requise avant déploiement. *(2026-07-10)*
 - [x] **P1 — Corriger le pre-prompt FCM** — `PushService` utilise maintenant la `rootNavigatorKey` du router pour le dialog de pré-permission. *(2026-07-10)*
 - [x] **P1 — Rendre les destinataires de chat canoniques** — `ensureConversation()` matérialise systématiquement client, livreur et commerçant dans les participants. *(2026-07-10)*
 - [x] **P1 — Protéger le cycle de vie de `ChatService`** — garde `_disposed` ajoutée autour du bootstrap async et du socket. *(2026-07-10)*
@@ -137,12 +143,12 @@
 - [x] **P1 — Activer les tarifs par zone dans le mobile** — sélection/envoi `pickupZoneId` / `destinationZoneId` côté client et commerçant, estimation alignée sur le pricing backend.
 - [x] **P1 — Sécuriser la réassignation** — `PATCH /orders/:id/assign` vérifie désormais le commerçant propriétaire (ou admin).
 - [x] **P2 — Sécuriser le chat multi-participants** — fermeture aussi sur `FAILED`, `chat:typing` autorisé seulement après contrôle d'appartenance, conversation commerçant réellement exploitable côté mobile.
-- [~] **P2 — Couvrir les flux récents** — backend couvert (171 tests commandes/gateway/messages OK), mais il manque encore des tests widget/intégration Flutter dédiés pour affiliation invite/accept, création commerçant, notification tap et conversation multi-participants.
-- [ ] **P0 — Purger complètement une session mobile invalide (401)** — `handleUnauthorized()` efface seulement les credentials : le socket et `ActiveOrdersStore` statiques du client restent vivants, ce qui peut exposer les commandes du client A au client B après une reconnexion dans le même processus. Supprimer aussi le token FCM local à cette occasion, sans boucle de requêtes 401. *(revu le 2026-07-10)*
-- [ ] **P0 — Rendre le paiement espèces exécutable côté client/livreur** — les courses démarrent `UNPAID`, mais seul l'écran commerçant appelle `PATCH /orders/:id/payment-status`. Ajouter une confirmation sûre de remise/paiement au livreur (et la visibilité cohérente au client) pour les courses Type 2.
-- [ ] **P1 — Rendre la photo réellement obligatoire à l'inscription livreur** — le sélecteur et le blocage sans fichier existent, mais le compte est créé avant l'upload et le fallback actuel laisse continuer en cas d'échec réseau. Le backend doit imposer une inscription atomique/deux phases validées, ou bloquer l'accès tant que la photo n'est pas persistée.
-- [ ] **P1 — Fermer/synchroniser le chat client et commerçant au statut terminal** — `ChatScreen` reçoit un statut figé ; après `COMPLETED`/`CANCELLED`/`FAILED`, le composer reste actif et les messages sont refusés par le serveur puis affichés en échec.
-- [ ] **P2 — Fiabiliser le synchronisme FCM** — ne marquer `_syncedToken` qu'après une réponse 2xx de `PATCH /users/me/fcm-token`, puis réessayer après erreur réseau/HTTP ; aujourd'hui une erreur bloque les notifications jusqu'au prochain redémarrage ou refresh FCM.
+- [x] **P2 — Couvrir les flux récents** — tests de régression ajoutés pour statuts terminaux de conversation et URLs média absolues/legacy; couverture backend stockage/utilisateurs/boutiques ajoutée. *(2026-07-10)*
+- [x] **P0 — Purger complètement une session mobile invalide (401)** — `handleUnauthorized()` invalide le FCM local, appelle `ClientServices.reset()` (socket, commandes actives, sélection boutique) puis efface les credentials. *(vérifié le 2026-07-10)*
+- [x] **P0 — Rendre le paiement espèces exécutable côté client/livreur** — actions client/livreur disponibles après `COMPLETED`, reprise depuis l’historique et visibilité cohérente du paiement. *(vérifié le 2026-07-10)*
+- [x] **P1 — Rendre la photo réellement obligatoire à l'inscription livreur** — l’inscription ne publie plus la session avant upload réussi ; le backend bloque validation, disponibilité et acceptation sans photo. *(vérifié le 2026-07-10)*
+- [x] **P1 — Fermer/synchroniser le chat client et commerçant au statut terminal** — `ChatScreen` écoute `orderStatusUpdated`, masque le composer et affiche l’état terminal. *(vérifié le 2026-07-10)*
+- [x] **P2 — Fiabiliser le synchronisme FCM** — `_syncedToken` n’est défini qu’après 2xx et une tentative différée est programmée après échec. *(vérifié le 2026-07-10)*
 - [ ] **P2 — Clarifier les accusés de lecture du chat multi-participants** — l'UI affiche `done_all` dès qu'un seul participant lit le message (`readAt` global). Afficher une sémantique « lu par au moins un » ou des reçus par participant.
 - [ ] **P2 — Durcir les routes et le cycle de vie socket** — protéger aussi les routes plates par rôle (`/driver/profile`, `/shops`, etc.) et empêcher `OrderSocketController.init()` de créer un socket après son `dispose()` lors d'une sortie rapide.
 - [x] **Décision PO — tarif CDC** — tranché : **200 FCFA/km** conservé. CDC source mis à jour (§4, note de décision du 2026-07-10) ; config backend (`PricingConfig` défaut 200) déjà alignée, tarif ajustable par l'admin. *(2026-07-10)*
@@ -217,9 +223,11 @@
   - Aucun `usersRepository.remove/delete` ni `ordersRepository.remove/delete` existant à remplacer (vérifié par grep). `OrdersService.findAll/findForUser` exclut déjà les soft-deleted via le comportement par défaut TypeORM — pas de modification nécessaire.
   - Pas d'endpoint soft-delete sur `DeliveryOrder` (l'annulation existe déjà via `updateStatus → CANCELLED`).
   - Tests Jest : `backend/src/users/users.service.spec.ts` créé (2 tests : softDelete et restore).
-- [ ] **Migration uploads vers Cloudflare R2** — uploads sur Fly sont éphémères, photos disparaissent à chaque deploy
+- [x] **Migration des nouveaux uploads vers Cloudflare R2** — uploads sur Fly sont éphémères, photos disparaissent à chaque deploy
   - `backend/src/users/upload.config.ts` + `backend/src/shops/upload.config.ts`
   - Compatible S3 SDK
+  - Pièces d'identité : bucket privé `zonzon-identity-private`; médias publics (avatars, logos, produits) : bucket public `zonzon-media` avec secrets Fly configurés. *(2026-07-11)*
+  - Aucun ancien fichier détecté dans `backend/uploads` ou `backend/private_uploads` : aucune migration historique nécessaire. Reste optionnellement le remplacement de l'URL `r2.dev` par un domaine personnalisé.
 - [x] **FCM fallback livreurs offline** — un livreur déconnecté du WS reçoit maintenant une push FCM dès qu'une nouvelle course est créée
   - Fichiers : `backend/src/orders/orders.service.ts` (méthode privée `notifyOfflineLivreurs`, fire-and-forget après le broadcast WS) + `backend/src/users/users.service.ts` (`findLivreursWithFcmToken`)
   - Push payload : `{ kind: 'new_order', orderId }`, body = "Pickup: <adresse>" (tronqué à 80 chars)

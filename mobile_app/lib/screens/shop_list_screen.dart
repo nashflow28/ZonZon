@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import '../config/env.dart';
 import '../models/shop.dart';
 import '../services/shops_service.dart';
 import 'favorites_screen.dart';
 import 'shop_detail_screen.dart';
+import '../utils/media_url.dart';
 import '../utils/platform_adapter.dart';
 
 /// Sélection de boutique côté client.
@@ -171,8 +171,10 @@ class _ShopListScreenState extends State<ShopListScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
         automaticallyImplyLeading: !widget.hideBackButton,
-        title: const Text('Commerces',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Commerces',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.favorite, color: Color(0xFFF0453D)),
@@ -188,7 +190,10 @@ class _ShopListScreenState extends State<ShopListScreen> {
               height: 52,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 itemCount: _categories.length + 1,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                 itemBuilder: (_, i) {
@@ -218,21 +223,21 @@ class _ShopListScreenState extends State<ShopListScreen> {
             child: _loading
                 ? Center(child: adaptiveLoader(color: const Color(0xFF0FB271)))
                 : _shops.isEmpty
-                    ? _empty()
-                    : RefreshIndicator(
-                        color: const Color(0xFF0FB271),
-                        onRefresh: _refresh,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-                          itemCount: _shops.length,
-                          itemBuilder: (_, i) => _ShopCard(
-                            shop: _shops[i],
-                            isFavorite: _favoriteIds.contains(_shops[i].id),
-                            onTap: () => _openShop(_shops[i]),
-                            onToggleFavorite: () => _toggleFavorite(_shops[i]),
-                          ),
-                        ),
+                ? _empty()
+                : RefreshIndicator(
+                    color: const Color(0xFF0FB271),
+                    onRefresh: _refresh,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
+                      itemCount: _shops.length,
+                      itemBuilder: (_, i) => _ShopCard(
+                        shop: _shops[i],
+                        isFavorite: _favoriteIds.contains(_shops[i].id),
+                        onTap: () => _openShop(_shops[i]),
+                        onToggleFavorite: () => _toggleFavorite(_shops[i]),
                       ),
+                    ),
+                  ),
           ),
         ],
       ),
@@ -257,8 +262,10 @@ class _ShopListScreenState extends State<ShopListScreen> {
             TextButton.icon(
               onPressed: _refresh,
               icon: const Icon(Icons.refresh, color: Color(0xFF0FB271)),
-              label: const Text('Rafraîchir',
-                  style: TextStyle(color: Color(0xFF0FB271))),
+              label: const Text(
+                'Rafraîchir',
+                style: TextStyle(color: Color(0xFF0FB271)),
+              ),
             ),
           ],
         ),
@@ -350,14 +357,17 @@ class _ShopCard extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.05),
                         image: logo != null
                             ? DecorationImage(
-                                image: NetworkImage('$apiUrl$logo'),
+                                image: NetworkImage(mediaUrl(logo)),
                                 fit: BoxFit.cover,
                               )
                             : null,
                       ),
                       child: logo == null
-                          ? const Icon(Icons.storefront,
-                              color: Color(0xFF0FB271), size: 28)
+                          ? const Icon(
+                              Icons.storefront,
+                              color: Color(0xFF0FB271),
+                              size: 28,
+                            )
                           : null,
                     ),
                     const SizedBox(width: 14),
@@ -383,14 +393,19 @@ class _ShopCard extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                color: Colors.white60, fontSize: 12),
+                              color: Colors.white60,
+                              fontSize: 12,
+                            ),
                           ),
                           if (shop.distanceKm != null) ...[
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                const Icon(Icons.near_me,
-                                    size: 12, color: Color(0xFF2E90FA)),
+                                const Icon(
+                                  Icons.near_me,
+                                  size: 12,
+                                  color: Color(0xFF2E90FA),
+                                ),
                                 const SizedBox(width: 4),
                                 Text(
                                   '${shop.distanceKm!.toStringAsFixed(1)} km',

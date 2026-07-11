@@ -139,9 +139,11 @@ export class ShopsComponent implements OnInit, OnDestroy {
 
   logoSrc(shop: Shop): string | null {
     if (!shop.logoUrl) return null;
-    return shop.logoUrl.startsWith('http')
-      ? shop.logoUrl
-      : `${environment.apiUrl}${shop.logoUrl}`;
+    return this.mediaUrl(shop.logoUrl);
+  }
+
+  private mediaUrl(path: string): string {
+    return /^https?:\/\//i.test(path) ? path : `${environment.apiUrl}${path}`;
   }
 
   statusBadgeClass(status: ShopStatus): string {

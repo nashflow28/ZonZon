@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import '../config/env.dart';
+import '../utils/media_url.dart';
 import '../models/product.dart';
 import '../services/shops_service.dart';
 import '../utils/platform_adapter.dart';
@@ -137,22 +137,27 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
                         fit: BoxFit.cover,
                       )
                     : (_photoUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage('$apiUrl$_photoUrl'),
-                            fit: BoxFit.cover,
-                          )
-                        : null),
+                          ? DecorationImage(
+                              image: NetworkImage(mediaUrl(_photoUrl!)),
+                              fit: BoxFit.cover,
+                            )
+                          : null),
               ),
               child: (_localPhotoPath == null && _photoUrl == null)
                   ? const Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_a_photo,
-                              color: Color(0xFF0FB271), size: 40),
+                          Icon(
+                            Icons.add_a_photo,
+                            color: Color(0xFF0FB271),
+                            size: 40,
+                          ),
                           SizedBox(height: 8),
-                          Text('Ajouter une photo',
-                              style: TextStyle(color: Color(0xFF0FB271))),
+                          Text(
+                            'Ajouter une photo',
+                            style: TextStyle(color: Color(0xFF0FB271)),
+                          ),
                         ],
                       ),
                     )
@@ -183,8 +188,12 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           ),
           const SizedBox(height: 12),
-          _input('Description (optionnel)', _description,
-              icon: Icons.notes, maxLines: 4),
+          _input(
+            'Description (optionnel)',
+            _description,
+            icon: Icons.notes,
+            maxLines: 4,
+          ),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -196,8 +205,10 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
             child: SwitchListTile(
               value: _available,
               onChanged: (v) => setState(() => _available = v),
-              title: const Text('Disponible',
-                  style: TextStyle(color: Colors.white, fontSize: 15)),
+              title: const Text(
+                'Disponible',
+                style: TextStyle(color: Colors.white, fontSize: 15),
+              ),
               subtitle: const Text(
                 'Décocher pour cacher le produit du catalogue',
                 style: TextStyle(color: Colors.white54, fontSize: 12),
@@ -212,14 +223,19 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
             child: ElevatedButton.icon(
               onPressed: _saving ? null : _save,
               icon: const Icon(Icons.check),
-              label: Text(_saving ? 'Enregistrement…' : 'Enregistrer',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold)),
+              label: Text(
+                _saving ? 'Enregistrement…' : 'Enregistrer',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF0FB271),
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
           ),
@@ -251,10 +267,14 @@ class _MerchantProductFormScreenState extends State<MerchantProductFormScreen> {
         decoration: InputDecoration(
           hintText: label,
           hintStyle: const TextStyle(color: Colors.white60),
-          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF0FB271)) : null,
+          prefixIcon: icon != null
+              ? Icon(icon, color: const Color(0xFF0FB271))
+              : null,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
       ),
     );

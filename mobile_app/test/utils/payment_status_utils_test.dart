@@ -6,4 +6,11 @@ void main() {
     expect(PaymentStatusUtils.isSettled('REFUNDED'), isTrue);
     expect(PaymentStatusUtils.isSettled('UNPAID'), isFalse);
   });
+
+  test('les statuts terminaux ferment les actions de conversation', () {
+    expect(OrderStatusUtils.isTerminal('COMPLETED'), isTrue);
+    expect(OrderStatusUtils.isTerminal('CANCELLED'), isTrue);
+    expect(OrderStatusUtils.isTerminal('FAILED'), isTrue);
+    expect(OrderStatusUtils.isTerminal('IN_PROGRESS'), isFalse);
+  });
 }

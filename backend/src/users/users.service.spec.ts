@@ -12,6 +12,8 @@ import {
 import { Vehicle } from '../entities/vehicle.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { IdentityStorageService } from '../storage/identity-storage.service';
+import { Readable } from 'stream';
 
 const mockUsersRepo = () => ({
   find: jest.fn(),
@@ -26,6 +28,11 @@ const mockUsersRepo = () => ({
 const mockVehiclesRepo = () => ({
   create: jest.fn(),
   save: jest.fn(),
+});
+
+const mockIdentityStorage = () => ({
+  store: jest.fn(),
+  open: jest.fn(),
 });
 
 describe('UsersService', () => {
@@ -351,15 +358,61 @@ describe('UsersService', () => {
   });
 
   describe('updateIdCardPhoto', () => {
-    it('met à jour idCardPhotoUrl dans le sous-dossier /uploads/identity/', async () => {
+    it('met à jour idCardPhotoUrl avec une clé opaque identity/<filename>', async () => {
       usersRepository.update.mockResolvedValue({ affected: 1 } as any);
 
       const result = await service.updateIdCardPhoto('user-1', 'cni.jpg');
 
       expect(usersRepository.update).toHaveBeenCalledWith('user-1', {
-        idCardPhotoUrl: '/uploads/identity/cni.jpg',
+        idCardPhotoUrl: 'identity/cni.jpg',
       });
-      expect(result).toEqual({ idCardPhotoUrl: '/uploads/identity/cni.jpg' });
+      expect(result).toEqual({ ok: true });
+    });
+  });
+
+  describe('getIdCardPhoto', () => {
+    it('autorise le propriétaire et renvoie le flux privé', async () => {
+      usersRepository.findOne.mockResolvedValue({
+        id: 'user-1',
+        idCardPhotoUrl: 'identity/cni.jpg',
+      });
+
+      const identityStorage = mockIdentityStorage();
+      identityStorage.open.mockResolvedValue({
+        stream: Readable.from(['binary']),
+        contentType: 'image/jpeg',
+      });
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getRepositoryToken(User), useValue: usersRepository },
+          {
+            provide: getRepositoryToken(Vehicle),
+            useValue: mockVehiclesRepo(),
+          },
+          { provide: IdentityStorageService, useValue: identityStorage },
+        ],
+      }).compile();
+      const svc = module.get<UsersService>(UsersService);
+
+      const asset = await svc.getIdCardPhoto('user-1', {
+        id: 'user-1',
+        role: UserRole.CLIENT,
+      });
+
+      expect(identityStorage.open).toHaveBeenCalledWith('identity/cni.jpg');
+      expect(asset.contentType).toBe('image/jpeg');
+      expect(asset.stream).toBeDefined();
+    });
+
+    it('refuse un accès tiers non admin', async () => {
+      await expect(
+        service.getIdCardPhoto('user-1', {
+          id: 'user-2',
+          role: UserRole.CLIENT,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -33,9 +34,11 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   final _picker = ImagePicker();
 
   User? _user;
+  Uint8List? _idCardBytes;
   Map<String, dynamic>? _vehicle;
   Map<String, dynamic>? _stats;
   bool _loading = true;
+  bool _loadingIdCard = false;
   bool _togglingAvailability = false;
   bool _togglingVisibility = false;
   bool _uploadingIdCard = false;
@@ -97,6 +100,8 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         if (statsRes.statusCode == 200) {
           _stats = jsonDecode(statsRes.body) as Map<String, dynamic>;
         }
+
+        await _loadIdCardPreview();
       }
 
       if (vehicleRes.statusCode == 200) {
@@ -126,14 +131,14 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
               .map((m) => Map<String, dynamic>.from(m))
               .where((m) => m['status']?.toString() == 'COMPLETED')
               .fold<int>(0, (sum, m) {
-            final raw = m['priceFcfa'];
-            final value = raw is int
-                ? raw
-                : raw is num
+                final raw = m['priceFcfa'];
+                final value = raw is int
+                    ? raw
+                    : raw is num
                     ? raw.toInt()
                     : int.tryParse(raw?.toString() ?? '') ?? 0;
-            return sum + value;
-          });
+                return sum + value;
+              });
         }
       }
 
@@ -156,6 +161,25 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         _unreadNotificationsCount = page.items.where((n) => n.isUnread).length;
       });
     } catch (_) {}
+  }
+
+  Future<void> _loadIdCardPreview() async {
+    final user = _user;
+    if (user == null) return;
+
+    setState(() => _loadingIdCard = true);
+    try {
+      final res = await _api.get('/users/${user.id}/id-card-photo');
+      if (res.statusCode == 200) {
+        _idCardBytes = res.bodyBytes;
+      } else {
+        _idCardBytes = null;
+      }
+    } catch (_) {
+      _idCardBytes = null;
+    } finally {
+      if (mounted) setState(() => _loadingIdCard = false);
+    }
   }
 
   Future<void> _openNotifications() async {
@@ -181,16 +205,19 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       };
     }
 
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
-    )
-      ..headers['Authorization'] = 'Bearer $token'
-      ..files.add(await http.MultipartFile.fromPath(
-        'file',
-        picked.path,
-        contentType: mimeFromPath(picked.path),
-      ));
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
+          )
+          ..headers['Authorization'] = 'Bearer $token'
+          ..files.add(
+            await http.MultipartFile.fromPath(
+              'file',
+              picked.path,
+              contentType: mimeFromPath(picked.path),
+            ),
+          );
 
     final response = await request.send();
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -221,16 +248,19 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         };
       }
 
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$apiUrl$apiPrefix/users/me/id-card-photo'),
-      )
-        ..headers['Authorization'] = 'Bearer $token'
-        ..files.add(await http.MultipartFile.fromPath(
-          'file',
-          picked.path,
-          contentType: mimeFromPath(picked.path),
-        ));
+      final request =
+          http.MultipartRequest(
+              'POST',
+              Uri.parse('$apiUrl$apiPrefix/users/me/id-card-photo'),
+            )
+            ..headers['Authorization'] = 'Bearer $token'
+            ..files.add(
+              await http.MultipartFile.fromPath(
+                'file',
+                picked.path,
+                contentType: mimeFromPath(picked.path),
+              ),
+            );
 
       final response = await request.send();
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -245,10 +275,13 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    final res = await _api.patch('/users/me', body: {
-      'firstName': _firstNameCtrl.text.trim(),
-      'lastName': _lastNameCtrl.text.trim(),
-    });
+    final res = await _api.patch(
+      '/users/me',
+      body: {
+        'firstName': _firstNameCtrl.text.trim(),
+        'lastName': _lastNameCtrl.text.trim(),
+      },
+    );
     if (res.statusCode == 200 || res.statusCode == 201) {
       await _load();
       if (mounted) {
@@ -259,8 +292,10 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
 
   Future<void> _saveVehicle() async {
     final body = <String, dynamic>{'type': _vehicleType};
-    if (_plateCtrl.text.trim().isNotEmpty) body['licensePlate'] = _plateCtrl.text.trim();
-    if (_descCtrl.text.trim().isNotEmpty) body['description'] = _descCtrl.text.trim();
+    if (_plateCtrl.text.trim().isNotEmpty)
+      body['licensePlate'] = _plateCtrl.text.trim();
+    if (_descCtrl.text.trim().isNotEmpty)
+      body['description'] = _descCtrl.text.trim();
     // Toujours envoyé explicitement (y compris `null`) pour permettre le
     // retrait de la zone habituelle quand "Aucune" est sélectionnée.
     body['usualZoneId'] = _selectedZoneId;
@@ -286,11 +321,17 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       });
       showAdaptiveSnack(
         context,
-        effective ? 'Vous êtes maintenant disponible' : 'Vous êtes maintenant indisponible',
+        effective
+            ? 'Vous êtes maintenant disponible'
+            : 'Vous êtes maintenant indisponible',
       );
     } catch (e) {
       if (mounted) {
-        showAdaptiveSnack(context, e.toString().replaceFirst('Exception: ', ''), isError: true);
+        showAdaptiveSnack(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _togglingAvailability = false);
@@ -314,7 +355,11 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       );
     } catch (e) {
       if (mounted) {
-        showAdaptiveSnack(context, e.toString().replaceFirst('Exception: ', ''), isError: true);
+        showAdaptiveSnack(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
       }
     } finally {
       if (mounted) setState(() => _togglingVisibility = false);
@@ -354,23 +399,23 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       if (!mounted) return;
       setState(() {
         _affiliations = _affiliations
-            .map((item) => item.merchantId == merchantId
-                ? DriverAffiliationInvite(
-                    merchantId: item.merchantId,
-                    status: response.status,
-                    createdAt: item.createdAt,
-                    acceptedAt: response.acceptedAt ?? item.acceptedAt,
-                    removedAt: response.removedAt ?? item.removedAt,
-                    merchant: item.merchant,
-                  )
-                : item)
+            .map(
+              (item) => item.merchantId == merchantId
+                  ? DriverAffiliationInvite(
+                      merchantId: item.merchantId,
+                      status: response.status,
+                      createdAt: item.createdAt,
+                      acceptedAt: response.acceptedAt ?? item.acceptedAt,
+                      removedAt: response.removedAt ?? item.removedAt,
+                      merchant: item.merchant,
+                    )
+                  : item,
+            )
             .toList();
       });
       showAdaptiveSnack(
         context,
-        action == 'accept'
-            ? 'Affiliation acceptée.'
-            : 'Invitation refusée.',
+        action == 'accept' ? 'Affiliation acceptée.' : 'Invitation refusée.',
       );
     } catch (e) {
       if (mounted) {
@@ -412,7 +457,10 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           const SizedBox(height: 16),
           _buildStatsRow(),
           const SizedBox(height: 16),
-          _buildSection('Affiliations commerçants', _buildAffiliationsSection()),
+          _buildSection(
+            'Affiliations commerçants',
+            _buildAffiliationsSection(),
+          ),
           const SizedBox(height: 16),
           _buildHistoryTile(),
           const SizedBox(height: 16),
@@ -427,11 +475,16 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             child: OutlinedButton.icon(
               onPressed: _logout,
               icon: const Icon(Icons.logout, color: Colors.redAccent),
-              label: const Text('Se déconnecter', style: TextStyle(color: Colors.redAccent)),
+              label: const Text(
+                'Se déconnecter',
+                style: TextStyle(color: Colors.redAccent),
+              ),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Colors.redAccent),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
           ),
@@ -450,12 +503,17 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             radius: 56,
             backgroundColor: const Color(0xFF22414D),
             backgroundImage: photoUrl != null
-                ? NetworkImage('$apiUrl$photoUrl')
+                ? NetworkImage(mediaUrl(photoUrl))
                 : null,
             child: photoUrl == null
                 ? Text(
-                    ((_user?.firstName ?? '?')[0] + (_user?.lastName ?? '?')[0]).toUpperCase(),
-                    style: const TextStyle(fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold),
+                    ((_user?.firstName ?? '?')[0] + (_user?.lastName ?? '?')[0])
+                        .toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 36,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   )
                 : null,
           ),
@@ -470,7 +528,11 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                   shape: BoxShape.circle,
                 ),
                 padding: const EdgeInsets.all(8),
-                child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                child: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.white,
+                  size: 18,
+                ),
               ),
             ),
           ),
@@ -479,11 +541,17 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     );
   }
 
+  String mediaUrl(String path) {
+    final uri = Uri.tryParse(path);
+    if (uri != null && uri.hasScheme) return path;
+    return '$apiUrl$path';
+  }
+
   /// Section "Pièce d'identité" : vignette (rectangle) de la pièce
   /// d'identité actuelle ou un placeholder, avec un bouton d'upload vers
   /// `POST /users/me/id-card-photo`.
   Widget _buildIdCardSection() {
-    final idCardUrl = _user?.idCardPhotoUrl;
+    final idCardBytes = _idCardBytes;
     final needsIdCard = _user?.isDriverApproved == false;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,9 +562,13 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             width: double.infinity,
             height: 160,
             color: const Color(0xFF0C1A22),
-            child: idCardUrl != null
-                ? Image.network(
-                    '$apiUrl$idCardUrl',
+            child: _loadingIdCard
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF2E90FA)),
+                  )
+                : idCardBytes != null
+                ? Image.memory(
+                    idCardBytes,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) =>
                         _idCardPlaceholder(),
@@ -517,13 +589,15 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                   )
                 : const Icon(Icons.upload_outlined, color: Color(0xFF2E90FA)),
             label: Text(
-              idCardUrl != null ? 'Changer la pièce d\'identité' : 'Ajouter',
+              idCardBytes != null ? 'Changer la pièce d\'identité' : 'Ajouter',
               style: const TextStyle(color: Color(0xFF2E90FA)),
             ),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: Color(0xFF2E90FA)),
               padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ),
@@ -562,14 +636,16 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
 
     if (!user.isDriverApproved) {
       final isRejected = user.isDriverRejected;
-      final color = isRejected ? const Color(0xFFF0453D) : const Color(0xFFFF9E1B);
+      final color = isRejected
+          ? const Color(0xFFF0453D)
+          : const Color(0xFFFF9E1B);
       final title = isRejected
           ? 'Compte refusé'
           : 'En attente de validation par un administrateur';
       final subtitle = isRejected
           ? (user.driverRejectionReason?.trim().isNotEmpty == true
-              ? user.driverRejectionReason!
-              : 'Contactez le support pour plus de détails.')
+                ? user.driverRejectionReason!
+                : 'Contactez le support pour plus de détails.')
           : 'Vous pourrez passer disponible une fois votre compte validé.';
 
       return Container(
@@ -582,15 +658,28 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(isRejected ? Icons.error_outline : Icons.hourglass_top, color: color),
+            Icon(
+              isRejected ? Icons.error_outline : Icons.hourglass_top,
+              color: color,
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
                 ],
               ),
             ),
@@ -615,7 +704,11 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           Expanded(
             child: Text(
               user.isAvailable ? 'Disponible' : 'Indisponible',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+              ),
             ),
           ),
           if (_togglingAvailability)
@@ -661,7 +754,11 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
               const Expanded(
                 child: Text(
                   'Recevoir les courses publiques',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
                 ),
               ),
               if (_togglingVisibility)
@@ -695,9 +792,19 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       children: [
         Row(
           children: [
-            _statCard(Icons.star_rounded, avg, 'Note moy.', const Color(0xFFFF9E1B)),
+            _statCard(
+              Icons.star_rounded,
+              avg,
+              'Note moy.',
+              const Color(0xFFFF9E1B),
+            ),
             const SizedBox(width: 12),
-            _statCard(Icons.delivery_dining, total, 'Avis reçus', const Color(0xFF2E90FA)),
+            _statCard(
+              Icons.delivery_dining,
+              total,
+              'Avis reçus',
+              const Color(0xFF2E90FA),
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -726,8 +833,18 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
               ],
             ),
           ],
@@ -752,8 +869,18 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
               ],
             ),
           ),
@@ -807,14 +934,20 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                           const SizedBox(height: 2),
                           Text(
                             merchant!.phone!,
-                            style: const TextStyle(color: Colors.white54, fontSize: 12),
+                            style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ],
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(20),
@@ -837,7 +970,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: busy ? null : () => _respondToAffiliation(invite, 'reject'),
+                        onPressed: busy
+                            ? null
+                            : () => _respondToAffiliation(invite, 'reject'),
                         icon: const Icon(Icons.close, color: Color(0xFFF0453D)),
                         label: const Text(
                           'Refuser',
@@ -851,7 +986,9 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: busy ? null : () => _respondToAffiliation(invite, 'accept'),
+                        onPressed: busy
+                            ? null
+                            : () => _respondToAffiliation(invite, 'accept'),
                         icon: busy
                             ? SizedBox(
                                 width: 16,
@@ -884,10 +1021,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => pushAdaptive<void>(
-          context,
-          const OrderHistoryScreen(),
-        ),
+        onTap: () => pushAdaptive<void>(context, const OrderHistoryScreen()),
         child: const Padding(
           padding: EdgeInsets.all(16),
           child: Row(
@@ -926,7 +1060,15 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.5)),
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
         const SizedBox(height: 12),
         Container(
           padding: const EdgeInsets.all(16),
@@ -947,7 +1089,12 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         const SizedBox(height: 12),
         _field('Nom', _lastNameCtrl, Icons.person_outline),
         const SizedBox(height: 12),
-        _field('Téléphone', TextEditingController(text: _user?.phone ?? ''), Icons.phone_outlined, readOnly: true),
+        _field(
+          'Téléphone',
+          TextEditingController(text: _user?.phone ?? ''),
+          Icons.phone_outlined,
+          readOnly: true,
+        ),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
@@ -956,9 +1103,17 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2E90FA),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Enregistrer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Enregistrer',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       ],
@@ -992,10 +1147,12 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           style: const TextStyle(color: Colors.white),
           items: [
             const DropdownMenuItem<String?>(value: null, child: Text('Aucune')),
-            ..._zones.map((z) => DropdownMenuItem<String?>(
-                  value: z['id'] as String?,
-                  child: Text(z['name']?.toString() ?? ''),
-                )),
+            ..._zones.map(
+              (z) => DropdownMenuItem<String?>(
+                value: z['id'] as String?,
+                child: Text(z['name']?.toString() ?? ''),
+              ),
+            ),
           ],
           onChanged: (v) => setState(() => _selectedZoneId = v),
         ),
@@ -1007,16 +1164,29 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0FB271),
               padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
-            child: const Text('Mettre à jour le véhicule', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Mettre à jour le véhicule',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _field(String label, TextEditingController ctrl, IconData icon, {bool readOnly = false}) {
+  Widget _field(
+    String label,
+    TextEditingController ctrl,
+    IconData icon, {
+    bool readOnly = false,
+  }) {
     return TextField(
       controller: ctrl,
       readOnly: readOnly,
@@ -1032,7 +1202,10 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
       prefixIcon: Icon(icon, color: Colors.white60),
       filled: true,
       fillColor: const Color(0xFF0C1A22),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Color(0xFF2E90FA)),
@@ -1075,18 +1248,31 @@ class _NotificationsBellButton extends StatelessWidget {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              const Icon(Icons.notifications_outlined, color: Colors.white70, size: 26),
+              const Icon(
+                Icons.notifications_outlined,
+                color: Colors.white70,
+                size: 26,
+              ),
               if (unreadCount > 0)
                 Positioned(
                   top: -2,
                   right: -4,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0453D),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF0C1A22), width: 1.5),
+                      border: Border.all(
+                        color: const Color(0xFF0C1A22),
+                        width: 1.5,
+                      ),
                     ),
                     child: Text(
                       unreadCount > 99 ? '99+' : '$unreadCount',

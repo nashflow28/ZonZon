@@ -15,6 +15,10 @@ import 'package:flutter/material.dart';
 class OrderStatusUtils {
   const OrderStatusUtils._();
 
+  /// Les statuts terminaux ferment les actions de course et le composer chat.
+  static bool isTerminal(String? status) =>
+      const {'COMPLETED', 'CANCELLED', 'FAILED'}.contains(status);
+
   /// Libellé FR court, utilisé pour les pills/badges et les listes.
   static String label(String? status) {
     switch (status) {

@@ -10,6 +10,7 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  StreamableFile,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UsersService } from './users.service';
@@ -102,7 +103,10 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: AvailabilityDto,
   ) {
-    return this.usersService.setAvailability(user.id ?? user.sub, dto.available);
+    return this.usersService.setAvailability(
+      user.id ?? user.sub,
+      dto.available,
+    );
   }
 
   /**
@@ -135,10 +139,7 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.usersService.updateProfilePhoto(
-      user.id ?? user.sub,
-      file.filename,
-    );
+    return this.usersService.updateProfilePhoto(user.id ?? user.sub, file);
   }
 
   /**
@@ -158,10 +159,16 @@ export class UsersController {
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.usersService.updateIdCardPhoto(
-      user.id ?? user.sub,
-      file.filename,
-    );
+    return this.usersService.updateIdCardPhoto(user.id ?? user.sub, file);
+  }
+
+  @Get(':id/id-card-photo')
+  async getIdCardPhoto(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    const asset = await this.usersService.getIdCardPhoto(id, user);
+    return new StreamableFile(asset.stream, { type: asset.contentType });
   }
 
   @Roles(UserRole.ADMIN)

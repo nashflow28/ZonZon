@@ -49,10 +49,12 @@ import { ZonesModule } from './zones/zones.module';
 import { MerchantDriversModule } from './merchant-drivers/merchant-drivers.module';
 import { SignalementsModule } from './signalements/signalements.module';
 import { ConversationsModule } from './conversations/conversations.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    StorageModule,
     LoggerModule.forRoot({
       pinoHttp: {
         transport:
@@ -92,7 +94,10 @@ import { ConversationsModule } from './conversations/conversations.module';
       username: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
       database: process.env.DB_DATABASE || 'zonzon_db',
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
+      ssl:
+        process.env.DB_SSL === 'true'
+          ? { rejectUnauthorized: true }
+          : undefined,
       entities: [
         User,
         Vehicle,

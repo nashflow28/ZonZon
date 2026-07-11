@@ -13,6 +13,7 @@ import { Product } from '../entities/product.entity';
 import { FavoriteShop } from '../entities/favorite-shop.entity';
 import { UserRole } from '../entities/user.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
 
 const mockShopsRepo = (): Partial<Repository<Shop>> => ({
   find: jest.fn(),
@@ -52,6 +53,12 @@ const mockAuditLogService = () => ({
   list: jest.fn(),
 });
 
+const mockObjectStorage = () => ({
+  store: jest.fn(
+    async (_file: any, _prefix: string, localUrl: string) => localUrl,
+  ),
+});
+
 const merchantActor = {
   id: 'merchant-1',
   role: UserRole.COMMERCANT,
@@ -67,12 +74,14 @@ describe('ShopsService', () => {
   let productsRepo: any;
   let favoritesRepo: ReturnType<typeof mockFavoritesRepo>;
   let auditLog: ReturnType<typeof mockAuditLogService>;
+  let objectStorage: ReturnType<typeof mockObjectStorage>;
 
   beforeEach(async () => {
     shopsRepo = mockShopsRepo();
     productsRepo = mockProductsRepo();
     favoritesRepo = mockFavoritesRepo();
     auditLog = mockAuditLogService();
+    objectStorage = mockObjectStorage();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -84,6 +93,7 @@ describe('ShopsService', () => {
           useValue: favoritesRepo,
         },
         { provide: AuditLogService, useValue: auditLog },
+        { provide: ObjectStorageService, useValue: objectStorage },
       ],
     }).compile();
 

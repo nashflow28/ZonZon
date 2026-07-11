@@ -19,6 +19,12 @@ import {
 import { Vehicle, VehicleType } from '../entities/vehicle.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
+import { IdentityStorageService } from '../storage/identity-storage.service';
+import { basename } from 'path';
+import { Readable } from 'stream';
+import { createReadStream, promises as fsPromises } from 'fs';
+import type { AuthenticatedUser } from '../auth/types';
 
 @Injectable()
 export class UsersService {
@@ -34,6 +40,8 @@ export class UsersService {
     @Optional()
     @Inject(forwardRef(() => NotificationsService))
     private notifications?: NotificationsService,
+    @Optional() private objectStorage?: ObjectStorageService,
+    @Optional() private identityStorage?: IdentityStorageService,
   ) {}
 
   private ensureDriverHasOperationalProfile(user: User) {
@@ -264,8 +272,17 @@ export class UsersService {
     return this.vehiclesRepository.save(vehicle);
   }
 
-  async updateProfilePhoto(userId: string, filename: string) {
-    const publicUrl = `/uploads/${filename}`;
+  async updateProfilePhoto(
+    userId: string,
+    file: Pick<Express.Multer.File, 'filename' | 'mimetype' | 'path'> | string,
+  ) {
+    const filename = typeof file === 'string' ? file : file.filename;
+    const localUrl = `/uploads/${filename}`;
+    const publicUrl =
+      typeof file === 'string'
+        ? localUrl
+        : ((await this.objectStorage?.store(file, 'avatars', localUrl)) ??
+          localUrl);
     await this.usersRepository.update(userId, { profilePhotoUrl: publicUrl });
     return { profilePhotoUrl: publicUrl };
   }
@@ -275,10 +292,42 @@ export class UsersService {
    * `identity`, cf. idCardPhotoStorage). Utilisé par l'admin pour la
    * validation du compte livreur.
    */
-  async updateIdCardPhoto(userId: string, filename: string) {
-    const publicUrl = `/uploads/identity/${filename}`;
-    await this.usersRepository.update(userId, { idCardPhotoUrl: publicUrl });
-    return { idCardPhotoUrl: publicUrl };
+  async updateIdCardPhoto(
+    userId: string,
+    file: Pick<Express.Multer.File, 'filename' | 'mimetype' | 'path'> | string,
+  ) {
+    const filename = basename(typeof file === 'string' ? file : file.filename);
+    const storageKey = `identity/${filename}`;
+    const persistedKey =
+      typeof file === 'string'
+        ? storageKey
+        : ((await this.identityStorage?.store(file)) ?? storageKey);
+    await this.usersRepository.update(userId, {
+      idCardPhotoUrl: persistedKey,
+    });
+    return { ok: true };
+  }
+
+  async getIdCardPhoto(userId: string, actor: AuthenticatedUser) {
+    const actorId = actor.id ?? actor.sub;
+    if (actor.role !== UserRole.ADMIN && actorId !== userId) {
+      throw new ForbiddenException(
+        "Vous ne pouvez consulter que votre propre pièce d'identité",
+      );
+    }
+
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: {
+        id: true,
+        idCardPhotoUrl: true,
+      } as any,
+    });
+    if (!user?.idCardPhotoUrl) {
+      throw new NotFoundException("Pièce d'identité introuvable");
+    }
+
+    return this.openIdCardAsset(user.idCardPhotoUrl);
   }
 
   async updateFcmToken(userId: string, token: string | null) {
@@ -401,5 +450,65 @@ export class UsersService {
       relations: ['vehicle'],
     });
     return drivers.filter((driver) => !!driver.profilePhotoUrl?.trim());
+  }
+
+  private async openIdCardAsset(reference: string): Promise<{
+    stream: Readable;
+    contentType: string;
+  }> {
+    const cleaned = reference.trim();
+    if (/^https?:\/\//i.test(cleaned)) {
+      const response = await fetch(cleaned);
+      if (!response.ok || !response.body) {
+        throw new NotFoundException("Pièce d'identité introuvable");
+      }
+      return {
+        stream: Readable.fromWeb(response.body as any),
+        contentType:
+          response.headers.get('content-type') ?? 'application/octet-stream',
+      };
+    }
+
+    if (cleaned.startsWith('/uploads/')) {
+      const localPath = cleaned.replace(/^\/+/, '');
+      const absolutePath = `${process.cwd()}/${localPath}`;
+      await fsPromises.access(absolutePath).catch(() => {
+        throw new NotFoundException("Pièce d'identité introuvable");
+      });
+      return {
+        stream: createReadStream(absolutePath),
+        contentType: this.contentTypeForReference(cleaned),
+      };
+    }
+
+    const key = cleaned.startsWith('identity/')
+      ? cleaned
+      : `identity/${basename(cleaned)}`;
+    if (this.identityStorage) {
+      return this.identityStorage.open(key);
+    }
+
+    const localPath = `${process.cwd()}/${process.env.IDENTITY_UPLOAD_DIR || 'private_uploads/identity'}/${basename(key)}`;
+    await fsPromises.access(localPath).catch(() => {
+      throw new NotFoundException("Pièce d'identité introuvable");
+    });
+    return {
+      stream: createReadStream(localPath),
+      contentType: this.contentTypeForReference(key),
+    };
+  }
+
+  private contentTypeForReference(reference: string): string {
+    const lower = reference.toLowerCase();
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) {
+      return 'image/jpeg';
+    }
+    if (lower.endsWith('.png')) {
+      return 'image/png';
+    }
+    if (lower.endsWith('.webp')) {
+      return 'image/webp';
+    }
+    return 'application/octet-stream';
   }
 }

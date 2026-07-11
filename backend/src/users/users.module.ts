@@ -8,6 +8,7 @@ import { Vehicle } from '../entities/vehicle.entity';
 import { DeviceToken } from '../entities/device-token.entity';
 import { AuditLogModule } from '../audit-log/audit-log.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     // NotificationsService (§14.1 — notif validation/refus livreur) → on
     // casse le cycle avec forwardRef des deux côtés.
     forwardRef(() => NotificationsModule),
+    StorageModule,
   ],
   controllers: [UsersController],
   providers: [UsersService, DeviceTokensService],

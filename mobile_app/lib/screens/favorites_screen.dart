@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../config/env.dart';
 import '../models/shop.dart';
 import '../services/shops_service.dart';
+import '../utils/media_url.dart';
 import '../utils/platform_adapter.dart';
 import 'shop_detail_screen.dart';
 
@@ -120,13 +120,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       body: _loading
           ? Center(child: adaptiveLoader(color: const Color(0xFF2E90FA)))
           : _hasError
-              ? _errorView()
-              : RefreshIndicator(
-                  color: const Color(0xFF2E90FA),
-                  backgroundColor: const Color(0xFF122530),
-                  onRefresh: _refresh,
-                  child: _shops.isEmpty ? _emptyView() : _listView(),
-                ),
+          ? _errorView()
+          : RefreshIndicator(
+              color: const Color(0xFF2E90FA),
+              backgroundColor: const Color(0xFF122530),
+              onRefresh: _refresh,
+              child: _shops.isEmpty ? _emptyView() : _listView(),
+            ),
     );
   }
 
@@ -138,8 +138,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           padding: const EdgeInsets.fromLTRB(24, 80, 24, 24),
           child: Column(
             children: [
-              const Icon(Icons.error_outline,
-                  color: Color(0xFFF0453D), size: 48),
+              const Icon(
+                Icons.error_outline,
+                color: Color(0xFFF0453D),
+                size: 48,
+              ),
               const SizedBox(height: 16),
               const Text(
                 'Impossible de charger les favoris.',
@@ -259,14 +262,17 @@ class _FavoriteShopCard extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.05),
                     image: logo != null
                         ? DecorationImage(
-                            image: NetworkImage('$apiUrl$logo'),
+                            image: NetworkImage(mediaUrl(logo)),
                             fit: BoxFit.cover,
                           )
                         : null,
                   ),
                   child: logo == null
-                      ? const Icon(Icons.storefront,
-                          color: Color(0xFF0FB271), size: 28)
+                      ? const Icon(
+                          Icons.storefront,
+                          color: Color(0xFF0FB271),
+                          size: 28,
+                        )
                       : null,
                 ),
                 const SizedBox(width: 14),
@@ -288,14 +294,19 @@ class _FavoriteShopCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            color: Colors.white60, fontSize: 12),
+                          color: Colors.white60,
+                          fontSize: 12,
+                        ),
                       ),
                       if (shop.distanceKm != null) ...[
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.near_me,
-                                size: 12, color: Color(0xFF2E90FA)),
+                            const Icon(
+                              Icons.near_me,
+                              size: 12,
+                              color: Color(0xFF2E90FA),
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               '${shop.distanceKm!.toStringAsFixed(1)} km',
@@ -316,8 +327,11 @@ class _FavoriteShopCard extends StatelessWidget {
                   shape: const CircleBorder(),
                   clipBehavior: Clip.antiAlias,
                   child: IconButton(
-                    icon: const Icon(Icons.favorite,
-                        color: Color(0xFFF0453D), size: 22),
+                    icon: const Icon(
+                      Icons.favorite,
+                      color: Color(0xFFF0453D),
+                      size: 22,
+                    ),
                     tooltip: 'Retirer des favoris',
                     onPressed: onRemove,
                   ),

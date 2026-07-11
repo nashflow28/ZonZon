@@ -1,10 +1,11 @@
 <div class="p-4 md:p-8">
   <div class="max-w-7xl mx-auto">
-
     <!-- Summary -->
     <div *ngIf="!isLoading()" class="flex items-center gap-3 mb-6">
       <div class="rounded-2xl px-4 py-3 border bg-yellow-500/10 border-yellow-500/30">
-        <span class="text-[11px] uppercase tracking-wider text-yellow-200/80 font-semibold mr-2">En attente</span>
+        <span class="text-[11px] uppercase tracking-wider text-yellow-200/80 font-semibold mr-2"
+          >En attente</span
+        >
         <span class="text-xl font-extrabold text-yellow-200">{{ drivers().length }}</span>
       </div>
     </div>
@@ -13,12 +14,17 @@
     <app-skeleton-row *ngIf="isLoading()" [rows]="4" [cols]="4"></app-skeleton-row>
 
     <!-- Error -->
-    <div *ngIf="!isLoading() && errored()"
-         class="bg-slate-800/40 p-10 rounded-2xl border border-slate-700/50 text-center text-slate-400 flex flex-col items-center gap-3">
+    <div
+      *ngIf="!isLoading() && errored()"
+      class="bg-slate-800/40 p-10 rounded-2xl border border-slate-700/50 text-center text-slate-400 flex flex-col items-center gap-3"
+    >
       <lucide-icon name="alert-triangle" class="w-8 h-8 text-red-400"></lucide-icon>
       Impossible de charger les livreurs en attente.
-      <button type="button" (click)="fetch()"
-              class="mt-1 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-slate-700/60 hover:bg-slate-700 transition">
+      <button
+        type="button"
+        (click)="fetch()"
+        class="mt-1 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white bg-slate-700/60 hover:bg-slate-700 transition"
+      >
         <lucide-icon name="refresh-cw" class="w-4 h-4"></lucide-icon>
         Réessayer
       </button>
@@ -28,28 +34,38 @@
     <app-empty-state
       *ngIf="!isLoading() && !errored() && drivers().length === 0"
       title="Aucun livreur en attente"
-      description="Tous les livreurs ont été traités. Les nouvelles inscriptions apparaîtront ici.">
+      description="Tous les livreurs ont été traités. Les nouvelles inscriptions apparaîtront ici."
+    >
     </app-empty-state>
 
     <!-- Grid -->
-    <div *ngIf="!isLoading() && !errored() && drivers().length > 0"
-         class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      <div *ngFor="let driver of drivers()"
-           class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 flex flex-col gap-3">
+    <div
+      *ngIf="!isLoading() && !errored() && drivers().length > 0"
+      class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+    >
+      <div
+        *ngFor="let driver of drivers()"
+        class="bg-slate-800/40 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-4 flex flex-col gap-3"
+      >
         <div class="flex items-start gap-3">
-          <div *ngIf="photoSrc(driver) as src; else placeholderPhoto"
-               class="w-14 h-14 rounded-xl bg-slate-900 flex items-center justify-center overflow-hidden border border-slate-700/50 shrink-0">
+          <div
+            *ngIf="photoSrc(driver) as src; else placeholderPhoto"
+            class="w-14 h-14 rounded-xl bg-slate-900 flex items-center justify-center overflow-hidden border border-slate-700/50 shrink-0"
+          >
             <img [src]="src" alt="" class="w-full h-full object-cover" />
           </div>
           <ng-template #placeholderPhoto>
-            <div class="w-14 h-14 rounded-xl bg-sky-600/20 border border-sky-500/40 flex items-center justify-center shrink-0">
+            <div
+              class="w-14 h-14 rounded-xl bg-sky-600/20 border border-sky-500/40 flex items-center justify-center shrink-0"
+            >
               <span class="text-sky-300 font-bold text-sm">{{ initials(driver) }}</span>
             </div>
           </ng-template>
           <div class="min-w-0 flex-1">
             <h3 class="text-white font-bold truncate">{{ fullName(driver) }}</h3>
-            <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border mb-2
-                         bg-yellow-500/20 text-yellow-300 border-yellow-500/40">
+            <span
+              class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border mb-2 bg-yellow-500/20 text-yellow-300 border-yellow-500/40"
+            >
               En attente
             </span>
             <div class="flex items-center gap-2 text-xs text-slate-400">
@@ -59,7 +75,9 @@
           </div>
         </div>
 
-        <div class="bg-slate-900/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-2 text-sm text-slate-300">
+        <div
+          class="bg-slate-900/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-2 text-sm text-slate-300"
+        >
           <lucide-icon name="bike" class="w-4 h-4 text-sky-400 shrink-0"></lucide-icon>
           <span class="truncate">
             {{ vehicleLabel(driver) }}
@@ -76,17 +94,38 @@
         </div>
 
         <!-- Identity document -->
-        <div class="bg-slate-900/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3 text-sm">
-          <ng-container *ngIf="idCardPhotoSrc(driver) as idSrc; else noIdCard">
-            <a [href]="idSrc" target="_blank" rel="noopener"
-               class="w-12 h-12 rounded-lg bg-slate-900 border border-slate-700/50 overflow-hidden shrink-0 hover:ring-2 hover:ring-sky-500/60 transition"
-               title="Voir la pièce d'identité en grand">
+        <div
+          class="bg-slate-900/50 border border-slate-700/40 rounded-xl p-3 flex items-center gap-3 text-sm"
+        >
+          <ng-container *ngIf="idCardPhotoSrc(driver.id) as idSrc; else idCardState">
+            <a
+              [href]="idSrc"
+              target="_blank"
+              rel="noopener"
+              class="w-12 h-12 rounded-lg bg-slate-900 border border-slate-700/50 overflow-hidden shrink-0 hover:ring-2 hover:ring-sky-500/60 transition"
+              title="Voir la pièce d'identité en grand"
+            >
               <img [src]="idSrc" alt="Pièce d'identité" class="w-full h-full object-cover" />
             </a>
-            <span class="text-slate-300">Pièce d'identité fournie</span>
+            <span class="text-slate-300">Pièce d'identité chargée</span>
           </ng-container>
-          <ng-template #noIdCard>
-            <div class="w-12 h-12 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0">
+          <ng-template #idCardState>
+            <ng-container *ngIf="isIdCardLoading(driver.id); else idCardMissing">
+              <div
+                class="w-12 h-12 rounded-lg bg-slate-800 border border-slate-700/50 flex items-center justify-center shrink-0"
+              >
+                <lucide-icon
+                  name="refresh-cw"
+                  class="w-5 h-5 text-sky-400 animate-spin"
+                ></lucide-icon>
+              </div>
+              <span class="text-slate-300">Chargement sécurisé…</span>
+            </ng-container>
+          </ng-template>
+          <ng-template #idCardMissing>
+            <div
+              class="w-12 h-12 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0"
+            >
               <lucide-icon name="id-card" class="w-5 h-5 text-amber-400"></lucide-icon>
             </div>
             <span class="text-amber-300 font-semibold">Pièce d'identité non fournie</span>
@@ -101,16 +140,23 @@
             placeholder="Motif de refus (optionnel)…"
             maxlength="255"
             rows="2"
-            class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-red-500"></textarea>
+            class="w-full bg-slate-900 border border-slate-700 text-white text-sm rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-red-500"
+          ></textarea>
           <div class="grid grid-cols-2 gap-2">
-            <button type="button" (click)="closeReject()"
-                    [disabled]="isBusy(driver.id)"
-                    class="bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/50 text-slate-200 px-3 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50">
+            <button
+              type="button"
+              (click)="closeReject()"
+              [disabled]="isBusy(driver.id)"
+              class="bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/50 text-slate-200 px-3 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50"
+            >
               Annuler
             </button>
-            <button type="button" (click)="confirmReject(driver)"
-                    [disabled]="isBusy(driver.id)"
-                    class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition disabled:opacity-50">
+            <button
+              type="button"
+              (click)="confirmReject(driver)"
+              [disabled]="isBusy(driver.id)"
+              class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-3 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+            >
               <lucide-icon name="x-circle" class="w-4 h-4"></lucide-icon>
               Confirmer le refus
             </button>
@@ -119,15 +165,21 @@
 
         <!-- Default actions -->
         <div *ngIf="rejectingId() !== driver.id" class="grid grid-cols-2 gap-2 mt-auto">
-          <button type="button" (click)="openReject(driver)"
-                  [disabled]="isBusy(driver.id)"
-                  class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition disabled:opacity-50">
+          <button
+            type="button"
+            (click)="openReject(driver)"
+            [disabled]="isBusy(driver.id)"
+            class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+          >
             <lucide-icon name="x-circle" class="w-4 h-4"></lucide-icon>
             Refuser
           </button>
-          <button type="button" (click)="approve(driver)"
-                  [disabled]="isBusy(driver.id)"
-                  class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition disabled:opacity-50">
+          <button
+            type="button"
+            (click)="approve(driver)"
+            [disabled]="isBusy(driver.id)"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2.5 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+          >
             <lucide-icon name="check-circle" class="w-4 h-4"></lucide-icon>
             Approuver
           </button>

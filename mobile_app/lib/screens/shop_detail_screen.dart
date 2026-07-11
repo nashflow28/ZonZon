@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../config/env.dart';
+import '../utils/media_url.dart';
 import '../models/product.dart';
 import '../models/shop.dart';
 import '../services/shops_service.dart';
@@ -111,9 +111,7 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                           ? 'Retirer des favoris'
                           : 'Ajouter aux favoris',
                       icon: Icon(
-                        _isFavorite
-                            ? Icons.favorite
-                            : Icons.favorite_border,
+                        _isFavorite ? Icons.favorite : Icons.favorite_border,
                         color: _isFavorite
                             ? const Color(0xFFF0453D)
                             : Colors.white,
@@ -122,17 +120,19 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                     ),
                   ],
                   flexibleSpace: FlexibleSpaceBar(
-                    title: Text(s.name,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold)),
+                    title: Text(
+                      s.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     background: Stack(
                       fit: StackFit.expand,
                       children: [
                         if (s.logoUrl != null)
-                          Image.network('$apiUrl${s.logoUrl}',
-                              fit: BoxFit.cover)
+                          Image.network(mediaUrl(s.logoUrl!), fit: BoxFit.cover)
                         else
                           Container(
                             decoration: const BoxDecoration(
@@ -143,8 +143,11 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                               ),
                             ),
                             child: const Center(
-                              child: Icon(Icons.storefront,
-                                  color: Colors.white, size: 80),
+                              child: Icon(
+                                Icons.storefront,
+                                color: Colors.white,
+                                size: 80,
+                              ),
                             ),
                           ),
                         Container(
@@ -170,11 +173,15 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (s.description != null && s.description!.isNotEmpty) ...[
+                          if (s.description != null &&
+                              s.description!.isNotEmpty) ...[
                             Text(
                               s.description!,
                               style: const TextStyle(
-                                  color: Colors.white70, fontSize: 14, height: 1.4),
+                                color: Colors.white70,
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
                             ),
                             const SizedBox(height: 12),
                           ],
@@ -229,8 +236,10 @@ class _ShopDetailScreenState extends State<ShopDetailScreen> {
           Icon(icon, color: const Color(0xFF0FB271), size: 16),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(text,
-                style: const TextStyle(color: Colors.white, fontSize: 13)),
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
           ),
         ],
       ),
@@ -264,14 +273,17 @@ class _ProductCard extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.05),
               image: photo != null
                   ? DecorationImage(
-                      image: NetworkImage('$apiUrl$photo'),
+                      image: NetworkImage(mediaUrl(photo)),
                       fit: BoxFit.cover,
                     )
                   : null,
             ),
             child: photo == null
-                ? const Icon(Icons.image_outlined,
-                    color: Colors.white24, size: 32)
+                ? const Icon(
+                    Icons.image_outlined,
+                    color: Colors.white24,
+                    size: 32,
+                  )
                 : null,
           ),
           const SizedBox(width: 12),
@@ -282,18 +294,23 @@ class _ProductCard extends StatelessWidget {
                 Text(
                   product.name,
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600),
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                if (product.description != null && product.description!.isNotEmpty)
+                if (product.description != null &&
+                    product.description!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
                       product.description!,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 const SizedBox(height: 4),
@@ -314,7 +331,9 @@ class _ProductCard extends StatelessWidget {
               backgroundColor: const Color(0xFF0FB271),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('Commander', style: TextStyle(fontSize: 13)),
           ),

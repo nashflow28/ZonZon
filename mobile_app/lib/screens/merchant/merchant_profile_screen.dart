@@ -7,6 +7,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../config/env.dart';
+import '../../utils/media_url.dart';
 import '../../models/user.dart';
 import '../../router/app_router.dart';
 import '../../services/api_client.dart';
@@ -103,16 +104,19 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
       };
     }
 
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
-    )
-      ..headers['Authorization'] = 'Bearer $token'
-      ..files.add(await http.MultipartFile.fromPath(
-        'file',
-        picked.path,
-        contentType: mimeFromPath(picked.path),
-      ));
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
+          )
+          ..headers['Authorization'] = 'Bearer $token'
+          ..files.add(
+            await http.MultipartFile.fromPath(
+              'file',
+              picked.path,
+              contentType: mimeFromPath(picked.path),
+            ),
+          );
 
     final response = await request.send();
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -124,17 +128,24 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    final res = await _api.patch('/users/me', body: {
-      'firstName': _firstNameCtrl.text.trim(),
-      'lastName': _lastNameCtrl.text.trim(),
-    });
+    final res = await _api.patch(
+      '/users/me',
+      body: {
+        'firstName': _firstNameCtrl.text.trim(),
+        'lastName': _lastNameCtrl.text.trim(),
+      },
+    );
     if (!mounted) return;
     if (res.statusCode == 200 || res.statusCode == 201) {
       await _load();
       if (!mounted) return;
       showAdaptiveSnack(context, 'Profil commerçant mis à jour');
     } else {
-      showAdaptiveSnack(context, 'Erreur lors de la mise à jour', isError: true);
+      showAdaptiveSnack(
+        context,
+        'Erreur lors de la mise à jour',
+        isError: true,
+      );
     }
   }
 
@@ -178,7 +189,10 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                   top: 10,
                   right: 10,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0453D),
                       borderRadius: BorderRadius.circular(999),
@@ -249,7 +263,10 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                     onTap: _openNotifications,
                   ),
                   const SizedBox(height: 18),
-                  _buildSection('Informations personnelles', _buildProfileFields()),
+                  _buildSection(
+                    'Informations personnelles',
+                    _buildProfileFields(),
+                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -283,10 +300,13 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
           CircleAvatar(
             radius: 56,
             backgroundColor: const Color(0xFF22414D),
-            backgroundImage: photoUrl != null ? NetworkImage('$apiUrl$photoUrl') : null,
+            backgroundImage: photoUrl != null
+                ? NetworkImage(mediaUrl(photoUrl))
+                : null,
             child: photoUrl == null
                 ? Text(
-                    ((_user?.firstName ?? '?')[0] + (_user?.lastName ?? '?')[0]).toUpperCase(),
+                    ((_user?.firstName ?? '?')[0] + (_user?.lastName ?? '?')[0])
+                        .toUpperCase(),
                     style: const TextStyle(
                       fontSize: 36,
                       color: Colors.white,
@@ -306,7 +326,11 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                   shape: BoxShape.circle,
                 ),
                 padding: const EdgeInsets.all(8),
-                child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                child: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.white,
+                  size: 18,
+                ),
               ),
             ),
           ),
@@ -349,7 +373,10 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(color: Colors.white60, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white60,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -415,7 +442,10 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
             ),
             child: const Text(
               'Enregistrer',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),

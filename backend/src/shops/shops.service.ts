@@ -17,6 +17,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { haversineKm } from '../common/geo';
 import { AuditLogService } from '../audit-log/audit-log.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
 
 interface ActorPayload {
   id?: string;
@@ -32,6 +33,7 @@ export class ShopsService {
     @InjectRepository(FavoriteShop)
     private favoritesRepo: Repository<FavoriteShop>,
     private readonly auditLog: AuditLogService,
+    private readonly objectStorage: ObjectStorageService,
   ) {}
 
   private actorId(actor: ActorPayload): string {
@@ -94,10 +96,17 @@ export class ShopsService {
     return this.shopsRepo.save(shop);
   }
 
-  async setMyShopLogo(actor: ActorPayload, filename: string): Promise<Shop> {
+  async setMyShopLogo(
+    actor: ActorPayload,
+    file: Pick<Express.Multer.File, 'filename' | 'mimetype' | 'path'>,
+  ): Promise<Shop> {
     const shop = await this.getMyShop(actor);
     if (!shop) throw new NotFoundException('Aucune boutique');
-    shop.logoUrl = `/uploads/shops/${filename}`;
+    shop.logoUrl = await this.objectStorage.store(
+      file,
+      'shops',
+      `/uploads/shops/${file.filename}`,
+    );
     return this.shopsRepo.save(shop);
   }
 
@@ -204,10 +213,14 @@ export class ShopsService {
   async setProductPhoto(
     actor: ActorPayload,
     productId: string,
-    filename: string,
+    file: Pick<Express.Multer.File, 'filename' | 'mimetype' | 'path'>,
   ): Promise<Product> {
     const product = await this.ownProduct(actor, productId);
-    product.photoUrl = `/uploads/products/${filename}`;
+    product.photoUrl = await this.objectStorage.store(
+      file,
+      'products',
+      `/uploads/products/${file.filename}`,
+    );
     return this.productsRepo.save(product);
   }
 
@@ -283,10 +296,7 @@ export class ShopsService {
    * Idempotent : un double-clic ne déclenche pas d'erreur (UNIQUE en base
    * gère le cas, on swallow le ConflictException issu du conflit clé unique).
    */
-  async addFavorite(
-    userId: string,
-    shopId: string,
-  ): Promise<{ ok: boolean }> {
+  async addFavorite(userId: string, shopId: string): Promise<{ ok: boolean }> {
     const shop = await this.shopsRepo.findOne({
       where: { id: shopId, status: ShopStatus.APPROVED },
     });

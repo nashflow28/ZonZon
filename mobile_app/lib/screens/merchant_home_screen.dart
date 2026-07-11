@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../controllers/order_socket_controller.dart';
 import 'package:image_picker/image_picker.dart';
-import '../config/env.dart';
+import '../utils/media_url.dart';
 import '../models/order_history_item.dart';
 import '../models/product.dart';
 import '../models/shop.dart';
@@ -590,7 +590,7 @@ class _ShopHeaderCard extends StatelessWidget {
                       ),
                       image: logoUrl != null
                           ? DecorationImage(
-                              image: NetworkImage('$apiUrl$logoUrl'),
+                              image: NetworkImage(mediaUrl(logoUrl)),
                               fit: BoxFit.cover,
                             )
                           : null,
@@ -830,7 +830,7 @@ class _ProductTile extends StatelessWidget {
               color: Colors.white.withValues(alpha: 0.05),
               image: photo != null
                   ? DecorationImage(
-                      image: NetworkImage('$apiUrl$photo'),
+                      image: NetworkImage(mediaUrl(photo)),
                       fit: BoxFit.cover,
                     )
                   : null,

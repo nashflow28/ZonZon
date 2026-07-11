@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import '../config/env.dart';
+import '../utils/media_url.dart';
 import '../models/user.dart';
 import '../router/app_router.dart';
 import '../services/api_client.dart';
@@ -98,16 +99,19 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       };
     }
 
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
-    )
-      ..headers['Authorization'] = 'Bearer $token'
-      ..files.add(await http.MultipartFile.fromPath(
-        'file',
-        picked.path,
-        contentType: mimeFromPath(picked.path),
-      ));
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse('$apiUrl$apiPrefix/users/me/photo'),
+          )
+          ..headers['Authorization'] = 'Bearer $token'
+          ..files.add(
+            await http.MultipartFile.fromPath(
+              'file',
+              picked.path,
+              contentType: mimeFromPath(picked.path),
+            ),
+          );
 
     final response = await request.send();
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -119,10 +123,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    final res = await _api.patch('/users/me', body: {
-      'firstName': _firstNameCtrl.text.trim(),
-      'lastName': _lastNameCtrl.text.trim(),
-    });
+    final res = await _api.patch(
+      '/users/me',
+      body: {
+        'firstName': _firstNameCtrl.text.trim(),
+        'lastName': _lastNameCtrl.text.trim(),
+      },
+    );
     if (res.statusCode == 200 || res.statusCode == 201) {
       await _load();
       if (mounted) {
@@ -130,7 +137,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       }
     } else {
       if (mounted) {
-        showAdaptiveSnack(context, 'Erreur lors de la mise à jour', isError: true);
+        showAdaptiveSnack(
+          context,
+          'Erreur lors de la mise à jour',
+          isError: true,
+        );
       }
     }
   }
@@ -178,15 +189,26 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   top: 8,
                   right: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 5,
+                      vertical: 1,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF0453D),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF122530), width: 1.5),
+                      border: Border.all(
+                        color: const Color(0xFF122530),
+                        width: 1.5,
+                      ),
                     ),
                     child: Text(
-                      _unreadNotificationsCount > 99 ? '99+' : '$_unreadNotificationsCount',
+                      _unreadNotificationsCount > 99
+                          ? '99+'
+                          : '$_unreadNotificationsCount',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.white,
@@ -212,7 +234,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   const SizedBox(height: 24),
                   _buildHistoryTile(),
                   const SizedBox(height: 16),
-                  _buildSection('Informations personnelles', _buildProfileFields()),
+                  _buildSection(
+                    'Informations personnelles',
+                    _buildProfileFields(),
+                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -248,12 +273,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             radius: 56,
             backgroundColor: const Color(0xFF22414D),
             backgroundImage: photoUrl != null
-                ? NetworkImage('$apiUrl$photoUrl')
+                ? NetworkImage(mediaUrl(photoUrl))
                 : null,
             child: photoUrl == null
                 ? Text(
-                    ((_user?.firstName ?? '?')[0] +
-                            (_user?.lastName ?? '?')[0])
+                    ((_user?.firstName ?? '?')[0] + (_user?.lastName ?? '?')[0])
                         .toUpperCase(),
                     style: const TextStyle(
                       fontSize: 36,
@@ -274,7 +298,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   shape: BoxShape.circle,
                 ),
                 padding: const EdgeInsets.all(8),
-                child: const Icon(Icons.camera_alt, color: Colors.white, size: 18),
+                child: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.white,
+                  size: 18,
+                ),
               ),
             ),
           ),
@@ -289,10 +317,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => pushAdaptive<void>(
-          context,
-          const OrderHistoryScreen(),
-        ),
+        onTap: () => pushAdaptive<void>(context, const OrderHistoryScreen()),
         child: const Padding(
           padding: EdgeInsets.all(16),
           child: Row(
@@ -380,7 +405,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             ),
             child: const Text(
               'Enregistrer',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ),
         ),
