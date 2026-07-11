@@ -524,6 +524,13 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  /** Real-time event for an affiliation-scoped general message. */
+  broadcastDirectMessage(message: any, senderId: string, recipientId: string) {
+    const payload = { senderId, recipientId, message };
+    this.server.to(`user:${recipientId}`).emit('direct:message', payload);
+    this.server.to(`user:${senderId}`).emit('direct:message', payload);
+  }
+
   /**
    * Indique si un user est actuellement dans la room du chat d'une commande
    * (chat ouvert dans l'app). Sert à décider d'envoyer une push notification

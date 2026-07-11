@@ -258,6 +258,15 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 53 (2026-07-11) — Messagerie unifiée commerçant/livreur/client
+
+- Ajout de `direct_messages` et de la migration `1780100000000-AddDirectMessages.ts`. Un message général est autorisé uniquement entre utilisateurs liés par une affiliation commerçant↔livreur `ACTIVE` ou par au moins une course partagée.
+- Une conversation générale est donc unique par paire de personnes : un livreur et un client conservent le même fil après plusieurs courses. Le champ `orderId` est optionnel sur chaque message général pour rattacher un message au contexte d'une course donnée, sans fragmenter le fil.
+- API : `GET /direct-messages/contacts`, `GET /direct-messages/:userId`, `POST /direct-messages/:userId`. Les notifications et l'événement Socket.IO `direct:message` sont diffusés aux deux participants.
+- Mobile : `MessagingHubScreen` accessible par l'icône Messagerie côté livreur et commerçant, avec `Général` (contacts liés) et `Courses` (fils historiques existants). `MerchantProfileScreen` est renommé visuellement `Commerçant`.
+- Les nouveaux écrans réutilisent `pushAdaptive`, les composants Material 3 et les helpers Cupertino déjà partagés; aucune modification globale risquée des flux de livraison.
+- Vérifications : `npm run build`, `npm test` (**365/365**) et `flutter test` (**26/26**) réussis. `flutter analyze` ne contient aucune erreur, seulement des diagnostics de style/dépréciation existants et deux styles mineurs dans les nouveaux fichiers.
+
 ### Session 52 (2026-07-11) — Itinéraire routier dans la carte livreur
 
 - La première version de `DriverNavigationScreen` reliait les marqueurs par une polyline de deux points, ce qui produisait un trait à travers les bâtiments (visible lors du test réel).

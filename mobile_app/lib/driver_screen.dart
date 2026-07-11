@@ -11,6 +11,7 @@ import 'services/driver_service.dart';
 import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
 import 'screens/driver_navigation_screen.dart';
+import 'screens/messaging_hub_screen.dart';
 import 'screens/driver_profile_screen.dart';
 import 'screens/order_history_screen.dart';
 import 'utils/order_status_utils.dart';
@@ -1373,6 +1374,14 @@ class _DriverScreenState extends State<DriverScreen> {
           backgroundColor: const Color(0xFF122530),
           iconTheme: const IconThemeData(color: Colors.white),
           automaticallyImplyLeading: false,
+          actions: [
+            IconButton(
+              tooltip: 'Messagerie',
+              icon: const Icon(Icons.chat_bubble_outline),
+              onPressed: () =>
+                  pushAdaptive<void>(context, const MessagingHubScreen()),
+            ),
+          ],
         ),
         body: IndexedStack(
           index: _currentTab,

@@ -173,7 +173,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
         backgroundColor: const Color(0xFF122530),
         foregroundColor: Colors.white,
         title: const Text(
-          'Profil commerçant',
+          'Commerçant',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [

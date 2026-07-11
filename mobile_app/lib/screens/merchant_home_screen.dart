@@ -14,6 +14,7 @@ import 'merchant/create_delivery_screen.dart';
 import 'merchant/merchant_drivers_screen.dart';
 import 'merchant/merchant_orders_screen.dart';
 import 'merchant/merchant_profile_screen.dart';
+import 'messaging_hub_screen.dart';
 import 'merchant_shop_form_screen.dart';
 import 'merchant_product_form_screen.dart';
 import '../utils/platform_adapter.dart';
@@ -121,6 +122,9 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     }
   }
 
+  Future<void> _openMessaging() =>
+      pushAdaptive<void>(context, const MessagingHubScreen());
+
   Future<void> _pickShopLogo() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -168,6 +172,11 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           ],
         ),
         actions: [
+          IconButton(
+            tooltip: 'Messagerie',
+            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white70),
+            onPressed: _openMessaging,
+          ),
           IconButton(
             tooltip: 'Profil',
             icon: const Icon(

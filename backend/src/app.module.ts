@@ -33,6 +33,7 @@ import { Signalement } from './entities/signalement.entity';
 import { Notification } from './entities/notification.entity';
 import { Conversation } from './entities/conversation.entity';
 import { ConversationParticipant } from './entities/conversation-participant.entity';
+import { DirectMessage } from './entities/direct-message.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -123,6 +124,7 @@ import { StorageModule } from './storage/storage.module';
         Notification,
         Conversation,
         ConversationParticipant,
+        DirectMessage,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',
