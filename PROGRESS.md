@@ -258,11 +258,20 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 50 (2026-07-11) — Correctif mobile socket/radar après incident prod
+- **JWT Socket.IO durci** : `mobile_app/lib/controllers/order_socket_controller.dart` ne crée plus de socket sans jeton exploitable, envoie désormais le JWT à la fois via `auth.token` et via l'en-tête `Authorization: Bearer ...`, et active des paramètres explicites de reconnexion (`reconnectionAttempts=8`, délai progressif, timeout 8 s).
+- **État temps réel exploitable** : `OrderSocketController` et `ChatService` exposent maintenant un flux `SocketLifecycleEvent` (connexion, déconnexion, tentative de reconnexion, échec) pour diagnostiquer les incidents réseau et le rejet d'authentification sans s'appuyer sur des logs implicites.
+- **Radar réconcilié à chaque connexion/reconnexion** : `mobile_app/lib/driver_screen.dart` recharge `GET /orders/available` à chaque connexion/reconnexion du socket, vide le radar sur `401/403`, supprime la course acceptée localement dès le succès de `POST /orders/:id/accept`, et fusionne les événements `newOrderAvailable` sans doublons ni réapparition de courses déjà présentes.
+- **Chat aligné sur le même correctif d'auth** : `mobile_app/lib/services/chat_service.dart` applique le même handshake robuste (JWT obligatoire, `auth` + header Bearer), rejoint à nouveau la room au reconnect et relance `markRead()` après reconnexion.
+- **Race de handshake éliminée** : les listeners Socket.IO sont enregistrés avant `connect()` pour ne pas manquer une connexion rapide ou la resynchronisation qui la suit.
+- **Tests Flutter ciblés** : nouveaux tests `mobile_app/test/services/socket_auth_options_test.dart` (options Socket.IO + refus sans token) et `mobile_app/test/services/driver_radar_sync_test.dart` (normalisation/upsert du radar). Validation locale exécutée : `dart format` sur les fichiers touchés puis `flutter test` → **25/25 verts**. `flutter analyze` ne relève aucune erreur nouvelle, seulement 11 avertissements préexistants.
+
 ### Session 49 (2026-07-11) — Déploiement local sans GitHub Actions
 - **Backend** : image `deployment-01KX8JSF0BQV3W6P4MWF3P9HXB` déployée sur Fly.io ; health check `GET /` valide et machine version 19 active.
 - **Admin** : build Angular publié sur Cloudflare Pages. URL de déploiement : `https://20ae89f4.zonzon-admin.pages.dev` ; l'URL de production `https://zonzon-admin.pages.dev` est mise à jour par Pages.
 - **Automatisation locale** : `deploy.bat` est désormais le point d'entrée de release. Il arrête la chaîne au premier échec et ne dépend pas de GitHub Actions.
 - **APK** : après une première tentative interrompue par la limite de temps locale, le build release a été relancé avec succès (`app-release.apk`, 57,8 MB) et installé via ADB sur le téléphone Android connecté. Le paquet `com.example.mobile_app` est présent dans le profil principal.
+- **Incident radar en production** : la commande `197b6bf3-6124-4f90-833e-bf661edfa9d5` a été diffusée à `0/0` livreur à 13:14:49Z. Le livreur concerné est bien `ACTIVE`, `APPROVED`, disponible, public et possède une photo. La cause directe est un socket rejeté sans jeton à 13:14:34Z. Le correctif mobile est maintenant livré localement en session 50 : fallback Bearer confirmé, resynchronisation radar à la reconnexion et durcissement chat validés par `flutter test`.
 
 ### Session 48 (2026-07-11) — Désactivation des Actions automatiques
 - Les workflows GitHub `ci`, `backend-ci`, `admin-ci`, `flutter-ci` et `deploy` ne sont plus déclenchés automatiquement. Ils restent exécutables manuellement depuis GitHub si besoin.

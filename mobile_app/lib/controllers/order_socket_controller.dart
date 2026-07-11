@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
@@ -64,6 +65,31 @@ class NewOrderEvent {
   final Map<String, dynamic> raw;
 
   NewOrderEvent({required this.orderId, required this.raw});
+}
+
+enum SocketLifecycleState {
+  skipped,
+  connecting,
+  connected,
+  disconnected,
+  reconnecting,
+  reconnectFailed,
+  connectError,
+  error,
+}
+
+class SocketLifecycleEvent {
+  final SocketLifecycleState state;
+  final String message;
+  final int? attempt;
+  final DateTime occurredAt;
+
+  const SocketLifecycleEvent({
+    required this.state,
+    required this.message,
+    this.attempt,
+    required this.occurredAt,
+  });
 }
 
 /// Gère le cycle de vie du socket pour les écrans client et livreur.
@@ -134,6 +160,7 @@ class OrderSocketController {
   final _newChatMessageCtrl = StreamController<NewChatMessageEvent>.broadcast();
   final _newOrderAvailableCtrl = StreamController<NewOrderEvent>.broadcast();
   final _connectedCtrl = StreamController<void>.broadcast();
+  final _lifecycleCtrl = StreamController<SocketLifecycleEvent>.broadcast();
 
   /// Stream des positions live du livreur (filtré par [watchedOrderIds]).
   Stream<DriverPosition> get driverPosition$ => _driverPositionCtrl.stream;
@@ -167,36 +194,151 @@ class OrderSocketController {
   /// effectivement prêt à recevoir des `driver:location`.
   Stream<void> get connected$ => _connectedCtrl.stream;
 
+  /// État du transport Socket.IO : utile pour afficher des erreurs concrètes
+  /// et relancer une resynchronisation HTTP au bon moment.
+  Stream<SocketLifecycleEvent> get lifecycle$ => _lifecycleCtrl.stream;
+
+  bool get isConnected => _socket?.connected == true;
+
   /// `true` après [dispose] : init() lancé sans await par un écran peut se
   /// terminer APRÈS le dispose de cet écran — sans ce flag, on créerait un
   /// socket orphelin jamais fermé.
   bool _disposed = false;
+
+  @visibleForTesting
+  static bool hasUsableToken(String? token) {
+    return token != null && token.trim().isNotEmpty;
+  }
+
+  @visibleForTesting
+  static Map<String, dynamic> buildSocketOptions(String token) {
+    final normalizedToken = token.trim();
+    return io.OptionBuilder()
+        .setTransports(['websocket'])
+        .disableAutoConnect()
+        .enableReconnection()
+        .setReconnectionAttempts(8)
+        .setReconnectionDelay(1000)
+        .setReconnectionDelayMax(5000)
+        .setTimeout(8000)
+        .setAuth({'token': normalizedToken})
+        .setExtraHeaders({'Authorization': 'Bearer $normalizedToken'})
+        .build();
+  }
+
+  void _emitLifecycle(
+    SocketLifecycleState state,
+    String message, {
+    int? attempt,
+  }) {
+    if (_lifecycleCtrl.isClosed) return;
+    _lifecycleCtrl.add(
+      SocketLifecycleEvent(
+        state: state,
+        message: message,
+        attempt: attempt,
+        occurredAt: DateTime.now(),
+      ),
+    );
+  }
 
   /// Connecte le socket et abonne les listeners. À appeler une seule fois.
   Future<void> init() async {
     if (_socket != null || _disposed) return;
     final token = await _auth.getToken();
     if (_disposed) return; // dispose() est passé pendant l'await du token
-    final socket = io.io(apiUrl, <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': false,
-      'auth': {'token': token},
-    });
-    _socket = socket;
-    socket.connect();
+    if (!hasUsableToken(token)) {
+      _emitLifecycle(
+        SocketLifecycleState.skipped,
+        'Connexion temps réel ignorée: JWT absent.',
+      );
+      return;
+    }
 
+    // Certains transports WebSocket natifs ne transmettent pas toujours
+    // `auth` jusqu'au handshake Socket.IO. Le backend accepte aussi Bearer.
+    final socket = io.io(apiUrl, buildSocketOptions(token!));
+    _socket = socket;
+    _emitLifecycle(
+      SocketLifecycleState.connecting,
+      'Connexion au temps réel en cours…',
+    );
     socket.onConnect((_) {
+      _emitLifecycle(
+        SocketLifecycleState.connected,
+        'Connexion temps réel établie.',
+      );
       _connectedCtrl.add(null);
+    });
+
+    socket.onDisconnect((reason) {
+      _emitLifecycle(
+        SocketLifecycleState.disconnected,
+        'Temps réel déconnecté: ${reason ?? 'raison inconnue'}.',
+      );
+    });
+
+    socket.onConnectError((error) {
+      _emitLifecycle(
+        SocketLifecycleState.connectError,
+        'Échec de connexion temps réel: ${error ?? 'erreur inconnue'}.',
+      );
+    });
+
+    socket.onError((error) {
+      _emitLifecycle(
+        SocketLifecycleState.error,
+        'Erreur Socket.IO: ${error ?? 'erreur inconnue'}.',
+      );
+    });
+
+    socket.onReconnectAttempt((attempt) {
+      final normalizedAttempt = switch (attempt) {
+        int value => value,
+        num value => value.toInt(),
+        _ => null,
+      };
+      _emitLifecycle(
+        SocketLifecycleState.reconnecting,
+        'Reconnexion temps réel en cours…',
+        attempt: normalizedAttempt,
+      );
+    });
+
+    socket.onReconnect((attempt) {
+      final normalizedAttempt = switch (attempt) {
+        int value => value,
+        num value => value.toInt(),
+        _ => null,
+      };
+      _emitLifecycle(
+        SocketLifecycleState.connected,
+        'Connexion temps réel rétablie.',
+        attempt: normalizedAttempt,
+      );
+    });
+
+    socket.onReconnectError((error) {
+      _emitLifecycle(
+        SocketLifecycleState.connectError,
+        'Échec de reconnexion temps réel: ${error ?? 'erreur inconnue'}.',
+      );
+    });
+
+    socket.onReconnectFailed((_) {
+      _emitLifecycle(
+        SocketLifecycleState.reconnectFailed,
+        'La reconnexion temps réel a échoué.',
+      );
     });
 
     socket.on('newOrderAvailable', (data) {
       if (data is! Map) return;
       final orderId = data['id']?.toString() ?? data['orderId']?.toString();
       if (orderId == null) return;
-      _newOrderAvailableCtrl.add(NewOrderEvent(
-        orderId: orderId,
-        raw: Map<String, dynamic>.from(data),
-      ));
+      _newOrderAvailableCtrl.add(
+        NewOrderEvent(orderId: orderId, raw: Map<String, dynamic>.from(data)),
+      );
     });
 
     socket.on('orderAccepted', (data) {
@@ -204,10 +346,12 @@ class OrderSocketController {
       final orderId = data['orderId']?.toString();
       if (orderId == null) return;
       if (!_shouldEmit(orderId)) return;
-      _orderAcceptedCtrl.add(OrderAcceptedEvent(
-        orderId: orderId,
-        raw: Map<String, dynamic>.from(data),
-      ));
+      _orderAcceptedCtrl.add(
+        OrderAcceptedEvent(
+          orderId: orderId,
+          raw: Map<String, dynamic>.from(data),
+        ),
+      );
     });
 
     socket.on('orderStatusUpdated', (data) {
@@ -216,7 +360,9 @@ class OrderSocketController {
       final status = data['status']?.toString();
       if (orderId == null || status == null) return;
       if (!_shouldEmit(orderId)) return;
-      _statusUpdatesCtrl.add(OrderStatusUpdate(orderId: orderId, status: status));
+      _statusUpdatesCtrl.add(
+        OrderStatusUpdate(orderId: orderId, status: status),
+      );
     });
 
     socket.on('orderPaymentUpdated', (data) {
@@ -237,11 +383,13 @@ class OrderSocketController {
       final lng = (data['lng'] as num?)?.toDouble();
       if (orderId == null || lat == null || lng == null) return;
       if (!_shouldEmit(orderId)) return;
-      _driverPositionCtrl.add(DriverPosition(
-        orderId: orderId,
-        location: LatLng(lat, lng),
-        receivedAt: DateTime.now(),
-      ));
+      _driverPositionCtrl.add(
+        DriverPosition(
+          orderId: orderId,
+          location: LatLng(lat, lng),
+          receivedAt: DateTime.now(),
+        ),
+      );
     });
 
     // Écouter les nouveaux messages du livreur pour afficher un badge non-lu.
@@ -250,11 +398,17 @@ class OrderSocketController {
       final orderId = data['orderId']?.toString();
       if (orderId == null) return;
       if (!_shouldEmit(orderId)) return;
-      _newChatMessageCtrl.add(NewChatMessageEvent(
-        orderId: orderId,
-        raw: Map<String, dynamic>.from(data),
-      ));
+      _newChatMessageCtrl.add(
+        NewChatMessageEvent(
+          orderId: orderId,
+          raw: Map<String, dynamic>.from(data),
+        ),
+      );
     });
+
+    // Tous les listeners doivent être prêts avant le handshake : une
+    // connexion très rapide ne doit pas empêcher la resynchronisation radar.
+    socket.connect();
   }
 
   /// Émet la position GPS du livreur sur le socket (`driver:location`).
@@ -280,5 +434,6 @@ class OrderSocketController {
     await _newChatMessageCtrl.close();
     await _newOrderAvailableCtrl.close();
     await _connectedCtrl.close();
+    await _lifecycleCtrl.close();
   }
 }

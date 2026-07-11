@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+
 import '../config/env.dart';
+import '../controllers/order_socket_controller.dart';
 import '../models/message.dart';
 import 'api_client.dart';
 import 'auth_service.dart';
@@ -25,6 +29,8 @@ class ChatService {
   final StreamController<bool> _typingCtrl = StreamController.broadcast();
   final StreamController<String> _orderStatusCtrl =
       StreamController.broadcast();
+  final StreamController<SocketLifecycleEvent> _connectionStateCtrl =
+      StreamController.broadcast();
 
   /// Destinataires connus de la conversation (participants − moi). Sert à
   /// l'accusé de lecture honnête : « lu par tous » = readBy ⊇ recipients.
@@ -38,16 +44,56 @@ class ChatService {
   /// des courses dont l'utilisateur est partie. Permet de fermer l'UI de
   /// saisie dès qu'un statut terminal survient pendant que le chat est ouvert.
   Stream<String> get orderStatus$ => _orderStatusCtrl.stream;
+  Stream<SocketLifecycleEvent> get connectionState$ =>
+      _connectionStateCtrl.stream;
 
   List<ChatMessage> get messages => List.unmodifiable(_messages);
   String? get myId => _myId;
   Set<String> get recipients => Set.unmodifiable(_recipients);
+  bool get isConnected => _socket?.connected == true;
 
   Timer? _typingDebounce;
   bool _typingEmitted = false;
   bool _disposed = false;
 
   ChatService(this.orderId);
+
+  @visibleForTesting
+  static bool hasUsableToken(String? token) {
+    return token != null && token.trim().isNotEmpty;
+  }
+
+  @visibleForTesting
+  static Map<String, dynamic> buildSocketOptions(String token) {
+    final normalizedToken = token.trim();
+    return IO.OptionBuilder()
+        .setTransports(['websocket'])
+        .disableAutoConnect()
+        .enableReconnection()
+        .setReconnectionAttempts(8)
+        .setReconnectionDelay(1000)
+        .setReconnectionDelayMax(5000)
+        .setTimeout(8000)
+        .setAuth({'token': normalizedToken})
+        .setExtraHeaders({'Authorization': 'Bearer $normalizedToken'})
+        .build();
+  }
+
+  void _emitConnectionState(
+    SocketLifecycleState state,
+    String message, {
+    int? attempt,
+  }) {
+    if (_connectionStateCtrl.isClosed) return;
+    _connectionStateCtrl.add(
+      SocketLifecycleEvent(
+        state: state,
+        message: message,
+        attempt: attempt,
+        occurredAt: DateTime.now(),
+      ),
+    );
+  }
 
   Future<void> init() async {
     final user = await _auth.getCurrentUser();
@@ -112,16 +158,90 @@ class ChatService {
 
   Future<void> _connectSocket() async {
     final token = await _auth.getToken();
-    _socket = IO.io(apiUrl, <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': false,
-      'auth': {'token': token},
-    });
+    if (_disposed) return;
+    if (!hasUsableToken(token)) {
+      _emitConnectionState(
+        SocketLifecycleState.skipped,
+        'Connexion chat ignorée: JWT absent.',
+      );
+      return;
+    }
 
-    _socket!.connect();
+    _socket = IO.io(apiUrl, buildSocketOptions(token!));
+    _emitConnectionState(
+      SocketLifecycleState.connecting,
+      'Connexion chat en cours…',
+    );
 
     _socket!.onConnect((_) {
+      _emitConnectionState(
+        SocketLifecycleState.connected,
+        'Connexion chat établie.',
+      );
       _socket!.emit('chat:join', {'orderId': orderId});
+    });
+
+    _socket!.onDisconnect((reason) {
+      _emitConnectionState(
+        SocketLifecycleState.disconnected,
+        'Chat déconnecté: ${reason ?? 'raison inconnue'}.',
+      );
+    });
+
+    _socket!.onConnectError((error) {
+      _emitConnectionState(
+        SocketLifecycleState.connectError,
+        'Échec de connexion chat: ${error ?? 'erreur inconnue'}.',
+      );
+    });
+
+    _socket!.onError((error) {
+      _emitConnectionState(
+        SocketLifecycleState.error,
+        'Erreur Socket.IO du chat: ${error ?? 'erreur inconnue'}.',
+      );
+    });
+
+    _socket!.onReconnectAttempt((attempt) {
+      final normalizedAttempt = switch (attempt) {
+        int value => value,
+        num value => value.toInt(),
+        _ => null,
+      };
+      _emitConnectionState(
+        SocketLifecycleState.reconnecting,
+        'Reconnexion du chat en cours…',
+        attempt: normalizedAttempt,
+      );
+    });
+
+    _socket!.onReconnect((attempt) {
+      final normalizedAttempt = switch (attempt) {
+        int value => value,
+        num value => value.toInt(),
+        _ => null,
+      };
+      _emitConnectionState(
+        SocketLifecycleState.connected,
+        'Connexion chat rétablie.',
+        attempt: normalizedAttempt,
+      );
+      _socket!.emit('chat:join', {'orderId': orderId});
+      unawaited(markRead());
+    });
+
+    _socket!.onReconnectError((error) {
+      _emitConnectionState(
+        SocketLifecycleState.connectError,
+        'Échec de reconnexion chat: ${error ?? 'erreur inconnue'}.',
+      );
+    });
+
+    _socket!.onReconnectFailed((_) {
+      _emitConnectionState(
+        SocketLifecycleState.reconnectFailed,
+        'La reconnexion du chat a échoué.',
+      );
     });
 
     _socket!.on('chat:message', (data) {
@@ -206,6 +326,10 @@ class ChatService {
       if (status == null || _orderStatusCtrl.isClosed) return;
       _orderStatusCtrl.add(status);
     });
+
+    // Enregistre d'abord les handlers afin de ne pas manquer un handshake
+    // ou un premier message sur une connexion très rapide.
+    _socket!.connect();
   }
 
   Future<void> sendText(String content) async {
@@ -307,5 +431,6 @@ class ChatService {
     await _messagesCtrl.close();
     await _typingCtrl.close();
     await _orderStatusCtrl.close();
+    await _connectionStateCtrl.close();
   }
 }

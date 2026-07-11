@@ -137,9 +137,66 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
+Map<String, dynamic>? _coerceRadarOrder(dynamic raw) {
+  if (raw is Map<String, dynamic>) {
+    return Map<String, dynamic>.from(raw);
+  }
+  if (raw is Map) {
+    try {
+      return Map<String, dynamic>.from(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+  return null;
+}
+
+String? _radarOrderId(dynamic raw) {
+  final order = _coerceRadarOrder(raw);
+  final orderId = order?['id']?.toString() ?? order?['orderId']?.toString();
+  if (orderId == null || orderId.isEmpty) return null;
+  return orderId;
+}
+
+/// Normalise un snapshot radar venu du backend : seules les courses valides
+/// avec un identifiant exploitable sont conservées, sans doublon.
+@visibleForTesting
+List<Map<String, dynamic>> normalizeRadarOrders(Iterable<dynamic> rawOrders) {
+  final normalized = <Map<String, dynamic>>[];
+  final seenIds = <String>{};
+  for (final rawOrder in rawOrders) {
+    final order = _coerceRadarOrder(rawOrder);
+    final orderId = _radarOrderId(order);
+    if (order == null || orderId == null || !seenIds.add(orderId)) {
+      continue;
+    }
+    normalized.add(order);
+  }
+  return normalized;
+}
+
+/// Insère ou remplace une course temps réel en tête du radar sans créer de
+/// doublon. Utilisé pour fusionner `newOrderAvailable` avec le snapshot HTTP.
+@visibleForTesting
+List<Map<String, dynamic>> upsertRadarOrder(
+  List<dynamic> currentOrders,
+  dynamic incomingOrder,
+) {
+  final normalizedCurrent = normalizeRadarOrders(currentOrders);
+  final incoming = _coerceRadarOrder(incomingOrder);
+  final incomingOrderId = _radarOrderId(incoming);
+  if (incoming == null || incomingOrderId == null) return normalizedCurrent;
+
+  return <Map<String, dynamic>>[
+    incoming,
+    for (final order in normalizedCurrent)
+      if (_radarOrderId(order) != incomingOrderId) order,
+  ];
+}
+
 class _DriverScreenState extends State<DriverScreen> {
   int _currentTab = 0;
-  List<dynamic> availableOrders = [];
+  List<Map<String, dynamic>> availableOrders = [];
   String? currentDriverId;
   final ApiClient _api = ApiClient();
   final AuthService _authService = AuthService();
@@ -174,6 +231,7 @@ class _DriverScreenState extends State<DriverScreen> {
   StreamSubscription<OrderStatusUpdate>? _statusSub;
   StreamSubscription<OrderPaymentUpdate>? _paymentSub;
   StreamSubscription<void>? _connectedSub;
+  StreamSubscription<SocketLifecycleEvent>? _socketLifecycleSub;
 
   /// Statuts pour lesquels une course est considérée « active » côté livreur
   /// (mêmes valeurs que ACTIVE_DELIVERY_STATUSES backend).
@@ -245,6 +303,9 @@ class _DriverScreenState extends State<DriverScreen> {
   /// géofencing (sans devoir cliquer le bouton du dialog).
   void Function(String status)? _onGeofenceTransitioned;
 
+  bool _hasSeenRealtimeConnection = false;
+  bool _radarSyncInFlight = false;
+
   @override
   void initState() {
     super.initState();
@@ -277,7 +338,7 @@ class _DriverScreenState extends State<DriverScreen> {
       // un redémarrage de l'app pendant une course faisait perdre au livreur
       // tout moyen de la faire avancer/terminer.
       await _restoreActiveOrder();
-      await _loadAvailableOrders();
+      await _reconcileAvailableOrders();
     }
   }
 
@@ -328,18 +389,34 @@ class _DriverScreenState extends State<DriverScreen> {
     }
   }
 
-  Future<void> _loadAvailableOrders() async {
+  Future<bool> _reconcileAvailableOrders() async {
+    if (_radarSyncInFlight) return false;
+    _radarSyncInFlight = true;
     try {
       final res = await _api.get('/orders/available');
       if (res.statusCode == 200 || res.statusCode == 201) {
         final data = jsonDecode(res.body);
         if (data is List && mounted) {
           setState(() {
-            availableOrders = data;
+            availableOrders = normalizeRadarOrders(data);
           });
+          return true;
         }
+        return false;
       }
-    } catch (_) {}
+
+      if ((res.statusCode == 401 || res.statusCode == 403) && mounted) {
+        setState(() {
+          availableOrders = <Map<String, dynamic>>[];
+        });
+        unawaited(_refreshDriverStatus());
+      }
+      return false;
+    } catch (_) {
+      return false;
+    } finally {
+      _radarSyncInFlight = false;
+    }
   }
 
   /// Bascule la disponibilité du livreur. Verrouillé si le compte n'est pas
@@ -359,10 +436,12 @@ class _DriverScreenState extends State<DriverScreen> {
             ? 'Vous êtes maintenant disponible'
             : 'Vous êtes maintenant indisponible',
       );
-      // Si on vient de passer disponible et que le radar n'avait jamais été
-      // chargé (ex. compte validé entre-temps), on rafraîchit la liste.
       if (effective) {
-        await _loadAvailableOrders();
+        await _reconcileAvailableOrders();
+      } else {
+        setState(() {
+          availableOrders = <Map<String, dynamic>>[];
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -385,13 +464,60 @@ class _DriverScreenState extends State<DriverScreen> {
   Future<void> _initSocket() async {
     await _socketCtrl.init();
 
+    _socketLifecycleSub = _socketCtrl.lifecycle$.listen((event) {
+      if (!mounted) return;
+      switch (event.state) {
+        case SocketLifecycleState.connectError:
+          if (_hasSeenRealtimeConnection) return;
+          showAdaptiveSnack(
+            context,
+            'Connexion temps réel impossible. Le radar sera resynchronisé dès que le réseau revient.',
+            isError: true,
+          );
+          return;
+        case SocketLifecycleState.disconnected:
+          if (!_hasSeenRealtimeConnection) return;
+          showAdaptiveSnack(
+            context,
+            'Connexion temps réel perdue. Reconnexion automatique en cours…',
+            isError: true,
+          );
+          return;
+        case SocketLifecycleState.reconnecting:
+          if (event.attempt != 1) return;
+          showAdaptiveSnack(context, 'Reconnexion du temps réel…');
+          return;
+        case SocketLifecycleState.reconnectFailed:
+          showAdaptiveSnack(
+            context,
+            'Temps réel indisponible. Le radar restera figé jusqu’à la prochaine reconnexion.',
+            isError: true,
+          );
+          return;
+        case SocketLifecycleState.skipped:
+        case SocketLifecycleState.connecting:
+        case SocketLifecycleState.connected:
+        case SocketLifecycleState.error:
+          return;
+      }
+    });
+
     // P2 (GPS strict) : le tracking GPS ne démarre plus à la connexion du
     // socket mais à l'ouverture d'une course active. À la (re)connexion, on
     // ne le (re)lance que si une course est effectivement en cours.
-    _connectedSub = _socketCtrl.connected$.listen((_) {
-      debugPrint('Connecté aux WebSockets du serveur !');
+    _connectedSub = _socketCtrl.connected$.listen((_) async {
+      final shouldNotify = _hasSeenRealtimeConnection;
+      _hasSeenRealtimeConnection = true;
+      debugPrint('Connecté aux WebSockets du serveur.');
       if (_activeOrderId != null) {
-        _startLocationUpdates();
+        await _startLocationUpdates();
+      }
+      final synced = await _reconcileAvailableOrders();
+      if (shouldNotify && synced && mounted) {
+        showAdaptiveSnack(
+          context,
+          'Connexion temps réel rétablie. Radar resynchronisé.',
+        );
       }
     });
 
@@ -412,11 +538,16 @@ class _DriverScreenState extends State<DriverScreen> {
     });
 
     _newOrderSub = _socketCtrl.newOrderAvailable$.listen((evt) {
-      if (!mounted) return;
+      if (!mounted || !_isApproved || !_isAvailable) return;
+      final alreadyPresent = availableOrders.any(
+        (order) => _radarOrderId(order) == evt.orderId,
+      );
       setState(() {
-        availableOrders.insert(0, evt.raw);
+        availableOrders = upsertRadarOrder(availableOrders, evt.raw);
       });
-      showAdaptiveSnack(context, '🔔 Nouvelle course disponible !');
+      if (!alreadyPresent) {
+        showAdaptiveSnack(context, '🔔 Nouvelle course disponible !');
+      }
     });
 
     _orderAcceptedSub = _socketCtrl.orderAccepted$.listen((evt) {
@@ -591,6 +722,13 @@ class _DriverScreenState extends State<DriverScreen> {
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final orderData = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            availableOrders.removeWhere(
+              (order) => order['id']?.toString() == orderId,
+            );
+          });
+        }
         _showActiveOrderDialog(orderData);
       } else {
         throw Exception('Course déjà prise ou erreur serveur.');
@@ -1161,6 +1299,7 @@ class _DriverScreenState extends State<DriverScreen> {
     _statusSub?.cancel();
     _paymentSub?.cancel();
     _connectedSub?.cancel();
+    _socketLifecycleSub?.cancel();
     _socketCtrl.dispose();
     super.dispose();
   }
