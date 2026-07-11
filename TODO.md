@@ -357,6 +357,7 @@
 
 - [x] **CI/CD GitHub Actions** — 3 workflows créés (backend-ci.yml, admin-ci.yml, flutter-ci.yml). Tests sur tous les PRs, déploiements sur push main uniquement. Secrets à configurer: FLY_API_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, GOOGLE_SERVICES_JSON
 - [x] **Éviter les coûts GitHub Actions automatiques** — les workflows `ci`, backend, admin, Flutter et deploy ne s'exécutent plus sur push/PR/tag ; ils sont désormais uniquement disponibles via `workflow_dispatch`. Tests et déploiements réalisés localement jusqu'à décision contraire. *(2026-07-11)*
+- [x] **Déploiement local reproductible** — `deploy.bat` valide et déploie backend/Fly.io, dashboard/Cloudflare Pages puis génère l'APK Android, sans GitHub Actions. *(2026-07-11)*
 - [x] **Pattern CORS preview Cloudflare** — supporter `*.pages.dev` (regex) pour les previews admin
   - Helper partagé `backend/src/common/cors.ts` (`loadCorsConfig`, `isOriginAllowed`, `hasAnyCorsConfig`).
   - Nouvelle env var `FRONTEND_URL_PATTERNS` (regex string séparées par virgules). Combinée avec `FRONTEND_URLS` existante (origines exactes). Si une origin matche soit l'une soit l'autre → autorisée.
