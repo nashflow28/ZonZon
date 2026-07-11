@@ -230,6 +230,7 @@ flyctl logs --app zonzon-backend --no-tail
 | Problème | Statut | Solution |
 |----------|--------|---------|
 | Nouveaux médias publics | ✅ Stockés dans Cloudflare R2 | Bucket `zonzon-media` via les secrets `OBJECT_STORAGE_*`; les anciens chemins `/uploads/*` restent compatibles mais ne sont pas migrés automatiquement |
+| Déploiements CI/CD GitHub | 🔴 Bloqués côté compte GitHub | Les workflows échouent avant toute étape : paiement récent échoué ou plafond GitHub Actions à augmenter (annotation du run `29152333436`) |
 | Mode développeur Windows requis pour Flutter | ✅ Activé | Paramètres → Pour les développeurs |
 | Windows Defender bloque le build Flutter | ✅ Résolu | Dossiers `build/` et `.gradle` exclus |
 | APK buildé sans `--dart-define` → URL localhost | ✅ Corrigé | `env.dart` pointe maintenant sur prod par défaut |
