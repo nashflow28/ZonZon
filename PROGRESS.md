@@ -258,6 +258,13 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 54 (2026-07-11) — Lier un message général à une course
+
+- Le composeur de conversation générale affiche une action de lien. Elle ouvre la liste des courses de l'utilisateur, puis attache l'identifiant choisi au message envoyé.
+- Le fil reste unique pour la paire livreur↔client (ou commerçant↔livreur), tandis que chaque message contextualisé affiche `Lié à la course #xxxxxx`.
+- Le backend refuse un lien vers une course qui ne relie pas réellement les deux participants, ce qui empêche tout rattachement abusif.
+- `flutter test` : **26/26** verts après la correction de syntaxe du composeur.
+
 ### Session 53 (2026-07-11) — Messagerie unifiée commerçant/livreur/client
 
 - Ajout de `direct_messages` et de la migration `1780100000000-AddDirectMessages.ts`. Un message général est autorisé uniquement entre utilisateurs liés par une affiliation commerçant↔livreur `ACTIVE` ou par au moins une course partagée.

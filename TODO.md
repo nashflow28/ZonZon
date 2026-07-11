@@ -362,6 +362,7 @@
 - [x] **Correctifs parcours réel client/livreur/commerçant** — notation côté client uniquement avec fallback HTTP, rafraîchissement historique/gains livreur, résolution des téléphones locaux/internationaux et navigation intégrée livreur. Backend Fly déployé, APK release généré, tests backend/mobile verts. *(2026-07-11)*
 - [x] **Route routière livreur** — la carte de navigation charge la géométrie du moteur d'itinéraire depuis la position GPS livreur vers la prochaine destination, sans jamais représenter un faux segment direct si le GPS est absent. APK release généré, tests Flutter verts. *(2026-07-11)*
 - [x] **Boîte de réception commerçant/livreur** — onglets Général/Courses, messages généraux entre contacts liés par affiliation active ou course partagée, et contexte de course optionnel par message. *(2026-07-11)*
+- [x] **Contexte de course dans un fil général** — le composeur permet de sélectionner une course; le message reste dans le fil unique mais porte un badge `Lié à la course #…`, validé côté serveur. *(2026-07-11)*
 - [x] **Pattern CORS preview Cloudflare** — supporter `*.pages.dev` (regex) pour les previews admin
   - Helper partagé `backend/src/common/cors.ts` (`loadCorsConfig`, `isOriginAllowed`, `hasAnyCorsConfig`).
   - Nouvelle env var `FRONTEND_URL_PATTERNS` (regex string séparées par virgules). Combinée avec `FRONTEND_URLS` existante (origines exactes). Si une origin matche soit l'une soit l'autre → autorisée.

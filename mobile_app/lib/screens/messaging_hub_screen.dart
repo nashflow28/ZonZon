@@ -102,8 +102,10 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
           : _contacts
                 .map(
                   (c) => ListTile(
-                    onTap: () =>
-                        pushAdaptive(context, _DirectThread(contact: c)),
+                    onTap: () => pushAdaptive(
+                      context,
+                      _DirectThread(contact: c, orders: _orders),
+                    ),
                     leading: const CircleAvatar(child: Icon(Icons.person)),
                     title: Text(
                       c.name.isEmpty ? 'Contact' : c.name,
@@ -165,8 +167,9 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
 }
 
 class _DirectThread extends StatefulWidget {
-  const _DirectThread({required this.contact});
+  const _DirectThread({required this.contact, required this.orders});
   final DirectContact contact;
+  final List<OrderHistoryItem> orders;
   @override
   State<_DirectThread> createState() => _DirectThreadState();
 }
@@ -177,6 +180,7 @@ class _DirectThreadState extends State<_DirectThread> {
   final _ctrl = TextEditingController();
   List<DirectMessageItem> _items = [];
   String _me = '';
+  String? _linkedOrderId;
   @override
   void initState() {
     super.initState();
@@ -202,9 +206,52 @@ class _DirectThreadState extends State<_DirectThread> {
   Future<void> _send() async {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
-    await _service.send(widget.contact.id, text);
+    await _service.send(widget.contact.id, text, orderId: _linkedOrderId);
     _ctrl.clear();
+    setState(() => _linkedOrderId = null);
     await _load();
+  }
+
+  Future<void> _pickOrderContext() async {
+    final selected = await showModalBottomSheet<String?>(
+      context: context,
+      backgroundColor: const Color(0xFF122530),
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.clear, color: Colors.white70),
+              title: const Text(
+                'Message général',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () => Navigator.pop(ctx),
+            ),
+            ...widget.orders.map(
+              (order) => ListTile(
+                leading: const Icon(
+                  Icons.local_shipping_outlined,
+                  color: Color(0xFF2E90FA),
+                ),
+                title: Text(
+                  'Course #${order.id.substring(0, 6)}',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  order.deliveryAddress,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.white60),
+                ),
+                onTap: () => Navigator.pop(ctx, order.id),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (mounted) setState(() => _linkedOrderId = selected);
   }
 
   @override
@@ -264,24 +311,44 @@ class _DirectThreadState extends State<_DirectThread> {
           top: false,
           child: Padding(
             padding: const EdgeInsets.all(10),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _ctrl,
-                    style: const TextStyle(color: Colors.white),
-                    decoration: const InputDecoration(
-                      hintText: 'Message général',
-                      hintStyle: TextStyle(color: Colors.white54),
-                      filled: true,
-                      fillColor: Color(0xFF122530),
-                      border: OutlineInputBorder(borderSide: BorderSide.none),
+                if (_linkedOrderId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Chip(
+                      label: Text('Course #${_linkedOrderId!.substring(0, 6)}'),
+                      onDeleted: () => setState(() => _linkedOrderId = null),
                     ),
                   ),
-                ),
-                IconButton(
-                  onPressed: _send,
-                  icon: const Icon(Icons.send, color: Color(0xFF2E90FA)),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: _pickOrderContext,
+                      icon: const Icon(Icons.link, color: Color(0xFF2E90FA)),
+                      tooltip: 'Lier à une course',
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _ctrl,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          hintText: 'Message général',
+                          hintStyle: TextStyle(color: Colors.white54),
+                          filled: true,
+                          fillColor: Color(0xFF122530),
+                          border: OutlineInputBorder(
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _send,
+                      icon: const Icon(Icons.send, color: Color(0xFF2E90FA)),
+                    ),
+                  ],
                 ),
               ],
             ),
