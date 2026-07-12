@@ -258,6 +258,28 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 59 (2026-07-12) — PWA iOS (Angular) — Round 2 : rôle Client + infrastructure partagée
+
+- **Dépendances ajoutées** (`pwa/`) : `socket.io-client@^4.8.3` (aligné sur `admin-dashboard`), `leaflet@^1.9` + `@types/leaflet`. CSS Leaflet ajouté à `angular.json` (`styles`), `allowedCommonJsDependencies: ["leaflet"]` pour supprimer le warning ESM.
+- **Infrastructure partagée créée** (réutilisable rounds livreur/commerçant) :
+  - `shared/models/order.model.ts` (`Order`, statuts, `EstimateResult`, `EtaResult`, `ChatMessage`, `Zone`, `AppNotification`, `Paginated<T>`) + `shared/models/shop.model.ts`.
+  - Services `shared/services/` : `OrdersService` (store `signal` alimenté par `GET /orders/mine` — le backend n'expose pas `GET /orders/:id`, donc suivi/liste/accueil partagent ce cache), `ShopsService`, `ZonesService`, `NotificationsService` (badge non-lu), `SignalementsService`, `MessagesService`.
+  - `shared/services/socket.service.ts` : connexion Socket.IO à la **racine** du backend (pas `/v1`, conforme au gateway NestJS), `on$<T>(event)` en Observable, `emit`, `joinOrderRoom`/`leaveOrderRoom`. Cycle de vie branché dans `AuthService` : connecte au login/restauration de session, déconnecte au logout/purge 401.
+  - `shared/status-utils.ts` (libellés FR statut/paiement, alignés sur `mobile_app/lib/utils/order_status_utils.dart`) + réutilisation de `status-colors.ts` (pills).
+  - `shared/media-url.ts` (résolution URL média absolue R2 vs legacy `/uploads`, portée depuis `admin-dashboard`).
+  - Composants `shared/components/` : `StatusTimelineComponent` (frise ACCEPTED→…→COMPLETED, fait=vert/en cours=mangue/à venir=gris, bandeau corail CANCELLED/FAILED — porté 1:1 depuis `mobile_app/lib/widgets/status_timeline.dart`), `OrderMapComponent` (Leaflet/OSM, marqueurs `divIcon` SVG inline pickup/delivery/driver + polyline, mode `tappable` pour poser un point), `OrderChatComponent` (historique `GET .../messages`, envoi, écoute `chat:message` après `chat:join`, marque lu, ferme la saisie sur statut terminal).
+- **Écrans client livrés** (remplacent les 4 placeholders) :
+  - **Accueil** (`/client/home`) : carte tappable + segmented « Retrait/Livraison », champs d'adresse texte, description, estimation debounce (`POST /orders/estimate`), bouton plein `--zz-go` → `POST /orders` → redirection suivi. Pré-remplissage du retrait depuis une boutique via `ClientOrderDraftService` (signal partagé, même principe que `ClientServices.pendingShopSelection` côté Flutter).
+  - **Commandes** (`/client/orders`) : actives/passées via `OrdersService`, pills statut/paiement.
+  - **Suivi** (`/client/orders/:id`) : `StatusTimeline`, carte + position live du livreur (`driver:position` + `orderStatusUpdated` + `orderAccepted` + resynchronisation HTTP sur reconnexion socket), ETA (`GET /orders/:id/eta`, poll 20s), badge paiement (`orderPaymentUpdated` live), chat, annulation (panneau raison, PENDING/ACCEPTED uniquement), signalement (`POST /signalements`), notation post-`COMPLETED` (`POST /orders/:id/rating`).
+  - **Boutiques** (`/client/shops` + `/client/shops/:id`) : liste filtrable par catégorie, détail + produits, « commander depuis cette boutique » → bascule Accueil avec retrait pré-rempli.
+  - **Profil** (`/client/profile`) : affichage + édition prénom/nom (`PATCH /users/me`), upload photo (`POST /users/me/photo`, méthodes ajoutées à `AuthService`), accès notifications (badge non-lu), déconnexion.
+  - **Notifications** (`/client/notifications`, sous-page hors tab bar) : liste paginée, tout marquer lu, tap → marque lu + ouvre le suivi de la livraison liée.
+- **Vérification manuelle** : `.claude/launch.json` créé (config `pwa` sur port 4200, absente jusqu'ici) pour prévisualiser via le Browser pane. Accueil vérifié avec une session simulée (`localStorage` fake token/user) : carte Leaflet + attribution OSM rendues, formulaire complet, aucune erreur console. Commandes/Boutiques/Profil vérifiés en état d'erreur/fallback gracieux (appels bloqués par CORS depuis `localhost:4200` vers le backend de prod — comportement attendu hors origine autorisée), aucun crash.
+- **Build final** : `npm run build` (prod) **OK** — initial **321.01 kB raw / 88.64 kB transfert** (budget 500k/1M inchangé, marge large), 0 warning. Chunks lazy par écran (`home-component` 8 kB, `order-tracking-component` 24.6 kB, etc.) ; Leaflet (~152 kB raw / 38.7 kB transfert) isolé dans un chunk lazy partagé, absent du bundle initial.
+- **Non touché** : `backend/`, `admin-dashboard/`, `mobile_app/`, shells livreur/commerçant (restent en placeholder pour les rounds 3/4).
+- **Reste (round suivant)** : R3 livreur (radar, validation/dispo, course active + statuts étendus, GPS, historique/gains, profil) → R4 commerçant → R5 finition PWA.
+
 ### Session 58 (2026-07-12) — PWA iOS (Angular) — Round 1 : fondations HIG
 - Décision : PWA iOS en **Angular 21** (cohérence avec l'admin, tokens/services réutilisés), **3 rôles** visés (parité Flutter). Nouveau dossier `pwa/` (sibling de `admin-dashboard/` et `mobile_app/`). Le backend de prod (`https://zonzon-backend.fly.dev/v1`) est consommé tel quel.
 - **Scaffold** : `ng new pwa` (Angular 21, standalone, sans SSR) + `ng add @angular/pwa` (service worker + manifest). Versions alignées sur l'admin.

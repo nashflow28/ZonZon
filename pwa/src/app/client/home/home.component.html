@@ -1,0 +1,86 @@
+<div class="home">
+  <div class="map-wrap">
+    <app-order-map
+      [pickup]="pickup()"
+      [delivery]="delivery()"
+      [tappable]="true"
+      (mapTap)="onMapTap($event)"
+    />
+  </div>
+
+  <p class="map-hint">
+    Touchez la carte pour poser le point sélectionné ci-dessous
+    ({{ mode() === 'pickup' ? 'retrait' : 'livraison' }}).
+  </p>
+
+  <div class="segmented">
+    <button
+      type="button"
+      [class.active]="mode() === 'pickup'"
+      (click)="selectMode('pickup')"
+    >
+      Retrait{{ pickup() ? ' ✓' : '' }}
+    </button>
+    <button
+      type="button"
+      [class.active]="mode() === 'delivery'"
+      (click)="selectMode('delivery')"
+    >
+      Livraison{{ delivery() ? ' ✓' : '' }}
+    </button>
+  </div>
+
+  @if (errorMessage()) {
+    <div class="error-banner">{{ errorMessage() }}</div>
+  }
+
+  <form class="form" (ngSubmit)="submit()">
+    <div class="field">
+      <label for="pickupAddress">Adresse de retrait</label>
+      <input
+        id="pickupAddress"
+        type="text"
+        placeholder="Ex : Chez moi, quartier Bè"
+        [(ngModel)]="pickupAddress"
+        name="pickupAddress"
+        autocomplete="off"
+      />
+    </div>
+
+    <div class="field">
+      <label for="deliveryAddress">Adresse de livraison</label>
+      <input
+        id="deliveryAddress"
+        type="text"
+        placeholder="Ex : Immeuble X, Agoè"
+        [(ngModel)]="deliveryAddress"
+        name="deliveryAddress"
+        autocomplete="off"
+      />
+    </div>
+
+    <div class="field">
+      <label for="description">Description du colis</label>
+      <textarea
+        id="description"
+        rows="2"
+        placeholder="Ex : Un sac de documents"
+        [(ngModel)]="description"
+        name="description"
+      ></textarea>
+    </div>
+
+    @if (estimating()) {
+      <div class="estimate estimate--loading">Calcul de l'estimation…</div>
+    } @else if (estimate()) {
+      <div class="estimate">
+        <span class="estimate-label">Estimation</span>
+        <span class="estimate-value">{{ estimate()!.distanceKm }} km · {{ estimate()!.priceFcfa }} FCFA</span>
+      </div>
+    }
+
+    <button type="submit" class="btn-primary" [disabled]="!canSubmit">
+      {{ submitting() ? 'Envoi…' : 'Commander maintenant' }}
+    </button>
+  </form>
+</div>

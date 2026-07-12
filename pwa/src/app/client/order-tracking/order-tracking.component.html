@@ -1,0 +1,158 @@
+<div class="tracking zz-scroll">
+  @if (loading()) {
+    <p class="hint">Chargement…</p>
+  } @else if (notFound()) {
+    <div class="empty">
+      <h3>Commande introuvable</h3>
+      <p>Cette course n'existe pas ou n'est plus accessible.</p>
+      <button type="button" class="btn-primary" (click)="backToOrders()">Retour aux commandes</button>
+    </div>
+  } @else if (order(); as o) {
+    <app-status-timeline [status]="o.status" />
+
+    <p class="status-long">{{ statusLongLabel(o.status) }}</p>
+
+    <div class="map-wrap">
+      <app-order-map
+        [pickup]="pickupPoint()"
+        [delivery]="deliveryPoint()"
+        [driverPosition]="driverPosition()"
+      />
+    </div>
+
+    <div class="badges-row">
+      <span [class]="paymentStatusPillClass(o.paymentStatus)">{{ paymentLabel(o.paymentStatus) }}</span>
+      @if (eta(); as e) {
+        @if (e.basedOn !== 'unavailable' && e.etaMinutes != null) {
+          <span class="eta-badge">~{{ e.etaMinutes }} min ({{ e.distanceKm }} km)</span>
+        }
+      }
+    </div>
+
+    <div class="info-card">
+      <div class="info-row">
+        <span class="info-label">Retrait</span>
+        <span class="info-value">{{ o.pickupAddress }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Livraison</span>
+        <span class="info-value">{{ o.deliveryAddress }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Colis</span>
+        <span class="info-value">{{ o.description }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Prix</span>
+        <span class="info-value">{{ o.priceFcfa ?? '—' }} FCFA</span>
+      </div>
+      @if (o.livreur) {
+        <div class="info-row">
+          <span class="info-label">Livreur</span>
+          <span class="info-value">{{ o.livreur.firstName }} {{ o.livreur.lastName }}</span>
+        </div>
+      }
+    </div>
+
+    @if (actionError()) {
+      <div class="error-banner">{{ actionError() }}</div>
+    }
+
+    <div class="actions-row">
+      <button type="button" class="action-btn" (click)="toggleChat()">
+        {{ showChat() ? 'Fermer le chat' : 'Discuter' }}
+      </button>
+      @if (canCancel()) {
+        <button type="button" class="action-btn action-btn--danger" (click)="openCancelPanel()">
+          Annuler
+        </button>
+      }
+      @if (!reportSent()) {
+        <button type="button" class="action-btn" (click)="openReportPanel()">Signaler</button>
+      } @else {
+        <span class="reported-hint">Signalement envoyé</span>
+      }
+    </div>
+
+    @if (showChat()) {
+      <div class="panel chat-panel">
+        <app-order-chat [orderId]="o.id" [orderStatus]="o.status" />
+      </div>
+    }
+
+    @if (showCancelPanel()) {
+      <div class="panel">
+        <h4>Annuler la commande</h4>
+        <p class="panel-hint">Le livreur a peut-être déjà démarré. Êtes-vous sûr ?</p>
+        <textarea
+          rows="2"
+          placeholder="Raison (optionnel)"
+          [ngModel]="cancelReason()"
+          (ngModelChange)="cancelReason.set($event)"
+        ></textarea>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" (click)="closeCancelPanel()">Retour</button>
+          <button type="button" class="btn-danger" [disabled]="cancelling()" (click)="confirmCancel()">
+            {{ cancelling() ? 'Annulation…' : "Confirmer l'annulation" }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (showReportPanel()) {
+      <div class="panel">
+        <h4>Signaler un problème</h4>
+        <textarea
+          rows="3"
+          placeholder="Décrivez le problème rencontré (3 caractères minimum)"
+          [ngModel]="reportReason()"
+          (ngModelChange)="reportReason.set($event)"
+        ></textarea>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" (click)="closeReportPanel()">Annuler</button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="reportReason().trim().length < 3 || reporting()"
+            (click)="submitReport()"
+          >
+            {{ reporting() ? 'Envoi…' : 'Envoyer' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (showRating()) {
+      <div class="panel rating-panel">
+        <h4>Notez votre livreur</h4>
+        <div class="stars">
+          @for (star of [1, 2, 3, 4, 5]; track star) {
+            <button
+              type="button"
+              class="star"
+              [class.star--filled]="star <= ratingScore()"
+              (click)="setRatingScore(star)"
+            >
+              ★
+            </button>
+          }
+        </div>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" (click)="dismissRating()">Plus tard</button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="ratingScore() === 0 || ratingSubmitting()"
+            (click)="submitRating()"
+          >
+            {{ ratingSubmitting() ? 'Envoi…' : 'Envoyer la note' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (ratingSubmitted()) {
+      <p class="rated-hint">Merci pour votre note !</p>
+    }
+  }
+</div>

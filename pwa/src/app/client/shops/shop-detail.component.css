@@ -1,0 +1,148 @@
+.detail {
+  padding: 4px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hint {
+  text-align: center;
+  color: var(--zz-text-mut);
+  margin-top: 40px;
+}
+
+.error-banner {
+  background: color-mix(in srgb, var(--zz-coral) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  color: var(--zz-coral);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.header-card {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: var(--zz-card);
+}
+
+.logo--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--zz-text-mut);
+  text-transform: uppercase;
+}
+
+.header-body h2 {
+  margin: 0 0 2px;
+  font-size: 20px;
+  color: var(--zz-text-hi);
+}
+
+.header-body p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--zz-text-mut);
+}
+
+.description {
+  margin: 0;
+  font-size: 14px;
+  color: var(--zz-text-hi);
+  line-height: 1.4;
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 14px;
+  padding: 16px;
+  font-size: 16px;
+  font-weight: 700;
+  background: var(--zz-go);
+  color: #06231a;
+  cursor: pointer;
+}
+
+.section-title {
+  margin: 4px 0 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--zz-text-hi);
+}
+
+.products {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.product {
+  display: flex;
+  gap: 12px;
+  background: var(--zz-card);
+  border: 1px solid var(--zz-line);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.product--unavailable {
+  opacity: 0.55;
+}
+
+.product-photo {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: var(--zz-bg);
+}
+
+.product-photo--placeholder {
+  background: var(--zz-bg);
+}
+
+.product-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.product-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--zz-text-hi);
+}
+
+.product-desc {
+  font-size: 12px;
+  color: var(--zz-text-mut);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--zz-go);
+}
+
+.product-unavailable {
+  font-size: 11px;
+  color: var(--zz-coral);
+  font-weight: 600;
+}

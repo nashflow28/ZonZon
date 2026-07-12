@@ -22,25 +22,47 @@ export const routes: Routes = [
         path: 'home',
         data: { title: 'Accueil' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./client/home/home.component').then((m) => m.ClientHomeComponent),
       },
       {
         path: 'orders',
         data: { title: 'Commandes' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./client/orders/orders.component').then((m) => m.ClientOrdersComponent),
+      },
+      {
+        path: 'orders/:id',
+        data: { title: 'Suivi' },
+        loadComponent: () =>
+          import('./client/order-tracking/order-tracking.component').then(
+            (m) => m.ClientOrderTrackingComponent
+          ),
       },
       {
         path: 'shops',
         data: { title: 'Boutiques' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./client/shops/shops-list.component').then((m) => m.ClientShopsListComponent),
+      },
+      {
+        path: 'shops/:id',
+        data: { title: 'Boutique' },
+        loadComponent: () =>
+          import('./client/shops/shop-detail.component').then((m) => m.ClientShopDetailComponent),
       },
       {
         path: 'profile',
         data: { title: 'Profil' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./client/profile/profile.component').then((m) => m.ClientProfileComponent),
+      },
+      {
+        path: 'notifications',
+        data: { title: 'Notifications' },
+        loadComponent: () =>
+          import('./client/notifications/notifications.component').then(
+            (m) => m.ClientNotificationsComponent
+          ),
       },
     ],
   },

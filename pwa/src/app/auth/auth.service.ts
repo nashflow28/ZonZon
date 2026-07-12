@@ -3,6 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { SocketService } from '../shared/services/socket.service';
 import { LoginPayload, LoginResponse, RegisterPayload, Role, User } from './models/user.model';
 
 const TOKEN_KEY = 'zonzon_token';
@@ -12,12 +13,21 @@ const USER_KEY = 'zonzon_user';
 export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
+  private socketService = inject(SocketService);
 
   /** Signal réactif pour suivre l'utilisateur courant (layout, guards, shells). */
   readonly currentUser = signal<User | null>(this.readUserFromStorage());
 
   /** Rôle courant, dérivé de l'utilisateur courant. */
   readonly role = computed<Role | null>(() => this.currentUser()?.role ?? null);
+
+  constructor() {
+    // Session déjà persistée (reload de page) : reconnecte le temps réel.
+    const token = this.getToken();
+    if (token && this.currentUser()) {
+      this.socketService.connect(token);
+    }
+  }
 
   login(phone: string, password: string): Observable<LoginResponse> {
     const payload: LoginPayload = { phone, password };
@@ -46,6 +56,7 @@ export class AuthService {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     this.currentUser.set(null);
+    this.socketService.disconnect();
     this.router.navigate(['/login']);
   }
 
@@ -54,6 +65,7 @@ export class AuthService {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     this.currentUser.set(null);
+    this.socketService.disconnect();
   }
 
   getToken(): string | null {
@@ -83,10 +95,37 @@ export class AuthService {
     }
   }
 
+  /** Édition du profil courant (prénom/nom). */
+  updateMe(payload: { firstName?: string; lastName?: string }): Observable<User> {
+    return this.http
+      .patch<User>(`${environment.apiUrl}${environment.apiPrefix}/users/me`, payload)
+      .pipe(
+        tap((user) => {
+          localStorage.setItem(USER_KEY, JSON.stringify(user));
+          this.currentUser.set(user);
+        })
+      );
+  }
+
+  /** Upload de la photo de profil (multipart). */
+  uploadPhoto(file: File): Observable<User> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http
+      .post<User>(`${environment.apiUrl}${environment.apiPrefix}/users/me/photo`, form)
+      .pipe(
+        tap((user) => {
+          localStorage.setItem(USER_KEY, JSON.stringify(user));
+          this.currentUser.set(user);
+        })
+      );
+  }
+
   private persistSession(res: LoginResponse): void {
     localStorage.setItem(TOKEN_KEY, res.access_token);
     localStorage.setItem(USER_KEY, JSON.stringify(res.user));
     this.currentUser.set(res.user);
+    this.socketService.connect(res.access_token);
   }
 
   private readUserFromStorage(): User | null {

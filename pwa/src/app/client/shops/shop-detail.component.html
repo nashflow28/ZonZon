@@ -1,0 +1,58 @@
+<div class="detail zz-scroll">
+  @if (loading()) {
+    <p class="hint">Chargement…</p>
+  } @else if (errorMessage()) {
+    <div class="error-banner">{{ errorMessage() }}</div>
+  } @else if (shop(); as s) {
+    <div class="header-card">
+      @if (logoSrc(); as logo) {
+        <img class="logo" [src]="logo" alt="" />
+      } @else {
+        <div class="logo logo--placeholder">{{ s.name.charAt(0) }}</div>
+      }
+      <div class="header-body">
+        <h2>{{ s.name }}</h2>
+        <p class="address">{{ s.address }}</p>
+        @if (s.hours) {
+          <p class="hours">{{ s.hours }}</p>
+        }
+        @if (s.phone) {
+          <p class="phone">{{ s.phone }}</p>
+        }
+      </div>
+    </div>
+
+    @if (s.description) {
+      <p class="description">{{ s.description }}</p>
+    }
+
+    <button type="button" class="btn-primary" (click)="orderFromShop()">
+      Commander depuis cette boutique
+    </button>
+
+    @if (s.products && s.products.length > 0) {
+      <h3 class="section-title">Produits</h3>
+      <div class="products">
+        @for (p of s.products; track p.id) {
+          <div class="product" [class.product--unavailable]="!p.available">
+            @if (productPhotoSrc(p.photoUrl); as photo) {
+              <img class="product-photo" [src]="photo" alt="" />
+            } @else {
+              <div class="product-photo product-photo--placeholder"></div>
+            }
+            <div class="product-body">
+              <span class="product-name">{{ p.name }}</span>
+              @if (p.description) {
+                <span class="product-desc">{{ p.description }}</span>
+              }
+              <span class="product-price">{{ p.priceFcfa }} FCFA</span>
+              @if (!p.available) {
+                <span class="product-unavailable">Indisponible</span>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

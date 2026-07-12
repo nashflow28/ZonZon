@@ -1,0 +1,46 @@
+<div class="shops zz-scroll">
+  <div class="categories">
+    <button type="button" [class.active]="selectedCategory() === null" (click)="selectCategory(null)">
+      Toutes
+    </button>
+    @for (cat of categories(); track cat.value) {
+      <button
+        type="button"
+        [class.active]="selectedCategory() === cat.value"
+        (click)="selectCategory(cat.value)"
+      >
+        {{ cat.label }}
+      </button>
+    }
+  </div>
+
+  @if (loading()) {
+    <p class="hint">Chargement…</p>
+  } @else if (errorMessage()) {
+    <div class="error-banner">
+      {{ errorMessage() }}
+      <button type="button" (click)="load()">Réessayer</button>
+    </div>
+  } @else if (shops().length === 0) {
+    <div class="empty">
+      <h3>Aucune boutique</h3>
+      <p>Aucune boutique disponible pour cette catégorie.</p>
+    </div>
+  } @else {
+    <div class="list">
+      @for (shop of shops(); track shop.id) {
+        <button type="button" class="card" (click)="open(shop)">
+          @if (logoSrc(shop); as logo) {
+            <img class="logo" [src]="logo" alt="" />
+          } @else {
+            <div class="logo logo--placeholder">{{ shop.name.charAt(0) }}</div>
+          }
+          <div class="card-body">
+            <span class="card-title">{{ shop.name }}</span>
+            <span class="card-sub">{{ shop.address }}</span>
+          </div>
+        </button>
+      }
+    </div>
+  }
+</div>

@@ -1,0 +1,144 @@
+.shops {
+  padding: 4px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.categories {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.categories button {
+  flex: 0 0 auto;
+  border: 1px solid var(--zz-line);
+  background: var(--zz-card);
+  color: var(--zz-text-mut);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.categories button.active {
+  background: var(--zz-go);
+  border-color: var(--zz-go);
+  color: #06231a;
+}
+
+.hint {
+  text-align: center;
+  color: var(--zz-text-mut);
+  margin-top: 40px;
+}
+
+.error-banner {
+  background: color-mix(in srgb, var(--zz-coral) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  color: var(--zz-coral);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-banner button {
+  border: none;
+  background: transparent;
+  color: var(--zz-coral);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 40vh;
+  text-align: center;
+  color: var(--zz-text-mut);
+}
+
+.empty h3 {
+  margin: 0;
+  color: var(--zz-text-hi);
+  font-size: 18px;
+}
+
+.empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: var(--zz-card);
+  border: 1px solid var(--zz-line);
+  border-radius: 16px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex: 0 0 auto;
+  background: var(--zz-bg);
+}
+
+.logo--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--zz-text-mut);
+  text-transform: uppercase;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--zz-text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-sub {
+  font-size: 13px;
+  color: var(--zz-text-mut);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
