@@ -258,6 +258,12 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 57 (2026-07-12) — Synchronisation temps réel messages et statuts
+
+- **Cause** : le backend diffusait déjà `direct:message` et `orderStatusUpdated`, mais l'application n'exposait pas le premier dans son contrôleur partagé. Les écrans ne rattrapaient pas non plus les changements intervenus pendant une coupure/reconnexion Socket.IO.
+- **Correctifs mobile** : `OrderSocketController` expose maintenant `directMessages$`; le fil général de `MessagingHubScreen` ajoute un message reçu sans rafraîchissement manuel. `ChatService` recharge son historique après reconnexion. Les shells client, suivi client et accueil commerçant rechargent leurs commandes au signal de reconnexion, tandis que le suivi complète chaque transition de statut par une synchronisation HTTP non bloquante.
+- **Vérifications** : `flutter analyze` : **No issues found**; `flutter test` : **29/29**; `flutter build apk --release` : succès (`app-release.apk`, 58.6 MB).
+
 ### Session 56 (2026-07-12) — Passe UI Material 3 et adaptation HIG iOS
 
 - **Portée** : revue et correction des parcours les plus utilisés (authentification/inscription, shell client, radar livreur, profils, historique, messagerie, notifications, accueil et commandes commerçant). Aucune API, route métier ni règle de livraison n'a été modifiée.

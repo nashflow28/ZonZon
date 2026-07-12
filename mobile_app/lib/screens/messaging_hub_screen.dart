@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../controllers/order_socket_controller.dart';
 import '../models/order_history_item.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
@@ -18,6 +20,7 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
   final _direct = DirectMessagesService();
   final _api = ApiClient();
   final _auth = AuthService();
+  final _socketCtrl = OrderSocketController();
   late final TabController _tabs;
   List<DirectContact> _contacts = [];
   List<OrderHistoryItem> _orders = [];
@@ -27,12 +30,14 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
   void initState() {
     super.initState();
     _tabs = TabController(length: 2, vsync: this);
+    _socketCtrl.init();
     _load();
   }
 
   @override
   void dispose() {
     _tabs.dispose();
+    _socketCtrl.dispose();
     super.dispose();
   }
 
@@ -107,7 +112,11 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
                     child: ListTile(
                       onTap: () => pushAdaptive(
                         context,
-                        _DirectThread(contact: c, orders: _orders),
+                        _DirectThread(
+                          contact: c,
+                          orders: _orders,
+                          socketController: _socketCtrl,
+                        ),
                       ),
                       leading: const CircleAvatar(child: Icon(Icons.person)),
                       title: Text(
@@ -173,9 +182,14 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
 }
 
 class _DirectThread extends StatefulWidget {
-  const _DirectThread({required this.contact, required this.orders});
+  const _DirectThread({
+    required this.contact,
+    required this.orders,
+    required this.socketController,
+  });
   final DirectContact contact;
   final List<OrderHistoryItem> orders;
+  final OrderSocketController socketController;
   @override
   State<_DirectThread> createState() => _DirectThreadState();
 }
@@ -187,16 +201,33 @@ class _DirectThreadState extends State<_DirectThread> {
   List<DirectMessageItem> _items = [];
   String _me = '';
   String? _linkedOrderId;
+  StreamSubscription<DirectMessageEvent>? _directMessageSub;
   @override
   void initState() {
     super.initState();
+    _directMessageSub = widget.socketController.directMessages$
+        .where(
+          (event) =>
+              event.senderId == widget.contact.id ||
+              event.recipientId == widget.contact.id,
+        )
+        .listen(_onDirectMessage);
     _load();
   }
 
   @override
   void dispose() {
     _ctrl.dispose();
+    _directMessageSub?.cancel();
     super.dispose();
+  }
+
+  void _onDirectMessage(DirectMessageEvent event) {
+    final item = DirectMessageItem.fromJson(event.raw);
+    if (!mounted || item.id.isEmpty || _items.any((m) => m.id == item.id)) {
+      return;
+    }
+    setState(() => _items = [..._items, item]);
   }
 
   Future<void> _load() async {

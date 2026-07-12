@@ -228,6 +228,8 @@ class ChatService {
       );
       _socket!.emit('chat:join', {'orderId': orderId});
       unawaited(markRead());
+      // Rattrape les messages envoyés pendant une coupure réseau.
+      unawaited(_loadHistory());
     });
 
     _socket!.onReconnectError((error) {

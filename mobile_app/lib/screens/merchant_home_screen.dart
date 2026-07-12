@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../controllers/order_socket_controller.dart';
@@ -34,11 +36,16 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   List<Product> _products = [];
   List<OrderHistoryItem> _orders = const [];
   bool _loading = true;
+  StreamSubscription<void>? _realtimeReconnectSub;
 
   @override
   void initState() {
     super.initState();
     _socketCtrl.init();
+    _realtimeReconnectSub = _socketCtrl.connected$.listen((_) {
+      // Rattrape les transitions de livraison manquées hors ligne.
+      if (mounted) _refresh();
+    });
     _socketCtrl.orderAccepted$.listen((evt) {
       if (!mounted || !_orders.any((order) => order.id == evt.orderId)) return;
       _refresh();
@@ -52,6 +59,7 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
 
   @override
   void dispose() {
+    _realtimeReconnectSub?.cancel();
     _socketCtrl.dispose();
     super.dispose();
   }

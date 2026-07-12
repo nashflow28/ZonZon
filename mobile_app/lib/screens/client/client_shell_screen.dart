@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -25,6 +27,8 @@ class ClientShellScreen extends StatefulWidget {
 }
 
 class _ClientShellScreenState extends State<ClientShellScreen> {
+  StreamSubscription<void>? _realtimeReconnectSub;
+
   @override
   void initState() {
     super.initState();
@@ -35,7 +39,17 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
     // Init du socket + bootstrap du store en parallèle.
     await ClientServices.socket.init();
     if (!mounted) return;
+    _realtimeReconnectSub = ClientServices.socket.connected$.listen((_) {
+      // Rattrape les changements de statut arrivés pendant une coupure.
+      unawaited(ClientServices.activeOrders.refresh());
+    });
     await ClientServices.activeOrders.bootstrap(ClientServices.socket);
+  }
+
+  @override
+  void dispose() {
+    _realtimeReconnectSub?.cancel();
+    super.dispose();
   }
 
   void _onTabTapped(int index) {

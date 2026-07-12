@@ -57,6 +57,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   StreamSubscription<OrderStatusUpdate>? _statusSub;
   StreamSubscription<OrderPaymentUpdate>? _paymentSub;
   StreamSubscription<NewChatMessageEvent>? _chatMsgSub;
+  StreamSubscription<void>? _realtimeReconnectSub;
 
   Place? _pickup;
   Place? _delivery;
@@ -172,6 +173,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   }
 
   void _attachStreams() {
+    _realtimeReconnectSub = _socketCtrl.connected$.listen((_) {
+      // La mise à jour de statut peut avoir été envoyée pendant la coupure.
+      _refreshDetails();
+    });
+
     _driverPosSub = _socketCtrl.driverPosition$
         .where((e) => e.orderId == widget.orderId)
         .listen((evt) {
@@ -219,6 +225,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             hapticSuccess();
             _promptRating();
           }
+          // Le payload Socket contient le statut; HTTP remet aussi à jour les
+          // détails annexes (livreur, paiement) sans action manuelle.
+          _refreshDetails();
         });
 
     // P1 : reflète en direct un changement de paiement fait par le livreur,
@@ -677,6 +686,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _statusSub?.cancel();
     _paymentSub?.cancel();
     _chatMsgSub?.cancel();
+    _realtimeReconnectSub?.cancel();
     _etaTimer?.cancel();
     _estimateSvc.dispose();
     // NB : on ne dispose PAS le socket — il appartient à `ClientServices`

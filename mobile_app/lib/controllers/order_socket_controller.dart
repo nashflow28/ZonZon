@@ -55,6 +55,23 @@ class NewChatMessageEvent {
   NewChatMessageEvent({required this.orderId, required this.raw});
 }
 
+/// Message général reçu via `direct:message`.
+///
+/// Contrairement au chat de course, ce fil est partagé entre deux personnes
+/// et peut optionnellement être relié à une commande. Il ne doit donc pas
+/// être filtré par [watchedOrderIds].
+class DirectMessageEvent {
+  final String senderId;
+  final String recipientId;
+  final Map<String, dynamic> raw;
+
+  DirectMessageEvent({
+    required this.senderId,
+    required this.recipientId,
+    required this.raw,
+  });
+}
+
 /// Nouvelle course disponible diffusée par le backend (côté LIVREUR).
 ///
 /// Le payload brut contient les champs habituels d'une commande (id,
@@ -158,6 +175,7 @@ class OrderSocketController {
   final _statusUpdatesCtrl = StreamController<OrderStatusUpdate>.broadcast();
   final _paymentUpdatesCtrl = StreamController<OrderPaymentUpdate>.broadcast();
   final _newChatMessageCtrl = StreamController<NewChatMessageEvent>.broadcast();
+  final _directMessageCtrl = StreamController<DirectMessageEvent>.broadcast();
   final _newOrderAvailableCtrl = StreamController<NewOrderEvent>.broadcast();
   final _connectedCtrl = StreamController<void>.broadcast();
   final _lifecycleCtrl = StreamController<SocketLifecycleEvent>.broadcast();
@@ -183,6 +201,9 @@ class OrderSocketController {
   /// Le consommateur doit lire `evt.orderId` pour aiguiller le badge non-lu
   /// vers la bonne commande quand plusieurs sont actives en parallèle.
   Stream<NewChatMessageEvent> get newChatMessage$ => _newChatMessageCtrl.stream;
+
+  /// Messages généraux client/livreur ou commerçant/livreur en temps réel.
+  Stream<DirectMessageEvent> get directMessages$ => _directMessageCtrl.stream;
 
   /// Stream des nouvelles courses diffusées par le backend (côté LIVREUR
   /// uniquement). Pas de filtrage sur [activeOrderId] — toutes les nouvelles
@@ -316,6 +337,9 @@ class OrderSocketController {
         'Connexion temps réel rétablie.',
         attempt: normalizedAttempt,
       );
+      // Les écrans utilisent ce signal pour resynchroniser HTTP les
+      // événements qui ont pu arriver pendant la coupure réseau.
+      _connectedCtrl.add(null);
     });
 
     socket.onReconnectError((error) {
@@ -406,6 +430,21 @@ class OrderSocketController {
       );
     });
 
+    socket.on('direct:message', (data) {
+      if (data is! Map) return;
+      final senderId = data['senderId']?.toString();
+      final recipientId = data['recipientId']?.toString();
+      final message = data['message'];
+      if (senderId == null || recipientId == null || message is! Map) return;
+      _directMessageCtrl.add(
+        DirectMessageEvent(
+          senderId: senderId,
+          recipientId: recipientId,
+          raw: Map<String, dynamic>.from(message),
+        ),
+      );
+    });
+
     // Tous les listeners doivent être prêts avant le handshake : une
     // connexion très rapide ne doit pas empêcher la resynchronisation radar.
     socket.connect();
@@ -432,6 +471,7 @@ class OrderSocketController {
     await _statusUpdatesCtrl.close();
     await _paymentUpdatesCtrl.close();
     await _newChatMessageCtrl.close();
+    await _directMessageCtrl.close();
     await _newOrderAvailableCtrl.close();
     await _connectedCtrl.close();
     await _lifecycleCtrl.close();
