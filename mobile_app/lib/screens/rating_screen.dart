@@ -164,8 +164,9 @@ class _RatingScreenState extends State<RatingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayName =
-        widget.otherPartyName.isEmpty ? _roleLabel : widget.otherPartyName;
+    final displayName = widget.otherPartyName.isEmpty
+        ? _roleLabel
+        : widget.otherPartyName;
     return Scaffold(
       backgroundColor: const Color(0xFF0C1A22),
       appBar: AppBar(
@@ -206,9 +207,7 @@ class _RatingScreenState extends State<RatingScreen> {
                         : () => setState(() => _score = value),
                     icon: Icon(
                       filled ? Icons.star : Icons.star_border,
-                      color: filled
-                          ? const Color(0xFFFACC15)
-                          : Colors.white54,
+                      color: filled ? const Color(0xFFFACC15) : Colors.white54,
                     ),
                     tooltip: '$value étoile${value > 1 ? 's' : ''}',
                   );

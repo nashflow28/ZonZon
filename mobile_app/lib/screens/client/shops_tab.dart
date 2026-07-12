@@ -25,8 +25,10 @@ class ShopsTab extends StatelessWidget {
         final shop = selection['shop'] as Shop?;
         final product = selection['product'] as catalog.Product?;
         if (shop == null || product == null) return;
-        ClientServices.pendingShopSelection.value =
-            PendingShopSelection(shop: shop, product: product);
+        ClientServices.pendingShopSelection.value = PendingShopSelection(
+          shop: shop,
+          product: product,
+        );
         if (!context.mounted) return;
         showAdaptiveSnack(
           context,

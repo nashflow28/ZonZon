@@ -22,10 +22,10 @@ class DriverVehicle {
   const DriverVehicle({this.type, this.licensePlate, this.description});
 
   factory DriverVehicle.fromJson(Map<String, dynamic> json) => DriverVehicle(
-        type: json['type'] as String?,
-        licensePlate: json['licensePlate'] as String?,
-        description: json['description'] as String?,
-      );
+    type: json['type'] as String?,
+    licensePlate: json['licensePlate'] as String?,
+    description: json['description'] as String?,
+  );
 
   /// Libellé court à afficher dans l'UI (ex. "MOTO", "VOITURE").
   String get label => type ?? 'Véhicule';
@@ -100,9 +100,7 @@ class AvailableDriver {
       vehicle: vehicleJson is Map
           ? DriverVehicle.fromJson(Map<String, dynamic>.from(vehicleJson))
           : null,
-      distanceKm: rawDistance == null
-          ? null
-          : (rawDistance as num).toDouble(),
+      distanceKm: rawDistance == null ? null : (rawDistance as num).toDouble(),
       isAffiliated: json['isAffiliated'] == true,
     );
   }
@@ -219,10 +217,12 @@ class MerchantDriversService {
         }
         return AffiliatedDriver.fromJson(decoded);
       }
-      throw MerchantDriversException(_extractErrorMessage(
-        res.body,
-        fallback: "Impossible d'affilier ce livreur.",
-      ));
+      throw MerchantDriversException(
+        _extractErrorMessage(
+          res.body,
+          fallback: "Impossible d'affilier ce livreur.",
+        ),
+      );
     } on MerchantDriversException {
       rethrow;
     } catch (e) {
@@ -244,9 +244,10 @@ class MerchantDriversService {
       }
       return decoded
           .whereType<Map>()
-          .map((m) => DriverAffiliationInvite.fromJson(
-                Map<String, dynamic>.from(m),
-              ))
+          .map(
+            (m) =>
+                DriverAffiliationInvite.fromJson(Map<String, dynamic>.from(m)),
+          )
           .toList();
     } on MerchantDriversException {
       rethrow;
@@ -282,10 +283,12 @@ class MerchantDriversService {
           merchant: null,
         );
       }
-      throw MerchantDriversException(_extractErrorMessage(
-        res.body,
-        fallback: "Impossible de répondre à l'invitation.",
-      ));
+      throw MerchantDriversException(
+        _extractErrorMessage(
+          res.body,
+          fallback: "Impossible de répondre à l'invitation.",
+        ),
+      );
     } on MerchantDriversException {
       rethrow;
     } catch (e) {
@@ -298,10 +301,12 @@ class MerchantDriversService {
     try {
       final res = await _api.delete('/merchants/me/drivers/$driverId');
       if (res.statusCode != 200 && res.statusCode != 204) {
-        throw MerchantDriversException(_extractErrorMessage(
-          res.body,
-          fallback: 'Impossible de retirer ce livreur.',
-        ));
+        throw MerchantDriversException(
+          _extractErrorMessage(
+            res.body,
+            fallback: 'Impossible de retirer ce livreur.',
+          ),
+        );
       }
     } on MerchantDriversException {
       rethrow;

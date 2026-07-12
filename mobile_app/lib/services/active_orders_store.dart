@@ -92,12 +92,13 @@ class ActiveOrdersStore extends ChangeNotifier {
       }
       final raw = jsonDecode(res.body);
       if (raw is! List) return;
-      final fetched = raw
-          .whereType<Map<String, dynamic>>()
-          .map(OrderHistoryItem.fromJson)
-          .where((o) => o.isActive)
-          .toList()
-        ..sort(_byCreatedAtDesc);
+      final fetched =
+          raw
+              .whereType<Map<String, dynamic>>()
+              .map(OrderHistoryItem.fromJson)
+              .where((o) => o.isActive)
+              .toList()
+            ..sort(_byCreatedAtDesc);
       _orders
         ..clear()
         ..addAll(fetched);
@@ -146,6 +147,23 @@ class ActiveOrdersStore extends ChangeNotifier {
     _removeAndUnwatch(orderId);
   }
 
+  /// Remplace le snapshot d'une commande après une resynchronisation HTTP.
+  void onOrderRefreshed(Map<String, dynamic> raw) {
+    final item = OrderHistoryItem.fromJson(raw);
+    final index = _orders.indexWhere((order) => order.id == item.id);
+    if (!item.isActive) {
+      if (index >= 0) _removeAndUnwatch(item.id);
+      return;
+    }
+    if (index >= 0) {
+      _orders[index] = item;
+    } else {
+      _orders.insert(0, item);
+      _socketCtrl?.watchOrder(item.id);
+    }
+    notifyListeners();
+  }
+
   // ---------------------------------------------------------------------------
   // Réactions aux events socket
   // ---------------------------------------------------------------------------
@@ -157,7 +175,12 @@ class ActiveOrdersStore extends ChangeNotifier {
     // Le payload `orderAccepted` contient en général le livreur assigné
     // ainsi que le nouveau statut. On regénère le `OrderHistoryItem` avec
     // le payload brut fusionné pour garder les autres champs.
-    final merged = <String, dynamic>{...current.raw, ...evt.raw};
+    final orderPayload = evt.raw['order'];
+    final merged = <String, dynamic>{
+      ...current.raw,
+      if (orderPayload is Map) ...Map<String, dynamic>.from(orderPayload),
+      ...evt.raw,
+    };
     if (!merged.containsKey('id')) merged['id'] = current.id;
     if (!merged.containsKey('status')) merged['status'] = 'ACCEPTED';
     _orders[idx] = OrderHistoryItem.fromJson(merged);

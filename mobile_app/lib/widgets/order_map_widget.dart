@@ -3,6 +3,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/place.dart';
+import '../services/map_appearance_service.dart';
+import 'map_appearance_controls.dart';
 
 /// Rendu de la carte client (pickup, delivery, polyline OSRM, position
 /// live du livreur). Le widget est volontairement passif : il reçoit
@@ -50,77 +52,70 @@ class _OrderMapWidgetState extends State<OrderMapWidget> {
   void initState() {
     super.initState();
     _internalController = MapController();
+    MapAppearanceService.load();
   }
 
   @override
   Widget build(BuildContext context) {
-    final mapCenter = widget.pickup?.location ??
+    final mapCenter =
+        widget.pickup?.location ??
         widget.delivery?.location ??
         OrderMapWidget._defaultLome;
-    return FlutterMap(
-      mapController: _controller,
-      options: MapOptions(
-        initialCenter: mapCenter,
-        initialZoom: 13.5,
-      ),
+    return Stack(
       children: [
-        TileLayer(
-          urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-          userAgentPackageName: 'com.zonzon.app',
-          subdomains: const ['a', 'b', 'c', 'd'],
-          retinaMode: RetinaMode.isHighDensity(context),
-        ),
-        TileLayer(
-          urlTemplate:
-              'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
-          userAgentPackageName: 'com.zonzon.app',
-          subdomains: const ['a', 'b', 'c', 'd'],
-          retinaMode: RetinaMode.isHighDensity(context),
-        ),
-        if (widget.polyline.length >= 2)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: widget.polyline,
-                color: const Color(0xFF2E90FA),
-                strokeWidth: 4,
-                borderColor: const Color(0xFF2E90FA).withValues(alpha: 0.35),
-                borderStrokeWidth: 8,
+        FlutterMap(
+          mapController: _controller,
+          options: MapOptions(initialCenter: mapCenter, initialZoom: 13.5),
+          children: [
+            const MapTileLayers(),
+            if (widget.polyline.length >= 2)
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: widget.polyline,
+                    color: const Color(0xFF2E90FA),
+                    strokeWidth: 4,
+                    borderColor: const Color(
+                      0xFF2E90FA,
+                    ).withValues(alpha: 0.35),
+                    borderStrokeWidth: 8,
+                  ),
+                ],
               ),
-            ],
-          ),
-        MarkerLayer(
-          markers: [
-            if (widget.pickup != null)
-              Marker(
-                point: widget.pickup!.location,
-                width: 60,
-                height: 60,
-                child: _GlowingMarker(
-                  icon: Icons.my_location,
-                  color: const Color(0xFF2E90FA),
-                ),
-              ),
-            if (widget.delivery != null)
-              Marker(
-                point: widget.delivery!.location,
-                width: 50,
-                height: 50,
-                child: _GlowingMarker(
-                  icon: Icons.location_on,
-                  color: const Color(0xFF0FB271),
-                ),
-              ),
-            if (widget.driverPosition != null)
-              Marker(
-                point: widget.driverPosition!,
-                width: 56,
-                height: 56,
-                child: const DriverPulseMarker(),
-              ),
+            MarkerLayer(
+              markers: [
+                if (widget.pickup != null)
+                  Marker(
+                    point: widget.pickup!.location,
+                    width: 60,
+                    height: 60,
+                    child: _GlowingMarker(
+                      icon: Icons.my_location,
+                      color: const Color(0xFF2E90FA),
+                    ),
+                  ),
+                if (widget.delivery != null)
+                  Marker(
+                    point: widget.delivery!.location,
+                    width: 50,
+                    height: 50,
+                    child: _GlowingMarker(
+                      icon: Icons.location_on,
+                      color: const Color(0xFF0FB271),
+                    ),
+                  ),
+                if (widget.driverPosition != null)
+                  Marker(
+                    point: widget.driverPosition!,
+                    width: 56,
+                    height: 56,
+                    child: const DriverPulseMarker(),
+                  ),
+              ],
+            ),
           ],
         ),
+        const Positioned(top: 12, right: 12, child: MapAppearanceButton()),
       ],
     );
   }
@@ -190,8 +185,9 @@ class _DriverPulseMarkerState extends State<DriverPulseMarker>
               height: 56 * (0.5 + t * 0.5),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF0FB271)
-                    .withValues(alpha: (1 - t) * 0.45),
+                color: const Color(
+                  0xFF0FB271,
+                ).withValues(alpha: (1 - t) * 0.45),
               ),
             ),
             Container(
@@ -208,8 +204,11 @@ class _DriverPulseMarkerState extends State<DriverPulseMarker>
                   ),
                 ],
               ),
-              child: const Icon(Icons.two_wheeler,
-                  size: 16, color: Colors.white),
+              child: const Icon(
+                Icons.two_wheeler,
+                size: 16,
+                color: Colors.white,
+              ),
             ),
           ],
         );

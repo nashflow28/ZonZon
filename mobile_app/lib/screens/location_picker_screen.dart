@@ -6,9 +6,11 @@ import 'package:latlong2/latlong.dart';
 import '../models/place.dart';
 import '../models/saved_address.dart';
 import '../services/geocoding_service.dart';
+import '../services/map_appearance_service.dart';
 import '../services/recent_addresses_service.dart';
 import '../services/saved_addresses_service.dart';
 import '../utils/platform_adapter.dart';
+import '../widgets/map_appearance_controls.dart';
 
 /// Plein écran de sélection d'un point sur la carte.
 ///
@@ -55,6 +57,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   Timer? _reverseDebounce;
   List<Place> _searchResults = [];
   bool _searching = false;
+  int _searchGeneration = 0;
 
   List<Place> _recents = [];
   List<SavedAddress> _favorites = [];
@@ -65,6 +68,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void initState() {
     super.initState();
     _center = widget.initial ?? _defaultLome;
+    MapAppearanceService.load();
     _bootstrap();
   }
 
@@ -120,7 +124,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
 
   void _onSearchChanged(String value) {
     _searchDebounce?.cancel();
-    if (value.trim().length < 3) {
+    final query = value.trim();
+    final generation = ++_searchGeneration;
+    if (query.length < 2) {
       setState(() {
         _searchResults = [];
         _searching = false;
@@ -128,9 +134,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       return;
     }
     setState(() => _searching = true);
-    _searchDebounce = Timer(const Duration(milliseconds: 350), () async {
-      final results = await _geo.search(value);
-      if (!mounted) return;
+    _searchDebounce = Timer(const Duration(milliseconds: 450), () async {
+      final results = await _geo.search(query);
+      if (!mounted || generation != _searchGeneration) return;
       setState(() {
         _searchResults = results;
         _searching = false;
@@ -277,26 +283,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   minZoom: 5,
                   maxZoom: 19,
                 ),
-                children: [
-                  TileLayer(
-                    urlTemplate:
-                        'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-                    userAgentPackageName: 'com.zonzon.app',
-                    subdomains: const ['a', 'b', 'c', 'd'],
-                    retinaMode: RetinaMode.isHighDensity(context),
-                  ),
-                  TileLayer(
-                    urlTemplate:
-                        'https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png',
-                    userAgentPackageName: 'com.zonzon.app',
-                    subdomains: const ['a', 'b', 'c', 'd'],
-                    retinaMode: RetinaMode.isHighDensity(context),
-                  ),
-                ],
+                children: [const MapTileLayers()],
               ),
             ),
             // Crosshair central
             const Center(child: _Crosshair()),
+            const Positioned(top: 64, right: 12, child: MapAppearanceButton()),
 
             // Header (search + close)
             Positioned(

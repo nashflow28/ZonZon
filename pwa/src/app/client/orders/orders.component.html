@@ -19,12 +19,20 @@
           <button type="button" class="card" (click)="open(order)">
             <div class="card-row">
               <span class="card-title">{{ order.deliveryAddress }}</span>
-              <span [class]="orderStatusPillClass(order.status)">{{ statusLabel(order.status) }}</span>
+              <span [class]="orderStatusPillClass(order.status)">{{
+                statusLabel(order.status)
+              }}</span>
             </div>
             <p class="card-sub">Depuis {{ order.pickupAddress }}</p>
             <div class="card-row">
-              <span class="card-price">{{ order.priceFcfa ?? '—' }} FCFA</span>
-              <span [class]="paymentStatusPillClass(order.paymentStatus)">{{ paymentLabel(order.paymentStatus) }}</span>
+              @if (order.status !== 'PENDING' || order.merchant) {
+                <span class="card-price">{{ order.priceFcfa ?? '—' }} FCFA</span>
+              } @else {
+                <span class="card-price">Prix en attente</span>
+              }
+              <span [class]="paymentStatusPillClass(order.paymentStatus)">{{
+                paymentLabel(order.paymentStatus)
+              }}</span>
             </div>
           </button>
         }
@@ -38,12 +46,16 @@
           <button type="button" class="card card--muted" (click)="open(order)">
             <div class="card-row">
               <span class="card-title">{{ order.deliveryAddress }}</span>
-              <span [class]="orderStatusPillClass(order.status)">{{ statusLabel(order.status) }}</span>
+              <span [class]="orderStatusPillClass(order.status)">{{
+                statusLabel(order.status)
+              }}</span>
             </div>
             <p class="card-sub">Depuis {{ order.pickupAddress }}</p>
             <div class="card-row">
               <span class="card-price">{{ order.priceFcfa ?? '—' }} FCFA</span>
-              <span [class]="paymentStatusPillClass(order.paymentStatus)">{{ paymentLabel(order.paymentStatus) }}</span>
+              <span [class]="paymentStatusPillClass(order.paymentStatus)">{{
+                paymentLabel(order.paymentStatus)
+              }}</span>
             </div>
           </button>
         }

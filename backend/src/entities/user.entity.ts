@@ -53,7 +53,7 @@ export class User {
   @Column({ unique: true })
   phone: string;
 
-  @Column({ nullable: true })
+  @Column({ nullable: true, select: false })
   password?: string;
 
   @Column({ nullable: true })
@@ -74,7 +74,12 @@ export class User {
    * par la table `device_tokens` (multi-devices). À supprimer dans une migration
    * de cleanup une fois que tous les clients mobiles auront migré.
    */
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({
+    type: 'varchar',
+    length: 255,
+    nullable: true,
+    select: false,
+  })
   fcmToken?: string | null;
 
   /**

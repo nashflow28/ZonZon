@@ -53,10 +53,12 @@ import { MerchantDriver } from '../src/entities/merchant-driver.entity';
 import { DriverPosition } from '../src/entities/driver-position.entity';
 import { PricingConfig } from '../src/entities/pricing-config.entity';
 import { DeliveryOrder } from '../src/entities/delivery-order.entity';
+import { DeliveryRun } from '../src/entities/delivery-run.entity';
 import { DeliveryStatusHistory } from '../src/entities/delivery-status-history.entity';
 import { PriceChange } from '../src/entities/price-change.entity';
 import { PaymentStatusHistory } from '../src/entities/payment-status-history.entity';
 import { Zone } from '../src/entities/zone.entity';
+import { OrderPriceProposal } from '../src/entities/order-price-proposal.entity';
 
 jest.mock('axios');
 export const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -223,6 +225,7 @@ export function makeInMemoryRepo<T extends { id?: string }>() {
       let updateSet: any = null;
 
       const builder: any = {
+        addSelect: () => builder,
         update: () => builder,
         set: (patch: any) => {
           updateSet = patch;
@@ -235,6 +238,29 @@ export function makeInMemoryRepo<T extends { id?: string }>() {
         andWhere: (sql: string, params?: any) => {
           conditions.push({ sql, params });
           return builder;
+        },
+        orWhere: (sql: string, params?: any) => {
+          conditions.push({ sql, params });
+          return builder;
+        },
+        getOne: async () => {
+          const params = Object.assign(
+            {},
+            ...conditions.map((condition) => condition.params ?? {}),
+          );
+          for (const row of store.values()) {
+            const phone = String((row as any).phone ?? '');
+            const digits = phone.replace(/[^0-9]/g, '');
+            if (params.raw && phone === params.raw) return row;
+            if (params.digits && digits === params.digits) return row;
+            if (
+              params.localSuffix &&
+              digits.endsWith(String(params.localSuffix).replace('%', ''))
+            ) {
+              return row;
+            }
+          }
+          return null;
         },
         execute: async () => {
           // Trouve la ligne par id (toujours la première condition dans notre
@@ -293,6 +319,8 @@ export interface TestAppBundle {
   usersRepo: ReturnType<typeof makeInMemoryRepo<User>>;
   vehiclesRepo: ReturnType<typeof makeInMemoryRepo<Vehicle>>;
   ordersRepo: ReturnType<typeof makeInMemoryRepo<DeliveryOrder>>;
+  deliveryRunsRepo: ReturnType<typeof makeInMemoryRepo<DeliveryRun>>;
+  priceProposalsRepo: ReturnType<typeof makeInMemoryRepo<OrderPriceProposal>>;
   merchantDriversRepo: ReturnType<typeof makeInMemoryRepo<MerchantDriver>>;
   statusHistoryRepo: ReturnType<typeof makeInMemoryRepo<DeliveryStatusHistory>>;
   priceChangeRepo: ReturnType<typeof makeInMemoryRepo<PriceChange>>;
@@ -303,6 +331,8 @@ export interface TestAppBundle {
     broadcastOrderAccepted: jest.Mock;
     broadcastStatusUpdate: jest.Mock;
     broadcastPaymentUpdate: jest.Mock;
+    broadcastPriceProposal: jest.Mock;
+    broadcastPriceProposalResponse: jest.Mock;
     isUserConnected: jest.Mock;
   };
 }
@@ -353,6 +383,8 @@ export async function buildTestApp(): Promise<TestAppBundle> {
   }
   const vehiclesRepo = makeInMemoryRepo<Vehicle>();
   const ordersRepo = makeInMemoryRepo<DeliveryOrder>();
+  const deliveryRunsRepo = makeInMemoryRepo<DeliveryRun>();
+  const priceProposalsRepo = makeInMemoryRepo<OrderPriceProposal>();
   const deviceTokensRepo = makeInMemoryRepo<DeviceToken>();
   const merchantDriversRepo = makeInMemoryRepo<MerchantDriver>();
   const driverPositionsRepo = makeInMemoryRepo<DriverPosition>();
@@ -368,6 +400,8 @@ export async function buildTestApp(): Promise<TestAppBundle> {
     broadcastOrderAccepted: jest.fn(),
     broadcastStatusUpdate: jest.fn(),
     broadcastPaymentUpdate: jest.fn(),
+    broadcastPriceProposal: jest.fn(),
+    broadcastPriceProposalResponse: jest.fn(),
     isUserConnected: jest.fn().mockReturnValue(false),
   };
 
@@ -380,8 +414,12 @@ export async function buildTestApp(): Promise<TestAppBundle> {
   (ordersRepo as any).manager = {
     transaction: async (cb: (em: any) => Promise<any>) =>
       cb({
-        getRepository: (entity: any) =>
-          entity === User ? usersRepo : ordersRepo,
+        getRepository: (entity: any) => {
+          if (entity === User) return usersRepo;
+          if (entity === DeliveryRun) return deliveryRunsRepo;
+          if (entity === OrderPriceProposal) return priceProposalsRepo;
+          return ordersRepo;
+        },
       }),
   };
 
@@ -433,6 +471,11 @@ export async function buildTestApp(): Promise<TestAppBundle> {
       { provide: getRepositoryToken(User), useValue: usersRepo },
       { provide: getRepositoryToken(Vehicle), useValue: vehiclesRepo },
       { provide: getRepositoryToken(DeliveryOrder), useValue: ordersRepo },
+      { provide: getRepositoryToken(DeliveryRun), useValue: deliveryRunsRepo },
+      {
+        provide: getRepositoryToken(OrderPriceProposal),
+        useValue: priceProposalsRepo,
+      },
       {
         provide: getRepositoryToken(DeviceToken),
         useValue: deviceTokensRepo,
@@ -483,6 +526,8 @@ export async function buildTestApp(): Promise<TestAppBundle> {
     usersRepo,
     vehiclesRepo,
     ordersRepo,
+    deliveryRunsRepo,
+    priceProposalsRepo,
     merchantDriversRepo,
     statusHistoryRepo,
     priceChangeRepo,
@@ -518,6 +563,26 @@ export async function registerAndLogin(
     .expect(201);
 
   return { token: res.body.access_token, id: res.body.user.id };
+}
+
+/** Nouveau flux client : le livreur propose, puis le client attribue la course. */
+export async function proposeAndAcceptPrice(
+  app: INestApplication,
+  orderId: string,
+  livreurToken: string,
+  clientToken: string,
+  priceFcfa = 700,
+) {
+  const proposal = await request(app.getHttpServer())
+    .post(`/orders/${orderId}/price-proposals`)
+    .set('Authorization', `Bearer ${livreurToken}`)
+    .send({ priceFcfa })
+    .expect(201);
+  return request(app.getHttpServer())
+    .patch(`/orders/${orderId}/price-proposal/${proposal.body.id}`)
+    .set('Authorization', `Bearer ${clientToken}`)
+    .send({ accept: true })
+    .expect(200);
 }
 
 /** Passe un livreur en APPROVED directement dans le repo in-memory (pas de route publique pour ça). */

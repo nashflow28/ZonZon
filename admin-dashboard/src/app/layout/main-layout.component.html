@@ -48,7 +48,7 @@
              class="w-10 h-10 rounded-full border border-slate-600 object-cover" />
         <ng-template #initialsTpl>
           <div class="w-10 h-10 rounded-full bg-blue-600/30 border border-blue-500/50 flex items-center justify-center font-bold text-blue-300 text-sm">
-            {{ (u.firstName?.[0] || '') + (u.lastName?.[0] || '') }}
+            {{ (u.firstName[0] || '') + (u.lastName[0] || '') }}
           </div>
         </ng-template>
         <div class="min-w-0">

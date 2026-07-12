@@ -22,10 +22,7 @@ class WhatsappService {
     try {
       final canOpen = await canLaunchUrl(waUri);
       if (canOpen) {
-        final ok = await launchUrl(
-          waUri,
-          mode: LaunchMode.externalApplication,
-        );
+        final ok = await launchUrl(waUri, mode: LaunchMode.externalApplication);
         if (ok) return;
       }
     } catch (_) {

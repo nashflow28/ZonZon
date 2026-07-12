@@ -49,8 +49,11 @@ class OrderHeader extends StatelessWidget {
                       child: const SizedBox(
                         width: 44,
                         height: 44,
-                        child: Icon(Icons.history,
-                            color: Colors.white70, size: 20),
+                        child: Icon(
+                          Icons.history,
+                          color: Colors.white70,
+                          size: 20,
+                        ),
                       ),
                     ),
                   )
@@ -59,17 +62,23 @@ class OrderHeader extends StatelessWidget {
                 const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text('ZonZon',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1.5)),
-                    Text('Express',
-                        style: TextStyle(
-                            color: Color(0xFFFF9E1B),
-                            fontSize: 24,
-                            fontWeight: FontWeight.w300)),
+                    Text(
+                      'ZonZon',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    Text(
+                      'Express',
+                      style: TextStyle(
+                        color: Color(0xFFFF9E1B),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w300,
+                      ),
+                    ),
                   ],
                 ),
                 Material(
@@ -119,7 +128,8 @@ class ShopOriginBanner extends StatelessWidget {
         color: const Color(0xFF0FB271).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: const Color(0xFF0FB271).withValues(alpha: 0.4)),
+          color: const Color(0xFF0FB271).withValues(alpha: 0.4),
+        ),
       ),
       child: Row(
         children: [
@@ -129,9 +139,10 @@ class ShopOriginBanner extends StatelessWidget {
             child: Text(
               'Commande : $productName',
               style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600),
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           IconButton(
@@ -219,7 +230,8 @@ class AddressCard extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (place != null && place!.displayName != place!.shortName) ...[
+                    if (place != null &&
+                        place!.displayName != place!.shortName) ...[
                       const SizedBox(height: 1),
                       Text(
                         place!.displayName,
@@ -234,8 +246,10 @@ class AddressCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right,
-                  color: Colors.white.withValues(alpha: 0.4)),
+              Icon(
+                Icons.chevron_right,
+                color: Colors.white.withValues(alpha: 0.4),
+              ),
             ],
           ),
         ),
@@ -272,8 +286,11 @@ class SwapButton extends StatelessWidget {
                 child: const SizedBox(
                   width: 44,
                   height: 44,
-                  child: Icon(Icons.swap_vert,
-                      color: Color(0xFF2E90FA), size: 20),
+                  child: Icon(
+                    Icons.swap_vert,
+                    color: Color(0xFF2E90FA),
+                    size: 20,
+                  ),
                 ),
               ),
             ),
@@ -297,6 +314,7 @@ class EstimatePreview extends StatelessWidget {
   final bool loading;
   final double? km;
   final int? priceFcfa;
+  final bool showPrice;
 
   const EstimatePreview({
     super.key,
@@ -305,6 +323,7 @@ class EstimatePreview extends StatelessWidget {
     required this.loading,
     required this.km,
     required this.priceFcfa,
+    this.showPrice = true,
   });
 
   static String _formatThousands(int n) {
@@ -346,8 +365,11 @@ class EstimatePreview extends StatelessWidget {
                 color: const Color(0xFF2E90FA).withValues(alpha: 0.25),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.alt_route,
-                  color: Color(0xFF2E90FA), size: 20),
+              child: const Icon(
+                Icons.alt_route,
+                color: Color(0xFF2E90FA),
+                size: 20,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -361,15 +383,18 @@ class EstimatePreview extends StatelessWidget {
                           width: 14,
                           height: 14,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Color(0xFF2E90FA)),
+                            strokeWidth: 2,
+                            color: Color(0xFF2E90FA),
+                          ),
                         ),
                         SizedBox(width: 8),
-                        Text('Calcul du trajet…',
-                            style: TextStyle(
-                                color: Colors.white, fontSize: 13)),
+                        Text(
+                          'Calcul du trajet…',
+                          style: TextStyle(color: Colors.white, fontSize: 13),
+                        ),
                       ],
                     )
-                  else if (km != null && priceFcfa != null) ...[
+                  else if (km != null) ...[
                     Text(
                       '${km!.toStringAsFixed(1)} km',
                       style: const TextStyle(
@@ -379,7 +404,9 @@ class EstimatePreview extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Prix estimé',
+                      showPrice
+                          ? 'Prix estimé'
+                          : 'Le livreur proposera son prix',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.6),
                         fontSize: 11,
@@ -389,7 +416,7 @@ class EstimatePreview extends StatelessWidget {
                 ],
               ),
             ),
-            if (priceFcfa != null && !loading)
+            if (showPrice && priceFcfa != null && !loading)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -433,11 +460,15 @@ class DescriptionField extends StatelessWidget {
         decoration: InputDecoration(
           hintText: 'Que transportez-vous ?',
           hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
-          prefixIcon:
-              const Icon(Icons.inventory_2_outlined, color: Color(0xFF2E90FA)),
+          prefixIcon: const Icon(
+            Icons.inventory_2_outlined,
+            color: Color(0xFF2E90FA),
+          ),
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 18,
+          ),
         ),
       ),
     );
@@ -473,28 +504,34 @@ class PrimaryGradientButton extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-              color: const Color(0xFF0FB271).withValues(alpha: 0.45),
-              blurRadius: 26,
-              offset: const Offset(0, 10)),
+            color: const Color(0xFF0FB271).withValues(alpha: 0.45),
+            blurRadius: 26,
+            offset: const Offset(0, 10),
+          ),
         ],
       ),
       child: ElevatedButton(
         onPressed: loading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.transparent,
-            shadowColor: Colors.transparent,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
         child: loading
             ? const CircularProgressIndicator(color: Color(0xFF06140F))
-            : Text(label,
+            : Text(
+                label,
                 style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w900,
-                    // Texte foncé sur fond vert vif → meilleur contraste et
-                    // rendu plus « premium » que le blanc pur.
-                    color: Color(0xFF06140F),
-                    letterSpacing: 0.3)),
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  // Texte foncé sur fond vert vif → meilleur contraste et
+                  // rendu plus « premium » que le blanc pur.
+                  color: Color(0xFF06140F),
+                  letterSpacing: 0.3,
+                ),
+              ),
       ),
     );
   }
@@ -507,15 +544,23 @@ class OrderBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.bottomCenter,
-      child: ClipRRect(
+    return DraggableScrollableSheet(
+      initialChildSize: 0.38,
+      minChildSize: 0.16,
+      maxChildSize: 0.82,
+      snap: true,
+      snapSizes: const [0.16, 0.38, 0.82],
+      builder: (context, scrollController) => ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(40)),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
             padding: EdgeInsets.fromLTRB(
-                24, 18, 24, 24 + MediaQuery.of(context).padding.bottom),
+              24,
+              18,
+              24,
+              24 + MediaQuery.of(context).padding.bottom,
+            ),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -525,14 +570,18 @@ class OrderBottomSheet extends StatelessWidget {
                   const Color(0xFF0C1A22).withValues(alpha: 0.95),
                 ],
               ),
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(40)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(40),
+              ),
               border: Border(
                 top: BorderSide(
-                    color: Colors.white.withValues(alpha: 0.15), width: 1.5),
+                  color: Colors.white.withValues(alpha: 0.15),
+                  width: 1.5,
+                ),
               ),
             ),
             child: SingleChildScrollView(
+              controller: scrollController,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -543,8 +592,9 @@ class OrderBottomSheet extends StatelessWidget {
                       height: 6,
                       margin: const EdgeInsets.only(bottom: 18),
                       decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(10)),
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ),
                   child,
@@ -572,6 +622,7 @@ class OrderFormSection extends StatelessWidget {
   final int? estimatePrice;
   final bool submitLoading;
   final Widget? extraSection;
+  final bool showEstimatedPrice;
 
   final VoidCallback onOpenShops;
   final VoidCallback onCancelShop;
@@ -592,6 +643,7 @@ class OrderFormSection extends StatelessWidget {
     required this.estimatePrice,
     required this.submitLoading,
     this.extraSection,
+    this.showEstimatedPrice = true,
     required this.onOpenShops,
     required this.onCancelShop,
     required this.onPickPickup,
@@ -613,14 +665,19 @@ class OrderFormSection extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Prêt à livrer ?',
-                      style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white)),
+                  Text(
+                    'Prêt à livrer ?',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white,
+                    ),
+                  ),
                   SizedBox(height: 4),
-                  Text('Choisissez les points de la course.',
-                      style: TextStyle(fontSize: 14, color: Colors.white60)),
+                  Text(
+                    'Choisissez les points de la course.',
+                    style: TextStyle(fontSize: 14, color: Colors.white60),
+                  ),
                 ],
               ),
             ),
@@ -688,6 +745,7 @@ class OrderFormSection extends StatelessWidget {
           loading: estimateLoading && estimatePrice == null,
           km: estimateKm,
           priceFcfa: estimatePrice,
+          showPrice: showEstimatedPrice,
         ),
         const SizedBox(height: 14),
         DescriptionField(controller: descController),
@@ -764,35 +822,44 @@ class OrderAcceptedSection extends StatelessWidget {
                   color: const Color(0xFF0FB271).withValues(alpha: 0.1),
                   boxShadow: [
                     BoxShadow(
-                        color: const Color(0xFF0FB271).withValues(alpha: 0.2),
-                        blurRadius: 30)
+                      color: const Color(0xFF0FB271).withValues(alpha: 0.2),
+                      blurRadius: 30,
+                    ),
                   ],
                 ),
-                child: const Icon(Icons.check_circle,
-                    color: Color(0xFF0FB271), size: 60),
+                child: const Icon(
+                  Icons.check_circle,
+                  color: Color(0xFF0FB271),
+                  size: 60,
+                ),
               ),
             );
           },
         ),
         const SizedBox(height: 16),
-        const Text('Coursier en route !',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w900,
-                color: Colors.white)),
+        const Text(
+          'Coursier en route !',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w900,
+            color: Colors.white,
+          ),
+        ),
         const SizedBox(height: 8),
         if ((paymentStatus ?? '').isNotEmpty) ...[
           Center(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: PaymentStatusUtils.color(paymentStatus)
-                    .withValues(alpha: 0.15),
+                color: PaymentStatusUtils.color(
+                  paymentStatus,
+                ).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: PaymentStatusUtils.color(paymentStatus)
-                      .withValues(alpha: 0.45),
+                  color: PaymentStatusUtils.color(
+                    paymentStatus,
+                  ).withValues(alpha: 0.45),
                 ),
               ),
               child: Text(
@@ -809,8 +876,11 @@ class OrderAcceptedSection extends StatelessWidget {
             Center(
               child: TextButton.icon(
                 onPressed: onMarkPaid,
-                icon: const Icon(Icons.payments_outlined,
-                    size: 16, color: Color(0xFF0FB271)),
+                icon: const Icon(
+                  Icons.payments_outlined,
+                  size: 16,
+                  color: Color(0xFF0FB271),
+                ),
                 label: const Text(
                   'J’ai payé en espèces',
                   style: TextStyle(
@@ -840,7 +910,8 @@ class OrderAcceptedSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                     color: Colors.white.withValues(alpha: 0.04),
                     border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.08)),
+                      color: Colors.white.withValues(alpha: 0.08),
+                    ),
                   ),
                   child: const Center(
                     child: Row(
@@ -850,12 +921,15 @@ class OrderAcceptedSection extends StatelessWidget {
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Color(0xFF2E90FA)),
+                            strokeWidth: 2,
+                            color: Color(0xFF2E90FA),
+                          ),
                         ),
                         SizedBox(width: 12),
-                        Text('Recherche d’un livreur…',
-                            style: TextStyle(
-                                color: Colors.white70, fontSize: 15)),
+                        Text(
+                          'Recherche d’un livreur…',
+                          style: TextStyle(color: Colors.white70, fontSize: 15),
+                        ),
                       ],
                     ),
                   ),
@@ -866,30 +940,36 @@ class OrderAcceptedSection extends StatelessWidget {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     gradient: const LinearGradient(
-                        colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)]),
+                      colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)],
+                    ),
                     boxShadow: [
                       BoxShadow(
-                          color:
-                              const Color(0xFF2E90FA).withValues(alpha: 0.4),
-                          blurRadius: 25,
-                          offset: const Offset(0, 8))
+                        color: const Color(0xFF2E90FA).withValues(alpha: 0.4),
+                        blurRadius: 25,
+                        offset: const Offset(0, 8),
+                      ),
                     ],
                   ),
                   child: ElevatedButton(
                     onPressed: onOpenChat,
                     style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20))),
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            const Icon(Icons.chat_bubble_rounded,
-                                color: Colors.white, size: 22),
+                            const Icon(
+                              Icons.chat_bubble_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
                             if (unreadChatCount > 0)
                               Positioned(
                                 top: -6,
@@ -901,15 +981,18 @@ class OrderAcceptedSection extends StatelessWidget {
                                     shape: BoxShape.circle,
                                   ),
                                   constraints: const BoxConstraints(
-                                      minWidth: 16, minHeight: 16),
+                                    minWidth: 16,
+                                    minHeight: 16,
+                                  ),
                                   child: Text(
                                     unreadChatCount > 9
                                         ? '9+'
                                         : '$unreadChatCount',
                                     style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.bold),
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                     textAlign: TextAlign.center,
                                   ),
                                 ),
@@ -920,9 +1003,10 @@ class OrderAcceptedSection extends StatelessWidget {
                         Text(
                           'Discuter avec ${assignedLivreur!['firstName'] ?? 'le livreur'}',
                           style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                       ],
                     ),
@@ -959,8 +1043,11 @@ class OrderAcceptedSection extends StatelessWidget {
             height: 52,
             child: OutlinedButton.icon(
               onPressed: onCancelOrder,
-              icon: const Icon(Icons.cancel_outlined,
-                  color: Color(0xFFF0453D), size: 20),
+              icon: const Icon(
+                Icons.cancel_outlined,
+                color: Color(0xFFF0453D),
+                size: 20,
+              ),
               label: const Text(
                 'Annuler la commande',
                 style: TextStyle(
@@ -970,8 +1057,9 @@ class OrderAcceptedSection extends StatelessWidget {
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                backgroundColor:
-                    const Color(0xFFF0453D).withValues(alpha: 0.08),
+                backgroundColor: const Color(
+                  0xFFF0453D,
+                ).withValues(alpha: 0.08),
                 side: const BorderSide(color: Color(0xFFF0453D), width: 1.2),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18),
@@ -1131,7 +1219,9 @@ class _EtaBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isFallback ? const Color(0xFF94A3B8) : const Color(0xFF2E90FA);
+    final color = isFallback
+        ? const Color(0xFF94A3B8)
+        : const Color(0xFF2E90FA);
     final icon = isFallback ? Icons.warning_amber_rounded : Icons.access_time;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),

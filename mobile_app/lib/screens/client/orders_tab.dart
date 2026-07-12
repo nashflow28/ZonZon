@@ -220,7 +220,9 @@ class _ActiveOrderCard extends StatelessWidget {
                     ),
                   ),
                   const Spacer(),
-                  if (order.priceFcfa != null)
+                  if (order.priceFcfa != null &&
+                      (order.status != 'PENDING' ||
+                          order.raw['merchant'] != null))
                     Text(
                       '${order.priceFcfa} FCFA',
                       style: const TextStyle(

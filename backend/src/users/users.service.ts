@@ -353,6 +353,9 @@ export class UsersService {
       "REPLACE(REPLACE(REPLACE(REPLACE(user.phone, '+', ''), ' ', ''), '-', ''), '.', '')";
     const qb = this.usersRepository
       .createQueryBuilder('user')
+      // `password` est select:false pour ne jamais fuiter via les relations.
+      // Ce chemin interne est le seul qui doit le charger pour bcrypt.
+      .addSelect('user.password')
       .where('user.phone = :raw', { raw })
       .orWhere(`${normalizedColumn} = :digits`, { digits });
 

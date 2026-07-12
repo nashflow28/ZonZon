@@ -55,11 +55,13 @@ class ConversationSnapshot {
           : '',
       participants: participantsJson is List
           ? participantsJson
-              .whereType<Map>()
-              .map((m) => ConversationParticipantInfo.fromJson(
+                .whereType<Map>()
+                .map(
+                  (m) => ConversationParticipantInfo.fromJson(
                     Map<String, dynamic>.from(m),
-                  ))
-              .toList()
+                  ),
+                )
+                .toList()
           : const [],
     );
   }
@@ -80,10 +82,12 @@ class ConversationService {
         }
         return ConversationSnapshot.fromJson(decoded);
       }
-      throw ConversationServiceException(_extractError(
-        res.body,
-        fallback: 'Impossible de charger la conversation.',
-      ));
+      throw ConversationServiceException(
+        _extractError(
+          res.body,
+          fallback: 'Impossible de charger la conversation.',
+        ),
+      );
     } on ConversationServiceException {
       rethrow;
     } catch (e) {
@@ -95,10 +99,12 @@ class ConversationService {
     try {
       final res = await _api.post('/orders/$orderId/conversation/participants');
       if (res.statusCode != 200 && res.statusCode != 201) {
-        throw ConversationServiceException(_extractError(
-          res.body,
-          fallback: 'Impossible de rejoindre la conversation.',
-        ));
+        throw ConversationServiceException(
+          _extractError(
+            res.body,
+            fallback: 'Impossible de rejoindre la conversation.',
+          ),
+        );
       }
     } on ConversationServiceException {
       rethrow;
@@ -109,12 +115,18 @@ class ConversationService {
 
   Future<void> removeSelf(String orderId) async {
     try {
-      final res = await _api.delete('/orders/$orderId/conversation/participants/me');
-      if (res.statusCode != 200 && res.statusCode != 201 && res.statusCode != 204) {
-        throw ConversationServiceException(_extractError(
-          res.body,
-          fallback: 'Impossible de quitter la conversation.',
-        ));
+      final res = await _api.delete(
+        '/orders/$orderId/conversation/participants/me',
+      );
+      if (res.statusCode != 200 &&
+          res.statusCode != 201 &&
+          res.statusCode != 204) {
+        throw ConversationServiceException(
+          _extractError(
+            res.body,
+            fallback: 'Impossible de quitter la conversation.',
+          ),
+        );
       }
     } on ConversationServiceException {
       rethrow;

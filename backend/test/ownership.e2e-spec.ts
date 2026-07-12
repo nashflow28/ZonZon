@@ -21,6 +21,7 @@ import { OrderStatus } from '../src/entities/delivery-order.entity';
 import {
   TestAppBundle,
   buildTestApp,
+  proposeAndAcceptPrice,
   setDriverProfilePhoto,
 } from './test-helpers';
 
@@ -143,10 +144,7 @@ describe('Propriété des ressources & attribution manuelle (e2e)', () => {
         .expect(201);
       orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/accept`)
-        .set('Authorization', `Bearer ${ownerLivreurToken}`)
-        .expect(201);
+      await proposeAndAcceptPrice(app, orderId, ownerLivreurToken, clientToken);
     });
 
     it('le livreur NON assigné reçoit 403 sur PATCH /orders/:id/status', async () => {
@@ -354,17 +352,20 @@ describe('Propriété des ressources & attribution manuelle (e2e)', () => {
 
     it('un AUTRE livreur validé+dispo reçoit 403 (course réservée)', async () => {
       await request(app.getHttpServer())
-        .post(`/orders/${reservedOrderId}/accept`)
+        .post(`/orders/${reservedOrderId}/price-proposals`)
         .set('Authorization', `Bearer ${otherLivreurToken}`)
+        .send({ priceFcfa: 700 })
         .expect(403);
     });
 
-    it('le livreur préféré peut accepter la course réservée', async () => {
-      const res = await request(app.getHttpServer())
-        .post(`/orders/${reservedOrderId}/accept`)
-        .set('Authorization', `Bearer ${preferredLivreurToken}`)
-        .expect(201);
-      expect(res.body.status).toBe(OrderStatus.ACCEPTED);
+    it('le client peut accepter le prix du livreur préféré', async () => {
+      const res = await proposeAndAcceptPrice(
+        app,
+        reservedOrderId,
+        preferredLivreurToken,
+        clientToken,
+      );
+      expect(res.body.order.status).toBe(OrderStatus.ACCEPTED);
     });
   });
 });

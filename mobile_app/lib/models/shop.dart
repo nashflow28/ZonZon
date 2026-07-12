@@ -22,14 +22,14 @@ ShopStatus shopStatusFromString(String? s) {
 String _shopStatusToJson(ShopStatus s) => s.name.toUpperCase();
 
 Map<String, double> _latLngToJson(LatLng l) => {
-      'lat': l.latitude,
-      'lng': l.longitude,
-    };
+  'lat': l.latitude,
+  'lng': l.longitude,
+};
 
 LatLng _latLngFromJson(Map<String, dynamic> json) => LatLng(
-      (json['lat'] as num?)?.toDouble() ?? 0,
-      (json['lng'] as num?)?.toDouble() ?? 0,
-    );
+  (json['lat'] as num?)?.toDouble() ?? 0,
+  (json['lng'] as num?)?.toDouble() ?? 0,
+);
 
 @JsonSerializable(createFactory: false, explicitToJson: true)
 class ShopCategory {
@@ -89,9 +89,9 @@ class Shop {
     final productsRaw = json['products'];
     final products = productsRaw is List
         ? productsRaw
-            .whereType<Map<String, dynamic>>()
-            .map(Product.fromJson)
-            .toList()
+              .whereType<Map<String, dynamic>>()
+              .map(Product.fromJson)
+              .toList()
         : <Product>[];
     return Shop(
       id: json['id']?.toString() ?? '',

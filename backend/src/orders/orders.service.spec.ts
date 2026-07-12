@@ -55,6 +55,7 @@ const mockRepo = () => {
     find: jest.fn(),
     findAndCount: jest.fn(),
     findOne: jest.fn(),
+    count: jest.fn().mockResolvedValue(0),
     save: jest.fn(),
     create: jest.fn((fn: any) => fn),
     update: jest.fn(),
@@ -854,6 +855,7 @@ describe('OrdersService', () => {
           id: livreurUser.id,
           firstName: livreurUser.firstName,
         }),
+        expect.objectContaining({ id: 'ord-1', status: OrderStatus.ACCEPTED }),
       );
     });
 
@@ -891,6 +893,10 @@ describe('OrdersService', () => {
         expect.objectContaining({
           id: livreurUser.id,
           firstName: livreurUser.firstName,
+        }),
+        expect.objectContaining({
+          id: 'ord-merchant',
+          status: OrderStatus.ACCEPTED,
         }),
       );
     });
@@ -1156,6 +1162,10 @@ describe('OrdersService', () => {
         expect.objectContaining({
           id: livreurUser.id,
           firstName: livreurUser.firstName,
+        }),
+        expect.objectContaining({
+          id: 'ord-concurrent',
+          status: OrderStatus.ACCEPTED,
         }),
       );
     });
@@ -2185,11 +2195,12 @@ describe('OrdersService', () => {
         buildOrder(OrderStatus.ACCEPTED),
       );
       // Livreur ~1 km du pickup (≈ 0.01° de latitude)
+      const positionAt = new Date();
       positionsService.findLatestForLivreur.mockResolvedValue({
         livreurId: livreurUser.id,
         lat: 6.14,
         lng: 1.22,
-        updatedAt: new Date(),
+        updatedAt: positionAt,
       });
 
       const result = await service.computeEta('ord-eta', clientUser);
@@ -2200,6 +2211,11 @@ describe('OrdersService', () => {
       expect(result.etaMinutes).toBeGreaterThanOrEqual(1);
       // ~1 km / 25 km/h * 60 = ~2.7 min
       expect(result.etaMinutes).toBeLessThanOrEqual(5);
+      expect(result).toMatchObject({
+        driverLat: 6.14,
+        driverLng: 1.22,
+        positionAt,
+      });
     });
 
     it('IN_PROGRESS + position récente livreur → ETA livreur→delivery', async () => {

@@ -1,7 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as admin from 'firebase-admin';
+import {
+  App,
+  applicationDefault,
+  cert,
+  getApps,
+  initializeApp,
+} from 'firebase-admin/app';
+import { getMessaging } from 'firebase-admin/messaging';
 import { User } from '../entities/user.entity';
 import { Notification } from '../entities/notification.entity';
 import { DeviceTokensService } from '../users/device-tokens.service';
@@ -29,7 +36,7 @@ export interface PushPayload {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
-  private app: admin.app.App | null = null;
+  private app: App | null = null;
   private initAttempted = false;
 
   constructor(
@@ -70,21 +77,18 @@ export class NotificationsService {
     }
   }
 
-  private ensureInit(): admin.app.App | null {
+  private ensureInit(): App | null {
     if (this.initAttempted) return this.app;
     this.initAttempted = true;
     try {
       const inlineCred = process.env.FIREBASE_CREDENTIALS_JSON;
       if (inlineCred) {
         const parsed = JSON.parse(inlineCred);
-        this.app = admin.initializeApp({
-          credential: admin.credential.cert(parsed),
-        });
+        this.app = getApps()[0] ?? initializeApp({ credential: cert(parsed) });
         this.logger.log('Firebase Admin initialisé (credentials inline)');
       } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-        this.app = admin.initializeApp({
-          credential: admin.credential.applicationDefault(),
-        });
+        this.app =
+          getApps()[0] ?? initializeApp({ credential: applicationDefault() });
         this.logger.log(
           'Firebase Admin initialisé (GOOGLE_APPLICATION_CREDENTIALS)',
         );
@@ -132,7 +136,7 @@ export class NotificationsService {
     // 3) Envoi en parallèle, on traite les échecs token-par-token
     const results = await Promise.allSettled(
       tokens.map((token) =>
-        admin.messaging().send({
+        getMessaging(app).send({
           token,
           notification: { title: payload.title, body: payload.body },
           data: payload.data ?? {},

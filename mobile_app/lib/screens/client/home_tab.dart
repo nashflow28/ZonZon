@@ -539,6 +539,7 @@ class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
               estimateLoading: _estimateLoading,
               estimateKm: _estimateKm,
               estimatePrice: _estimatePrice,
+              showEstimatedPrice: false,
               submitLoading: isLoading,
               extraSection: _buildZoneSelectors(),
               onOpenShops: _openShops,

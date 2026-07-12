@@ -17,6 +17,7 @@ import {
   In,
   IsNull,
   LessThanOrEqual,
+  MoreThan,
   MoreThanOrEqual,
   Repository,
 } from 'typeorm';
@@ -49,6 +50,10 @@ import { MerchantDriversService } from '../merchant-drivers/merchant-drivers.ser
 import { Zone } from '../entities/zone.entity';
 import { DeliveryRun } from '../entities/delivery-run.entity';
 import { DeliveryRunStatus } from '../entities/delivery-run.entity';
+import {
+  OrderPriceProposal,
+  PriceProposalStatus,
+} from '../entities/order-price-proposal.entity';
 
 type RouteCacheEntry = { km: number; at: number };
 type RouteWithGeometry = { km: number; geometry: number[][] };
@@ -118,6 +123,12 @@ const ACTIVE_DELIVERY_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.NEAR_CLIENT,
 ]);
 
+const CLIENT_OPEN_ORDER_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.PENDING,
+  ...ACTIVE_DELIVERY_STATUSES,
+]);
+const MAX_CLIENT_OPEN_ORDERS = 5;
+
 const TERMINAL_ORDER_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.COMPLETED,
   OrderStatus.CANCELLED,
@@ -141,6 +152,8 @@ export class OrdersService {
    * défaut, modifiable par l'admin via `PATCH /admin/pricing`).
    */
   private readonly PRICE_PER_KM = 200;
+  private readonly priceProposalTtlMs =
+    Math.max(30, Number(process.env.PRICE_PROPOSAL_TTL_SECONDS) || 120) * 1000;
   private readonly orsBase =
     'https://api.openrouteservice.org/v2/directions/driving-car';
   private readonly orsApiKey = process.env.ORS_API_KEY;
@@ -160,6 +173,9 @@ export class OrdersService {
     private paymentHistoryRepository: Repository<PaymentStatusHistory>,
     @InjectRepository(DeliveryRun)
     private deliveryRunsRepository: Repository<DeliveryRun>,
+    @Optional()
+    @InjectRepository(OrderPriceProposal)
+    private priceProposalRepository: Repository<OrderPriceProposal> | undefined,
     private usersService: UsersService,
     private ordersGateway: OrdersGateway,
     private notifications: NotificationsService,
@@ -786,7 +802,26 @@ export class OrdersService {
         : null,
     });
 
-    const saved = await this.ordersRepository.save(order);
+    const saved = await this.ordersRepository.manager.transaction(
+      async (em) => {
+        await em.getRepository(User).findOne({
+          where: { id: clientId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        const openCount = await em.getRepository(DeliveryOrder).count({
+          where: {
+            client: { id: clientId },
+            status: In([...CLIENT_OPEN_ORDER_STATUSES]),
+          },
+        });
+        if (openCount >= MAX_CLIENT_OPEN_ORDERS) {
+          throw new ConflictException(
+            `Vous avez déjà ${MAX_CLIENT_OPEN_ORDERS} commandes actives`,
+          );
+        }
+        return em.getRepository(DeliveryOrder).save(order);
+      },
+    );
 
     void this.logStatusChange({
       deliveryId: saved.id,
@@ -1155,7 +1190,7 @@ export class OrdersService {
       return [];
     }
     if (u.isPublic === false) {
-      return this.ordersRepository.find({
+      const orders = await this.ordersRepository.find({
         where: {
           status: OrderStatus.PENDING,
           livreur: IsNull(),
@@ -1164,12 +1199,13 @@ export class OrdersService {
         relations: ['client', 'merchant', 'run'],
         order: { createdAt: 'DESC' },
       });
+      return this.withoutOrdersUnderNegotiation(orders);
     }
     // Exclut les courses réservées à un AUTRE livreur (attribution manuelle,
     // Priorité 3 Lot 3 item 1). Une course sans preferredLivreurId reste
     // visible par tous (rétro-compat) ; une course réservée à CE livreur
     // reste visible pour lui.
-    return this.ordersRepository.find({
+    const orders = await this.ordersRepository.find({
       where: [
         {
           status: OrderStatus.PENDING,
@@ -1185,6 +1221,22 @@ export class OrdersService {
       relations: ['client', 'merchant', 'run'],
       order: { createdAt: 'DESC' },
     });
+    return this.withoutOrdersUnderNegotiation(orders);
+  }
+
+  private async withoutOrdersUnderNegotiation(
+    orders: DeliveryOrder[],
+  ): Promise<DeliveryOrder[]> {
+    if (!this.priceProposalRepository || orders.length === 0) return orders;
+    const pending = await this.priceProposalRepository.find({
+      where: {
+        status: PriceProposalStatus.PENDING,
+        expiresAt: MoreThan(new Date()),
+      },
+      relations: ['order'],
+    });
+    const blockedIds = new Set(pending.map((proposal) => proposal.order.id));
+    return orders.filter((order) => !blockedIds.has(order.id));
   }
 
   findForUser(user: any) {
@@ -1212,6 +1264,319 @@ export class OrdersService {
     }
     // ADMIN tombant sur /orders/mine : on renvoie la première page paginée.
     return this.findAll();
+  }
+
+  private get priceProposals(): Repository<OrderPriceProposal> {
+    if (!this.priceProposalRepository) {
+      throw new ServiceUnavailableException(
+        'Le service de proposition de prix est indisponible',
+      );
+    }
+    return this.priceProposalRepository;
+  }
+
+  async proposePrice(orderId: string, livreurId: string, priceFcfa: number) {
+    const livreur = await this.usersService.findOne(livreurId);
+    if (
+      livreur.driverApprovalStatus !== DriverApprovalStatus.APPROVED ||
+      !livreur.isAvailable ||
+      livreur.status === UserStatus.SUSPENDED
+    ) {
+      throw new ForbiddenException('Livreur non autorisé ou indisponible');
+    }
+    if (!livreur.profilePhotoUrl?.trim()) {
+      throw new ForbiddenException(
+        'Ajoutez votre photo de profil avant de proposer un prix',
+      );
+    }
+    const activeOrder = await this.ordersRepository.findOne({
+      where: {
+        livreur: { id: livreurId },
+        status: In([...ACTIVE_DELIVERY_STATUSES]),
+      },
+    });
+    if (activeOrder) {
+      throw new ConflictException(
+        'Terminez votre course active avant de proposer un nouveau prix',
+      );
+    }
+
+    const expiresAt = new Date(Date.now() + this.priceProposalTtlMs);
+
+    const proposal = await this.ordersRepository.manager.transaction(
+      async (em) => {
+        const order = await em.getRepository(DeliveryOrder).findOne({
+          where: { id: orderId },
+          relations: ['client', 'merchant', 'preferredLivreur'],
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Commande introuvable');
+        if (order.merchant || !order.client) {
+          throw new BadRequestException(
+            'Les livraisons commerçant utilisent leur prix fixé à la création',
+          );
+        }
+        if (order.status !== OrderStatus.PENDING || order.livreur) {
+          throw new ConflictException('Cette course n’est plus disponible');
+        }
+        if (
+          order.preferredLivreur?.id &&
+          order.preferredLivreur.id !== livreurId
+        ) {
+          throw new ForbiddenException(
+            'Cette course est réservée à un autre livreur',
+          );
+        }
+        if (livreur.isPublic === false && !order.preferredLivreur) {
+          throw new ForbiddenException(
+            'Votre profil privé ne peut répondre qu’aux courses réservées',
+          );
+        }
+
+        const proposalRepo = em.getRepository(OrderPriceProposal);
+        const pending = await proposalRepo.findOne({
+          where: {
+            order: { id: orderId },
+            status: PriceProposalStatus.PENDING,
+          },
+          relations: ['livreur'],
+        });
+        if (pending) {
+          if (pending.expiresAt <= new Date()) {
+            pending.status = PriceProposalStatus.SUPERSEDED;
+            pending.respondedAt = new Date();
+            await proposalRepo.save(pending);
+          } else if (pending.livreur.id === livreurId) {
+            pending.priceFcfa = priceFcfa;
+            pending.expiresAt = expiresAt;
+            return proposalRepo.save(pending);
+          } else {
+            throw new ConflictException(
+              'Une proposition est déjà en attente de réponse du client',
+            );
+          }
+        }
+        return proposalRepo.save(
+          proposalRepo.create({
+            order,
+            livreur,
+            priceFcfa,
+            status: PriceProposalStatus.PENDING,
+            respondedAt: null,
+            expiresAt,
+          }),
+        );
+      },
+    );
+
+    const payload = {
+      id: proposal.id,
+      orderId,
+      priceFcfa: proposal.priceFcfa,
+      status: proposal.status,
+      createdAt: proposal.createdAt,
+      expiresAt: proposal.expiresAt,
+      livreur: {
+        id: livreur.id,
+        firstName: livreur.firstName,
+        lastName: livreur.lastName,
+        phone: livreur.phone,
+        profilePhotoUrl: livreur.profilePhotoUrl,
+      },
+    };
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client'],
+    });
+    if (order?.client?.id) {
+      this.ordersGateway.broadcastPriceProposal(order.client.id, payload);
+      if (!this.ordersGateway.isUserConnected(order.client.id)) {
+        void this.notifications.sendToUser(order.client.id, {
+          title: 'Proposition de prix',
+          body: `${livreur.firstName ?? 'Un livreur'} propose ${priceFcfa} FCFA`,
+          data: { kind: 'price_proposal', orderId },
+        });
+      }
+    }
+    return payload;
+  }
+
+  async getPendingPriceProposal(orderId: string, clientId: string) {
+    const order = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client'],
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (order.client?.id !== clientId) throw new ForbiddenException();
+    return this.priceProposals.findOne({
+      where: {
+        order: { id: orderId },
+        status: PriceProposalStatus.PENDING,
+        expiresAt: MoreThan(new Date()),
+      },
+      relations: ['livreur'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  async respondToPriceProposal(
+    orderId: string,
+    proposalId: string,
+    clientId: string,
+    accept: boolean,
+  ) {
+    const result = await this.ordersRepository.manager.transaction(
+      async (em) => {
+        const orderRepo = em.getRepository(DeliveryOrder);
+        const proposalRepo = em.getRepository(OrderPriceProposal);
+        const order = await orderRepo.findOne({
+          where: { id: orderId },
+          relations: ['client', 'merchant', 'run'],
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!order) throw new NotFoundException('Commande introuvable');
+        if (order.client?.id !== clientId) throw new ForbiddenException();
+        if (order.status !== OrderStatus.PENDING || order.livreur) {
+          throw new ConflictException('Cette course n’est plus disponible');
+        }
+        const proposal = await proposalRepo.findOne({
+          where: { id: proposalId, order: { id: orderId } },
+          relations: ['livreur'],
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!proposal || proposal.status !== PriceProposalStatus.PENDING) {
+          throw new ConflictException('Cette proposition n’est plus active');
+        }
+
+        if (!accept) {
+          proposal.status = PriceProposalStatus.REJECTED;
+          proposal.respondedAt = new Date();
+          await proposalRepo.save(proposal);
+          return { order, proposal, accepted: false, invalidReason: null };
+        }
+        if (proposal.expiresAt <= new Date()) {
+          proposal.status = PriceProposalStatus.SUPERSEDED;
+          proposal.respondedAt = new Date();
+          await proposalRepo.save(proposal);
+          return {
+            order,
+            proposal,
+            accepted: false,
+            invalidReason: 'Cette proposition a expiré',
+          };
+        }
+
+        const driver = await em.getRepository(User).findOne({
+          where: { id: proposal.livreur.id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (
+          !driver ||
+          driver.driverApprovalStatus !== DriverApprovalStatus.APPROVED ||
+          !driver.isAvailable ||
+          driver.status === UserStatus.SUSPENDED
+        ) {
+          proposal.status = PriceProposalStatus.SUPERSEDED;
+          proposal.respondedAt = new Date();
+          await proposalRepo.save(proposal);
+          return {
+            order,
+            proposal,
+            accepted: false,
+            invalidReason: 'Ce livreur n’est plus disponible',
+          };
+        }
+        const active = await orderRepo.findOne({
+          where: {
+            livreur: { id: driver.id },
+            status: In([...ACTIVE_DELIVERY_STATUSES]),
+          },
+        });
+        if (active) {
+          proposal.status = PriceProposalStatus.SUPERSEDED;
+          proposal.respondedAt = new Date();
+          await proposalRepo.save(proposal);
+          return {
+            order,
+            proposal,
+            accepted: false,
+            invalidReason: 'Ce livreur a déjà une course active',
+          };
+        }
+        proposal.status = PriceProposalStatus.ACCEPTED;
+        proposal.respondedAt = new Date();
+        await proposalRepo.save(proposal);
+        order.livreur = driver;
+        order.priceFcfa = proposal.priceFcfa;
+        order.priceWasManuallyAdjusted =
+          proposal.priceFcfa !== order.estimatedPrice;
+        order.status = OrderStatus.ACCEPTED;
+        order.acceptedAt = new Date();
+        await orderRepo.save(order);
+        return { order, proposal, accepted: true, invalidReason: null };
+      },
+    );
+
+    const driver = result.proposal.livreur;
+    this.ordersGateway.broadcastPriceProposalResponse(driver.id, {
+      orderId,
+      proposalId,
+      accepted: result.accepted,
+    });
+    if (!this.ordersGateway.isUserConnected(driver.id)) {
+      void this.notifications.sendToUser(driver.id, {
+        title: result.accepted ? 'Prix accepté' : 'Prix refusé',
+        body: result.accepted
+          ? 'Le client a accepté votre prix. La course vous est attribuée.'
+          : 'Le client a refusé votre proposition.',
+        data: {
+          kind: 'price_proposal_response',
+          orderId,
+          accepted: String(result.accepted),
+        },
+      });
+    }
+    if (!result.accepted) {
+      await this.dispatchNewOrder(result.order);
+      if (result.invalidReason) {
+        throw new ConflictException(result.invalidReason);
+      }
+      return { accepted: false, order: result.order };
+    }
+
+    void this.logStatusChange({
+      deliveryId: orderId,
+      oldStatus: OrderStatus.PENDING,
+      newStatus: OrderStatus.ACCEPTED,
+      changedBy: clientId,
+    });
+    void this.logPriceChange({
+      deliveryId: orderId,
+      oldPrice: result.order.estimatedPrice,
+      newPrice: result.proposal.priceFcfa,
+      changedBy: driver.id,
+      reason: 'Proposition livreur acceptée par le client',
+    });
+    const updated = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['client', 'livreur', 'merchant', 'run'],
+    });
+    if (!updated) throw new NotFoundException('Commande introuvable');
+    this.ordersGateway.broadcastOrderAccepted(
+      updated.id,
+      driver.id,
+      updated.client?.id,
+      updated.merchant?.id,
+      {
+        id: driver.id,
+        firstName: driver.firstName,
+        lastName: driver.lastName,
+        phone: driver.phone,
+      },
+      updated as unknown as Record<string, unknown>,
+    );
+    await this.syncRunStatus(updated.run?.id);
+    return { accepted: true, order: updated };
   }
 
   async acceptOrder(orderId: string, livreurId: string) {
@@ -1265,7 +1630,13 @@ export class OrdersService {
     });
     const requestedOrder = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['preferredLivreur', 'run', 'run.livreur'],
+      relations: [
+        'client',
+        'merchant',
+        'preferredLivreur',
+        'run',
+        'run.livreur',
+      ],
     });
     if (!requestedOrder) throw new NotFoundException('Commande introuvable');
     if (
@@ -1281,6 +1652,12 @@ export class OrdersService {
     //    de 409 (déjà prise par un autre livreur) et 403 (réservée à un
     //    autre livreur — attribution manuelle, Priorité 3 Lot 3 item 1).
     const existing = requestedOrder;
+
+    if (this.priceProposalRepository && !existing.merchant && existing.client) {
+      throw new BadRequestException(
+        'Proposez un prix au client avant de prendre cette course',
+      );
+    }
 
     if (
       existing.preferredLivreur?.id &&
@@ -1393,6 +1770,7 @@ export class OrdersService {
         lastName: livreur.lastName,
         phone: livreur.phone,
       },
+      updated as unknown as Record<string, unknown>,
     );
 
     // Push notification au client si offline
@@ -1586,6 +1964,9 @@ export class OrdersService {
     distanceKm: number | null;
     etaMinutes: number | null;
     basedOn: 'driver_position' | 'pickup' | 'unavailable';
+    driverLat?: number;
+    driverLng?: number;
+    positionAt?: Date;
   }> {
     const order = await this.ordersRepository.findOne({
       where: { id: orderId },
@@ -1682,6 +2063,13 @@ export class OrdersService {
       distanceKm: parseFloat(distanceKm.toFixed(2)),
       etaMinutes,
       basedOn,
+      ...(basedOn === 'driver_position' && position
+        ? {
+            driverLat: position.lat,
+            driverLng: position.lng,
+            positionAt: position.updatedAt,
+          }
+        : {}),
     };
   }
 

@@ -89,11 +89,42 @@
 
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)
 
+### Audit global post-négociation (2026-07-12)
+
+- [x] **P0 — Ne jamais sérialiser les secrets User** — `password` et `fcmToken` hors sélection TypeORM par défaut, sélection explicite limitée à l'auth/FCM, assertions e2e. *(2026-07-12)*
+- [x] **P0 — Activer la course Flutter après accord sur le prix** — restauration de la commande, panneau livreur et GPS déclenchés par les événements d'acceptation. *(2026-07-12)*
+- [x] **P0 — Porter la négociation sur la PWA iOS** — proposition livreur, acceptation/refus client, événements socket, prix estimé masqué et tests HTTP. *(2026-07-12)*
+- [x] **P0 — Empêcher les propositions bloquées** — TTL, invalidation, exclusion des livreurs actifs et filtrage radar pendant une offre en attente. *(2026-07-12)*
+- [x] **P1 — Synchroniser le prix final Flutter** — payload complet dans `orderAccepted` et fusion du store/rechargement du suivi. *(2026-07-12)*
+- [x] **P1 — Enforcer la limite de 5 commandes actives côté backend** — verrou client + comptage transactionnel, scénario e2e de refus de la sixième commande. *(2026-07-12)*
+- [x] **P1 sécurité dépendances** — Multer/Nest, Firebase Admin et Angular mis à niveau ; audits production backend/admin à 0 vulnérabilité. *(2026-07-12)*
+- [~] **P1 — Réparer la qualité automatisée** — test admin réparé et couverture PWA négociation ajoutée ; dette ESLint backend historique encore à traiter séparément sans masquer les règles.
+- [x] **P2 — Renuméroter la migration de propositions** — migration déplacée vers `1780500000000`, après les migrations existantes. *(2026-07-12)*
+- [ ] **OPS — Aligner production et dépôt** — commit/push, déployer backend+migration, adapter/build APK et PWA avant tests terrain.
+
+### Négociation du prix client/livreur (2026-07-12)
+
+- [x] **P0 — Backend propositions de prix** — proposition livreur historisée, acceptation/refus client transactionnel, attribution uniquement après acceptation, socket et notifications. *(2026-07-12)*
+- [x] **P0 — Mobile livreur** — remplacer l'acceptation directe d'une course client par la saisie et l'envoi d'un prix. *(2026-07-12)*
+- [x] **P0 — Mobile client** — masquer le prix estimé avant attribution et afficher l'acceptation/refus d'une proposition en temps réel. *(2026-07-12)*
+- [x] **P1 — Suivi plein écran carte** — informations de course dans un panneau superposé rétractable, suivi commerçant et statuts vérifiés. *(2026-07-12)*
+- [x] **Tests de non-régression** — concurrence, refus/remise au radar, acceptation/attribution, tournées commerçant et interfaces. *(2026-07-12)*
+
 - [x] **P0 — Backend indisponible après messagerie directe** — `DirectMessagesService` requiert `UserRepository`, omis de `MessagesModule`; les requêtes client `/orders/mine` expiraient. Repository ajouté, backend redéployé et machine Fly redémarrée; health check `200`. *(2026-07-12)*
 
 ### Qualité UI mobile (2026-07-12)
 
-- [x] **Tournées commerçant multi-colis** — tournées persistées, commandes rattachables à `runId`, même livreur autorisé sur plusieurs courses de la même tournée, cartes d'arrêts actives côté livreur et ajout successif de colis côté commerçant. *(2026-07-12)*
+- [x] **P0 — Fiabiliser le suivi GPS livreur** — stream auto-réparable, position fraîche périodique, suivi Android en service foreground et récupération HTTP de la dernière position persistée si un événement socket est manqué. *(2026-07-12)*
+- [x] **P1 — Carte claire/sombre** — sélecteur persistant sur toutes les cartes Flutter, avec tuiles CARTO light et dark. *(2026-07-12)*
+- [x] **P1 — Autocomplétion des lieux** — suggestions OSM préfixées dès 2 caractères via Photon (`Adi` → `Adidogomé`), filtrage Togo, classement/déduplication et protection contre les réponses réseau arrivant dans le désordre. *(2026-07-12)*
+
+- [x] **Tournées commerçant multi-colis** — backend déployé avec migrations, suivi multi-course mobile corrigé, e2e complet, mode multi-colis PWA et APK release généré. *(corrigé le 2026-07-12, Session 64)*
+- [x] **P0 — Déployer le backend des tournées avant l'APK** — migrations appliquées via Fly; production version 25, health `200`, `/v1/orders/runs/mine` répond désormais `401` sans JWT au lieu de `404`.
+- [x] **P1 — Maintenir le suivi d'une tournée multi-colis côté livreur** — course terminale retirée du registre, GPS conservé tant qu'un arrêt reste actif, statuts/paiements socket propagés à toutes les courses.
+- [x] **P1 — Réparer et étendre les tests e2e backend** — `DeliveryRunRepository` et recherche téléphone supportés par le harness; scénario deux colis/même livreur ajouté; e2e 57/57.
+- [x] **P2 — Parité PWA iOS des tournées commerçant** — `runId`, création/réutilisation de tournée et mode « plusieurs colis » ajoutés; build et test PWA verts. Aucun projet Cloudflare Pages PWA n'existe encore (seul `zonzon-admin`).
+- [x] **P2 — Réinitialiser la tournée mobile au changement de livreur** — `_runId` est invalidé au changement de livreur ou de point de retrait.
+- [x] **Afficher le montant au livreur** — prix formaté dans le radar, les raccourcis actifs et le panneau de conduite; fallback « Montant à confirmer » si absent. *(2026-07-12)*
 
 - [x] **Accès persistant course livreur** — le radar affiche une carte « Course en cours » qui rouvre le panneau complet (itinéraire, chat, statuts) après un retour arrière. *(2026-07-12)*
 

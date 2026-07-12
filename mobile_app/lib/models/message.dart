@@ -69,14 +69,14 @@ class ChatMessage {
       senderLastName: sender?['lastName'] as String?,
       type: json['type']?.toString() ?? 'TEXT',
       content: json['content']?.toString() ?? '',
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
           DateTime.now(),
       readAt: json['readAt'] != null
           ? DateTime.tryParse(json['readAt'].toString())
           : null,
       readBy: json['readBy'] is List
-          ? List<String>.from(
-              (json['readBy'] as List).map((e) => e.toString()))
+          ? List<String>.from((json['readBy'] as List).map((e) => e.toString()))
           : const [],
       status: MessageStatus.sent,
     );

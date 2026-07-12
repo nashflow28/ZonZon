@@ -149,15 +149,25 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
                 const SizedBox(height: 12),
                 _addressTile(),
                 const SizedBox(height: 12),
-                _input('Téléphone (optionnel)', _phone,
-                    icon: Icons.phone_outlined,
-                    keyboard: TextInputType.phone),
+                _input(
+                  'Téléphone (optionnel)',
+                  _phone,
+                  icon: Icons.phone_outlined,
+                  keyboard: TextInputType.phone,
+                ),
                 const SizedBox(height: 12),
-                _input('Horaires (ex: Lun-Sam 8h-20h)', _hours,
-                    icon: Icons.access_time),
+                _input(
+                  'Horaires (ex: Lun-Sam 8h-20h)',
+                  _hours,
+                  icon: Icons.access_time,
+                ),
                 const SizedBox(height: 12),
-                _input('Description (optionnel)', _description,
-                    icon: Icons.notes, maxLines: 4),
+                _input(
+                  'Description (optionnel)',
+                  _description,
+                  icon: Icons.notes,
+                  maxLines: 4,
+                ),
                 const SizedBox(height: 24),
                 SizedBox(
                   height: 56,
@@ -166,14 +176,19 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
                     icon: const Icon(Icons.check),
                     label: _saving
                         ? const Text('Enregistrement…')
-                        : const Text('Enregistrer',
+                        : const Text(
+                            'Enregistrer',
                             style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0FB271),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                   ),
                 ),
@@ -212,8 +227,10 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
               iconEnabledColor: const Color(0xFF0FB271),
               style: const TextStyle(color: Colors.white, fontSize: 16),
               items: _categories
-                  .map((c) =>
-                      DropdownMenuItem(value: c.value, child: Text(c.label)))
+                  .map(
+                    (c) =>
+                        DropdownMenuItem(value: c.value, child: Text(c.label)),
+                  )
                   .toList(),
               onChanged: (v) {
                 if (v != null) setState(() => _category = v);
@@ -302,10 +319,14 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
         decoration: InputDecoration(
           hintText: label,
           hintStyle: const TextStyle(color: Colors.white60),
-          prefixIcon: icon != null ? Icon(icon, color: const Color(0xFF0FB271)) : null,
+          prefixIcon: icon != null
+              ? Icon(icon, color: const Color(0xFF0FB271))
+              : null,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
       ),
     );

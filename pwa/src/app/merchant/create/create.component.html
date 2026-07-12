@@ -41,8 +41,9 @@
     </div>
 
     <p class="map-hint">
-      Touchez la carte pour poser le point sélectionné ci-dessous
-      ({{ mode() === 'pickup' ? 'retrait' : 'livraison' }}).
+      Touchez la carte pour poser le point sélectionné ci-dessous ({{
+        mode() === 'pickup' ? 'retrait' : 'livraison'
+      }}).
     </p>
 
     <div class="segmented">
@@ -100,7 +101,9 @@
     } @else if (estimate()) {
       <div class="estimate">
         <span class="estimate-label">Estimation</span>
-        <span class="estimate-value">{{ estimate()!.distanceKm }} km · {{ estimate()!.priceFcfa }} FCFA</span>
+        <span class="estimate-value"
+          >{{ estimate()!.distanceKm }} km · {{ estimate()!.priceFcfa }} FCFA</span
+        >
       </div>
     }
 
@@ -109,7 +112,9 @@
         <strong>Ajuster le prix manuellement</strong>
         <small>Sinon, le prix est calculé automatiquement à l'acceptation</small>
       </span>
-      <span class="switch" [class.switch--on]="manualPriceEnabled()"><span class="knob"></span></span>
+      <span class="switch" [class.switch--on]="manualPriceEnabled()"
+        ><span class="knob"></span
+      ></span>
     </button>
 
     @if (manualPriceEnabled()) {
@@ -154,13 +159,39 @@
       [selectedId]="selectedDriverId()"
       (select)="selectDriver($event)"
     />
+
+    <button
+      type="button"
+      class="toggle-row"
+      [disabled]="!selectedDriverId()"
+      (click)="toggleBatchMode()"
+    >
+      <span class="toggle-label">
+        <strong>Livrer plusieurs colis avec ce livreur</strong>
+        <small>Chaque colis reste une course distincte dans la même tournée</small>
+      </span>
+      <span class="switch" [class.switch--on]="batchMode()"><span class="knob"></span></span>
+    </button>
   </section>
+
+  @if (successMessage()) {
+    <div class="success-banner">
+      <span>{{ successMessage() }}</span>
+      <button type="button" (click)="finishRun()">Terminer la tournée</button>
+    </div>
+  }
 
   @if (errorMessage()) {
     <div class="error-banner">{{ errorMessage() }}</div>
   }
 
   <button type="button" class="btn-primary" [disabled]="!canSubmit" (click)="submit()">
-    {{ submitting() ? 'Création…' : 'Créer la livraison' }}
+    {{
+      submitting()
+        ? 'Création…'
+        : batchMode()
+          ? 'Ajouter le colis à la tournée'
+          : 'Créer la livraison'
+    }}
   </button>
 </div>

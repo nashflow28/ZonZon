@@ -1,8 +1,16 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Subject, debounceTime } from 'rxjs';
+import { Subject, debounceTime, map, of, switchMap } from 'rxjs';
 import { OrderMapComponent, MapLatLng } from '../../shared/components/map/map.component';
 import { AvailableDriver, EstimateResult } from '../../shared/models/order.model';
 import { OrdersService } from '../../shared/services/orders.service';
@@ -52,6 +60,9 @@ export class MerchantCreateComponent implements OnInit, OnDestroy {
   readonly drivers = signal<AvailableDriver[]>([]);
   readonly driversLoading = signal(false);
   readonly selectedDriverId = signal<string | null>(null);
+  readonly batchMode = signal(false);
+  readonly activeRunId = signal<string | null>(null);
+  readonly successMessage = signal<string | null>(null);
 
   readonly submitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
@@ -61,7 +72,7 @@ export class MerchantCreateComponent implements OnInit, OnDestroy {
   readonly phoneValid = computed(() => PHONE_PATTERN.test(this.clientPhone.trim()));
 
   readonly effectivePrice = computed(() =>
-    this.manualPriceEnabled() ? this.manualPrice : (this.estimate()?.priceFcfa ?? null)
+    this.manualPriceEnabled() ? this.manualPrice : (this.estimate()?.priceFcfa ?? null),
   );
 
   ngOnInit(): void {
@@ -132,6 +143,8 @@ export class MerchantCreateComponent implements OnInit, OnDestroy {
         // Le livreur sélectionné n'est peut-être plus dans la liste (indisponible entre-temps).
         if (this.selectedDriverId() && !drivers.some((d) => d.id === this.selectedDriverId())) {
           this.selectedDriverId.set(null);
+          this.activeRunId.set(null);
+          this.batchMode.set(false);
         }
       },
       error: () => this.driversLoading.set(false),
@@ -139,7 +152,17 @@ export class MerchantCreateComponent implements OnInit, OnDestroy {
   }
 
   selectDriver(driverId: string | null): void {
+    if (driverId !== this.selectedDriverId()) {
+      this.activeRunId.set(null);
+    }
     this.selectedDriverId.set(driverId);
+    if (driverId == null) this.batchMode.set(false);
+  }
+
+  toggleBatchMode(): void {
+    if (!this.selectedDriverId()) return;
+    this.batchMode.update((enabled) => !enabled);
+    if (!this.batchMode()) this.activeRunId.set(null);
   }
 
   toggleManualPrice(): void {
@@ -158,6 +181,7 @@ export class MerchantCreateComponent implements OnInit, OnDestroy {
       this.description.trim().length > 0 &&
       this.phoneValid() &&
       (!this.manualPriceEnabled() || (this.manualPrice != null && this.manualPrice >= 0)) &&
+      (!this.batchMode() || !!this.selectedDriverId()) &&
       !this.submitting()
     );
   }
@@ -169,26 +193,52 @@ export class MerchantCreateComponent implements OnInit, OnDestroy {
 
     this.submitting.set(true);
     this.errorMessage.set(null);
+    this.successMessage.set(null);
 
-    this.ordersService
-      .createMerchant({
-        pickupAddress: this.pickupAddress.trim(),
-        pickupLat: pickup.lat,
-        pickupLng: pickup.lng,
-        deliveryAddress: this.deliveryAddress.trim(),
-        deliveryLat: delivery.lat,
-        deliveryLng: delivery.lng,
-        description: this.description.trim(),
-        clientPhone: this.clientPhone.trim(),
-        clientName: this.clientName.trim() || undefined,
-        priceFcfa: this.manualPriceEnabled() ? (this.manualPrice ?? undefined) : undefined,
-        priceReason:
-          this.manualPriceEnabled() && this.priceReason.trim() ? this.priceReason.trim() : undefined,
-        preferredLivreurId: this.selectedDriverId() ?? undefined,
-      })
+    const selectedDriverId = this.selectedDriverId();
+    const runId$ =
+      this.batchMode() && selectedDriverId
+        ? this.activeRunId()
+          ? of(this.activeRunId()!)
+          : this.ordersService.createRun(selectedDriverId).pipe(
+              map((run) => {
+                this.activeRunId.set(run.id);
+                return run.id;
+              }),
+            )
+        : of<string | undefined>(undefined);
+
+    runId$
+      .pipe(
+        switchMap((runId) =>
+          this.ordersService.createMerchant({
+            pickupAddress: this.pickupAddress.trim(),
+            pickupLat: pickup.lat,
+            pickupLng: pickup.lng,
+            deliveryAddress: this.deliveryAddress.trim(),
+            deliveryLat: delivery.lat,
+            deliveryLng: delivery.lng,
+            description: this.description.trim(),
+            clientPhone: this.clientPhone.trim(),
+            clientName: this.clientName.trim() || undefined,
+            priceFcfa: this.manualPriceEnabled() ? (this.manualPrice ?? undefined) : undefined,
+            priceReason:
+              this.manualPriceEnabled() && this.priceReason.trim()
+                ? this.priceReason.trim()
+                : undefined,
+            preferredLivreurId: this.selectedDriverId() ?? undefined,
+            runId,
+          }),
+        ),
+      )
       .subscribe({
         next: (order) => {
           this.submitting.set(false);
+          if (this.batchMode()) {
+            this.successMessage.set('Colis ajouté à la tournée. Vous pouvez saisir le suivant.');
+            this.resetPackageForm();
+            return;
+          }
           this.resetForm();
           this.router.navigate(['/merchant/deliveries', order.id]);
         },
@@ -197,6 +247,24 @@ export class MerchantCreateComponent implements OnInit, OnDestroy {
           this.errorMessage.set(this.extractMessage(err));
         },
       });
+  }
+
+  finishRun(): void {
+    this.resetForm();
+    this.router.navigate(['/merchant/deliveries']);
+  }
+
+  private resetPackageForm(): void {
+    this.deliveryAddress = '';
+    this.description = '';
+    this.clientPhone = '';
+    this.clientName = '';
+    this.manualPrice = null;
+    this.priceReason = '';
+    this.manualPriceEnabled.set(false);
+    this.delivery.set(null);
+    this.estimate.set(null);
+    this.mode.set('delivery');
   }
 
   private resetForm(): void {
@@ -212,6 +280,9 @@ export class MerchantCreateComponent implements OnInit, OnDestroy {
     this.delivery.set(null);
     this.estimate.set(null);
     this.selectedDriverId.set(null);
+    this.batchMode.set(false);
+    this.activeRunId.set(null);
+    this.successMessage.set(null);
     this.mode.set('pickup');
   }
 

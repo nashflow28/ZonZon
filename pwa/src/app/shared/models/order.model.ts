@@ -102,8 +102,16 @@ export interface CreateMerchantOrderPayload {
   priceFcfa?: number;
   priceReason?: string;
   preferredLivreurId?: string;
+  runId?: string;
   pickupZoneId?: string;
   destinationZoneId?: string;
+}
+
+export interface DeliveryRun {
+  id: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  livreur: AvailableDriver | null;
+  orders?: Order[];
 }
 
 /** Réponse `GET /orders/available-drivers` — affiliés en tête, puis triés par distance. */
@@ -120,6 +128,19 @@ export interface EtaResult {
   distanceKm: number | null;
   etaMinutes: number | null;
   basedOn: 'driver_position' | 'pickup' | 'unavailable';
+  driverLat?: number;
+  driverLng?: number;
+  positionAt?: string;
+}
+
+export interface PriceProposal {
+  id: string;
+  orderId?: string;
+  priceFcfa: number;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'SUPERSEDED';
+  createdAt: string;
+  expiresAt: string;
+  livreur: OrderUserRef;
 }
 
 export interface StatusHistoryEntry {

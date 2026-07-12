@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:latlong2/latlong.dart';
+
 import 'api_client.dart';
 
 /// Résultat d'un appel `GET /orders/:id/eta` côté backend.
@@ -20,12 +22,18 @@ class EtaResult {
   final int? etaMinutes;
   final String basedOn;
   final DateTime fetchedAt;
+  final double? driverLat;
+  final double? driverLng;
+  final DateTime? positionAt;
 
   EtaResult({
     this.distanceKm,
     this.etaMinutes,
     required this.basedOn,
     required this.fetchedAt,
+    this.driverLat,
+    this.driverLng,
+    this.positionAt,
   });
 
   bool get isAvailable => etaMinutes != null;
@@ -34,6 +42,10 @@ class EtaResult {
   /// supposé que le livreur était au pickup). À afficher en grisé / avec
   /// un warning visuel léger côté UI.
   bool get isFallback => basedOn == 'pickup';
+
+  LatLng? get driverPosition => driverLat != null && driverLng != null
+      ? LatLng(driverLat!, driverLng!)
+      : null;
 }
 
 /// Client HTTP pour l'endpoint ETA.
@@ -60,6 +72,9 @@ class EtaService {
         etaMinutes: (data['etaMinutes'] as num?)?.toInt(),
         basedOn: data['basedOn']?.toString() ?? 'unavailable',
         fetchedAt: DateTime.now(),
+        driverLat: (data['driverLat'] as num?)?.toDouble(),
+        driverLng: (data['driverLng'] as num?)?.toDouble(),
+        positionAt: DateTime.tryParse(data['positionAt']?.toString() ?? ''),
       );
     } catch (_) {
       return null;

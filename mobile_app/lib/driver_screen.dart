@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -16,7 +17,10 @@ import 'screens/messaging_hub_screen.dart';
 import 'screens/driver_profile_screen.dart';
 import 'screens/order_history_screen.dart';
 import 'utils/order_status_utils.dart';
+import 'utils/driver_active_orders.dart';
+import 'utils/money_format.dart';
 import 'utils/platform_adapter.dart';
+import 'widgets/driver_active_order_shortcuts.dart';
 import 'widgets/status_timeline.dart';
 
 class DriverScreen extends StatefulWidget {
@@ -233,6 +237,7 @@ class _DriverScreenState extends State<DriverScreen> {
   StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
   StreamSubscription<OrderStatusUpdate>? _statusSub;
   StreamSubscription<OrderPaymentUpdate>? _paymentSub;
+  StreamSubscription<OrderPriceProposalResponseEvent>? _priceResponseSub;
   StreamSubscription<void>? _connectedSub;
   StreamSubscription<SocketLifecycleEvent>? _socketLifecycleSub;
   Timer? _radarRefreshTimer;
@@ -270,12 +275,15 @@ class _DriverScreenState extends State<DriverScreen> {
   /// la batterie : on n'émet que quand le livreur a réellement bougé).
   StreamSubscription<Position>? _positionSub;
 
-  /// Heartbeat de fallback : si la position n'a pas changé depuis 90 s,
-  /// on re-broadcast la dernière position connue pour garder le client
-  /// informé que le livreur est toujours là.
+  /// Heartbeat de fallback : si le stream n'émet plus, demande une nouvelle
+  /// position au système au lieu de republier une coordonnée obsolète.
   Timer? _heartbeatTimer;
+  Timer? _locationRetryTimer;
   Position? _lastKnownPosition;
   DateTime? _lastEmittedAt;
+  bool _startingLocation = false;
+  bool _refreshingLocation = false;
+  bool _locationFailureNotified = false;
 
   /// Géofencing pickup — coordonnées du point de retrait de la course
   /// actuellement ACCEPTED (dialog ouvert). Reset quand la course passe
@@ -310,6 +318,8 @@ class _DriverScreenState extends State<DriverScreen> {
 
   bool _hasSeenRealtimeConnection = false;
   bool _radarSyncInFlight = false;
+  final Set<String> _pendingPriceOrderIds = <String>{};
+  final Map<String, Timer> _proposalExpiryTimers = <String, Timer>{};
   int _historyVersion = 0;
   int _profileVersion = 0;
 
@@ -521,7 +531,7 @@ class _DriverScreenState extends State<DriverScreen> {
       final shouldNotify = _hasSeenRealtimeConnection;
       _hasSeenRealtimeConnection = true;
       debugPrint('Connecté aux WebSockets du serveur.');
-      if (_activeOrderId != null) {
+      if (_activeRunOrders.isNotEmpty) {
         await _startLocationUpdates();
       }
       final synced = await _reconcileAvailableOrders();
@@ -537,16 +547,48 @@ class _DriverScreenState extends State<DriverScreen> {
     // ailleurs — annulation par le client ou l'admin en tête. Sans cette
     // écoute, le livreur restait bloqué sur une course annulée.
     _statusSub = _socketCtrl.statusUpdates$.listen((evt) {
-      if (!mounted || evt.orderId != _activeOrderId) return;
-      _onRemoteStatusChanged?.call(evt.status);
+      if (!mounted) return;
+      final wasTracked = _activeRunOrders.any(
+        (order) => order['id']?.toString() == evt.orderId,
+      );
+      if (wasTracked) {
+        setState(() {
+          _activeRunOrders = applyActiveOrderStatus(
+            _activeRunOrders,
+            evt.orderId,
+            evt.status,
+          );
+        });
+      }
+      if (evt.orderId == _activeOrderId) {
+        _activeOrderData?['status'] = evt.status;
+        _onRemoteStatusChanged?.call(evt.status);
+      }
+      if (_activeRunOrders.isEmpty) {
+        _stopLocationUpdates();
+      }
     });
 
     // P1 : reflète en direct un changement de statut de paiement fait par
     // le client, le commerçant ou un admin.
     _paymentSub = _socketCtrl.paymentUpdates$.listen((evt) {
-      if (!mounted || evt.orderId != _activeOrderId) return;
-      _activeOrderData?['paymentStatus'] = evt.paymentStatus;
-      _refreshActiveDialog?.call();
+      if (!mounted) return;
+      final wasTracked = _activeRunOrders.any(
+        (order) => order['id']?.toString() == evt.orderId,
+      );
+      if (wasTracked) {
+        setState(() {
+          _activeRunOrders = applyActiveOrderPayment(
+            _activeRunOrders,
+            evt.orderId,
+            evt.paymentStatus,
+          );
+        });
+      }
+      if (evt.orderId == _activeOrderId) {
+        _activeOrderData?['paymentStatus'] = evt.paymentStatus;
+        _refreshActiveDialog?.call();
+      }
     });
 
     _newOrderSub = _socketCtrl.newOrderAvailable$.listen((evt) {
@@ -564,11 +606,44 @@ class _DriverScreenState extends State<DriverScreen> {
 
     _orderAcceptedSub = _socketCtrl.orderAccepted$.listen((evt) {
       if (!mounted) return;
+      final isMine = evt.raw['livreurId']?.toString() == currentDriverId;
+      final rawOrder = evt.raw['order'];
       setState(() {
         availableOrders.removeWhere(
           (order) => order['id']?.toString() == evt.orderId,
         );
+        if (isMine && rawOrder is Map) {
+          final acceptedOrder = Map<String, dynamic>.from(rawOrder);
+          _activeRunOrders = upsertActiveOrder(_activeRunOrders, acceptedOrder);
+        }
       });
+      if (isMine && rawOrder is Map) {
+        unawaited(_startLocationUpdates());
+        if (_activeOrderId == null) {
+          _showActiveOrderDialog(
+            Map<String, dynamic>.from(rawOrder),
+            restored: true,
+          );
+        }
+      }
+    });
+
+    _priceResponseSub = _socketCtrl.priceProposalResponses$.listen((evt) {
+      if (!mounted) return;
+      setState(() => _pendingPriceOrderIds.remove(evt.orderId));
+      _proposalExpiryTimers.remove(evt.orderId)?.cancel();
+      showAdaptiveSnack(
+        context,
+        evt.accepted
+            ? 'Votre prix a été accepté. La course vous est attribuée.'
+            : 'Prix refusé par le client. La course reste disponible.',
+        isError: !evt.accepted,
+      );
+      if (evt.accepted) {
+        unawaited(_restoreActiveOrder());
+      } else {
+        unawaited(_reconcileAvailableOrders());
+      }
     });
   }
 
@@ -591,6 +666,10 @@ class _DriverScreenState extends State<DriverScreen> {
     _lastEmittedAt = DateTime.now();
     _checkPickupGeofence(pos.latitude, pos.longitude);
     _refreshActiveDialog?.call();
+    if (_locationFailureNotified && mounted) {
+      _locationFailureNotified = false;
+      showAdaptiveSnack(context, 'Localisation rétablie.');
+    }
   }
 
   /// Vérifie si la position actuelle se trouve dans le rayon du pickup
@@ -670,55 +749,104 @@ class _DriverScreenState extends State<DriverScreen> {
   }
 
   Future<void> _startLocationUpdates() async {
+    if (_startingLocation || _activeRunOrders.isEmpty) return;
+    _startingLocation = true;
     final granted = await _ensureLocationPermission();
-    if (!granted) return;
+    if (!granted) {
+      _startingLocation = false;
+      _notifyLocationFailure(
+        'Activez la localisation et autorisez ZonZon à y accéder.',
+      );
+      return;
+    }
 
     // Première position pour amorcer le tracking et avoir une référence
     try {
       final first = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
+          accuracy: LocationAccuracy.bestForNavigation,
+          timeLimit: Duration(seconds: 15),
         ),
       );
       _emitPosition(first);
     } catch (_) {
-      // pas grave, le stream prendra le relais
+      _notifyLocationFailure('Recherche de la position GPS en cours…');
     }
 
     // On annule un éventuel ancien stream avant d'en démarrer un nouveau
     await _positionSub?.cancel();
 
-    const settings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 25, // ne re-broadcast que tous les 25 m parcourus
-    );
-    _positionSub = Geolocator.getPositionStream(locationSettings: settings)
-        .listen(
-          (pos) {
-            _emitPosition(pos);
-          },
-          onError: (_) {
-            // on ignore : le heartbeat continuera à pousser la dernière position
-          },
-        );
+    final settings = defaultTargetPlatform == TargetPlatform.android
+        ? AndroidSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 10,
+            intervalDuration: const Duration(seconds: 10),
+            foregroundNotificationConfig: const ForegroundNotificationConfig(
+              notificationTitle: 'Course ZonZon en cours',
+              notificationText:
+                  'Votre position est partagée pour le suivi de la livraison.',
+              enableWakeLock: true,
+            ),
+          )
+        : const LocationSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            distanceFilter: 10,
+          );
+    try {
+      _positionSub = Geolocator.getPositionStream(locationSettings: settings)
+          .listen(
+            _emitPosition,
+            onError: (error) => _handleLocationStreamError(error),
+          );
+    } catch (error) {
+      _startingLocation = false;
+      _handleLocationStreamError(error);
+      return;
+    }
 
-    // Heartbeat de fallback : si rien n'a été émis depuis 90 s, on re-pousse
-    // la dernière position connue pour rassurer le client.
+    // Toutes les 30 s, force une position réellement fraîche si le stream
+    // n'a rien émis. Cela récupère aussi automatiquement certains arrêts GPS.
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 90), (_) {
-      final last = _lastKnownPosition;
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (_refreshingLocation || _activeRunOrders.isEmpty) return;
       final lastAt = _lastEmittedAt;
-      if (last == null) return;
       if (lastAt == null ||
-          DateTime.now().difference(lastAt) >= const Duration(seconds: 90)) {
-        _socketCtrl.emitDriverLocation(
-          last.latitude,
-          last.longitude,
-          heartbeat: true,
-        );
-        _lastEmittedAt = DateTime.now();
+          DateTime.now().difference(lastAt) >= const Duration(seconds: 30)) {
+        _refreshingLocation = true;
+        try {
+          final fresh = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.bestForNavigation,
+              timeLimit: Duration(seconds: 15),
+            ),
+          );
+          _emitPosition(fresh);
+        } catch (error) {
+          _handleLocationStreamError(error);
+        } finally {
+          _refreshingLocation = false;
+        }
       }
     });
+    _startingLocation = false;
+  }
+
+  void _handleLocationStreamError(Object error) {
+    if (_activeRunOrders.isEmpty) return;
+    _notifyLocationFailure('Signal GPS perdu. Nouvelle tentative automatique…');
+    _locationRetryTimer?.cancel();
+    _locationRetryTimer = Timer(const Duration(seconds: 5), () {
+      if (mounted && _activeRunOrders.isNotEmpty) {
+        _startingLocation = false;
+        _startLocationUpdates();
+      }
+    });
+  }
+
+  void _notifyLocationFailure(String message) {
+    if (_locationFailureNotified || !mounted) return;
+    _locationFailureNotified = true;
+    showAdaptiveSnack(context, message, isError: true);
   }
 
   /// Arrête le tracking GPS (stream de positions + heartbeat). Appelé quand
@@ -728,6 +856,10 @@ class _DriverScreenState extends State<DriverScreen> {
     _positionSub = null;
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    _locationRetryTimer?.cancel();
+    _locationRetryTimer = null;
+    _startingLocation = false;
+    _refreshingLocation = false;
     _lastEmittedAt = null;
   }
 
@@ -744,7 +876,10 @@ class _DriverScreenState extends State<DriverScreen> {
             );
           });
         }
-        _showActiveOrderDialog(orderData);
+        final alreadyOpened = _activeRunOrders.any(
+          (order) => order['id']?.toString() == orderId,
+        );
+        if (!alreadyOpened) _showActiveOrderDialog(orderData);
       } else {
         throw Exception('Course déjà prise ou erreur serveur.');
       }
@@ -757,6 +892,97 @@ class _DriverScreenState extends State<DriverScreen> {
         );
       }
     }
+  }
+
+  Future<void> _proposePrice(Map<String, dynamic> order) async {
+    final orderId = order['id']?.toString();
+    if (orderId == null || _pendingPriceOrderIds.contains(orderId)) return;
+    final controller = TextEditingController();
+    final price = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Proposer votre prix'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${order['distanceKm'] ?? '—'} km'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Montant proposé',
+                suffixText: 'FCFA',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = int.tryParse(controller.text.trim());
+              if (value == null || value < 100) return;
+              Navigator.pop(ctx, value);
+            },
+            child: const Text('Envoyer'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (price == null || !mounted) return;
+    setState(() => _pendingPriceOrderIds.add(orderId));
+    try {
+      final res = await _api.post(
+        '/orders/$orderId/price-proposals',
+        body: {'priceFcfa': price},
+      );
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        final body = jsonDecode(res.body);
+        throw Exception(body is Map ? body['message'] : 'Proposition refusée');
+      }
+      final payload = jsonDecode(res.body);
+      final expiresAt = payload is Map
+          ? DateTime.tryParse(payload['expiresAt']?.toString() ?? '')
+          : null;
+      _scheduleProposalExpiry(orderId, expiresAt);
+      if (mounted) {
+        showAdaptiveSnack(
+          context,
+          'Prix proposé. Réponse du client en attente.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _pendingPriceOrderIds.remove(orderId));
+      showAdaptiveSnack(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+        isError: true,
+      );
+    }
+  }
+
+  void _scheduleProposalExpiry(String orderId, DateTime? expiresAt) {
+    _proposalExpiryTimers.remove(orderId)?.cancel();
+    final delay = expiresAt == null
+        ? const Duration(minutes: 2)
+        : expiresAt.difference(DateTime.now());
+    _proposalExpiryTimers[orderId] = Timer(
+      delay.isNegative ? Duration.zero : delay,
+      () {
+        _proposalExpiryTimers.remove(orderId);
+        if (!mounted) return;
+        setState(() => _pendingPriceOrderIds.remove(orderId));
+        unawaited(_reconcileAvailableOrders());
+      },
+    );
   }
 
   void _declineOrder(String orderId) {
@@ -948,8 +1174,10 @@ class _DriverScreenState extends State<DriverScreen> {
         : Map<String, dynamic>.from(orderData as Map);
     _activeOrderId = orderId;
     _activeOrderData = data;
-    if (!_activeRunOrders.any((order) => order['id']?.toString() == orderId)) {
-      _activeRunOrders = [..._activeRunOrders, data];
+    if (mounted) {
+      setState(() {
+        _activeRunOrders = upsertActiveOrder(_activeRunOrders, data);
+      });
     }
 
     // P2 (GPS strict) : le tracking ne tourne que pendant une course active.
@@ -993,6 +1221,16 @@ class _DriverScreenState extends State<DriverScreen> {
                 setDialogState(() => dialogProcessing = false);
               }
               return;
+            }
+            if (mounted) {
+              setState(() {
+                _activeRunOrders = applyActiveOrderStatus(
+                  _activeRunOrders,
+                  orderId,
+                  targetStatus,
+                );
+                data['status'] = targetStatus;
+              });
             }
             if (targetStatus == 'COMPLETED' ||
                 targetStatus == 'CANCELLED' ||
@@ -1101,6 +1339,38 @@ class _DriverScreenState extends State<DriverScreen> {
                 Text(
                   'Allez au ${orderData['pickupAddress']} pour récupérer le colis.',
                   style: const TextStyle(color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0FB271).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF0FB271).withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Montant de la course',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      Text(
+                        formatFcfa(data['priceFcfa']),
+                        style: const TextStyle(
+                          color: Color(0xFF0FB271),
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Wrap(
@@ -1342,15 +1612,16 @@ class _DriverScreenState extends State<DriverScreen> {
         },
       ),
     ).then((_) {
-      // Fermeture du dialog (locale ou distante) : plus de course active.
-      // P2 (GPS strict) : le tracking s'arrête avec la course.
+      // La fermeture concerne un arrêt, pas forcément toute la tournée.
       dialogClosed = true;
       _activeOrderId = null;
       _activeOrderData = null;
       _onRemoteStatusChanged = null;
       _refreshActiveDialog = null;
       _resetGeofenceState();
-      _stopLocationUpdates();
+      if (_activeRunOrders.isEmpty) {
+        _stopLocationUpdates();
+      }
     });
   }
 
@@ -1362,9 +1633,13 @@ class _DriverScreenState extends State<DriverScreen> {
     _orderAcceptedSub?.cancel();
     _statusSub?.cancel();
     _paymentSub?.cancel();
+    _priceResponseSub?.cancel();
     _connectedSub?.cancel();
     _socketLifecycleSub?.cancel();
     _radarRefreshTimer?.cancel();
+    for (final timer in _proposalExpiryTimers.values) {
+      timer.cancel();
+    }
     _socketCtrl.dispose();
     super.dispose();
   }
@@ -1490,66 +1765,15 @@ class _DriverScreenState extends State<DriverScreen> {
     return Column(
       children: [
         _buildAvailabilityHeader(),
-        if (_activeRunOrders.isNotEmpty) _buildActiveOrderShortcuts(),
+        if (_activeRunOrders.isNotEmpty)
+          DriverActiveOrderShortcuts(
+            orders: _activeRunOrders,
+            onOpen: (order) => _showActiveOrderDialog(order, restored: true),
+          ),
         Expanded(child: _buildRadarBody()),
       ],
     );
   }
-
-  /// Point d'entrée permanent vers la course après fermeture du dialogue.
-  /// Le livreur peut consulter le radar, l'historique ou son profil sans
-  /// perdre l'accès à l'itinéraire, au chat et aux actions de course.
-  Widget _buildActiveOrderShortcutFor(Map<String, dynamic> order) {
-    final status = order['status']?.toString() ?? 'ACCEPTED';
-    final pickup = order['pickupAddress']?.toString() ?? 'Retrait';
-    final delivery = order['deliveryAddress']?.toString() ?? 'Livraison';
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: Material(
-        color: const Color(0xFF0FB271).withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _showActiveOrderDialog(order, restored: true),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                const Icon(Icons.navigation, color: Color(0xFF0FB271)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Course en cours - ${OrderStatusUtils.label(status)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '$pickup -> $delivery',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right, color: Colors.white),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActiveOrderShortcuts() => Column(
-    children: _activeRunOrders.map(_buildActiveOrderShortcutFor).toList(),
-  );
 
   /// En-tête toujours visible en haut du Radar : bandeau de statut si le
   /// compte n'est pas validé, sinon le switch de disponibilité.
@@ -1735,7 +1959,9 @@ class _DriverScreenState extends State<DriverScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            '${order['priceFcfa']} FCFA',
+                            order['merchant'] != null
+                                ? formatFcfa(order['priceFcfa'])
+                                : 'Prix à proposer',
                             style: const TextStyle(
                               color: Color(0xFF0FB271),
                               fontSize: 22,
@@ -1801,17 +2027,29 @@ class _DriverScreenState extends State<DriverScreen> {
                             child: SizedBox(
                               height: 50,
                               child: ElevatedButton(
-                                onPressed: () =>
-                                    _acceptOrder(order['id'].toString()),
+                                onPressed:
+                                    _pendingPriceOrderIds.contains(
+                                      order['id']?.toString(),
+                                    )
+                                    ? null
+                                    : () => order['merchant'] != null
+                                          ? _acceptOrder(order['id'].toString())
+                                          : _proposePrice(order),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF2E90FA),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Accepter la course',
-                                  style: TextStyle(
+                                child: Text(
+                                  order['merchant'] != null
+                                      ? 'Accepter la course'
+                                      : _pendingPriceOrderIds.contains(
+                                          order['id']?.toString(),
+                                        )
+                                      ? 'Réponse en attente'
+                                      : 'Proposer un prix',
+                                  style: const TextStyle(
                                     fontSize: 18,
                                     color: Colors.white,
                                   ),

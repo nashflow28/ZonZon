@@ -84,6 +84,23 @@ class NewOrderEvent {
   NewOrderEvent({required this.orderId, required this.raw});
 }
 
+class OrderPriceProposalEvent {
+  final String orderId;
+  final Map<String, dynamic> raw;
+
+  OrderPriceProposalEvent({required this.orderId, required this.raw});
+}
+
+class OrderPriceProposalResponseEvent {
+  final String orderId;
+  final bool accepted;
+
+  OrderPriceProposalResponseEvent({
+    required this.orderId,
+    required this.accepted,
+  });
+}
+
 enum SocketLifecycleState {
   skipped,
   connecting,
@@ -177,6 +194,10 @@ class OrderSocketController {
   final _newChatMessageCtrl = StreamController<NewChatMessageEvent>.broadcast();
   final _directMessageCtrl = StreamController<DirectMessageEvent>.broadcast();
   final _newOrderAvailableCtrl = StreamController<NewOrderEvent>.broadcast();
+  final _priceProposalCtrl =
+      StreamController<OrderPriceProposalEvent>.broadcast();
+  final _priceProposalResponseCtrl =
+      StreamController<OrderPriceProposalResponseEvent>.broadcast();
   final _connectedCtrl = StreamController<void>.broadcast();
   final _lifecycleCtrl = StreamController<SocketLifecycleEvent>.broadcast();
 
@@ -209,6 +230,10 @@ class OrderSocketController {
   /// uniquement). Pas de filtrage sur [activeOrderId] — toutes les nouvelles
   /// courses doivent apparaître dans le radar.
   Stream<NewOrderEvent> get newOrderAvailable$ => _newOrderAvailableCtrl.stream;
+  Stream<OrderPriceProposalEvent> get priceProposals$ =>
+      _priceProposalCtrl.stream;
+  Stream<OrderPriceProposalResponseEvent> get priceProposalResponses$ =>
+      _priceProposalResponseCtrl.stream;
 
   /// Stream qui émet une fois à chaque (re)connexion du socket. Utilisé
   /// côté livreur pour amorcer le tracking GPS au moment où le socket est
@@ -378,6 +403,30 @@ class OrderSocketController {
       );
     });
 
+    socket.on('orderPriceProposed', (data) {
+      if (data is! Map) return;
+      final orderId = data['orderId']?.toString();
+      if (orderId == null || !_shouldEmit(orderId)) return;
+      _priceProposalCtrl.add(
+        OrderPriceProposalEvent(
+          orderId: orderId,
+          raw: Map<String, dynamic>.from(data),
+        ),
+      );
+    });
+
+    socket.on('orderPriceProposalResponded', (data) {
+      if (data is! Map) return;
+      final orderId = data['orderId']?.toString();
+      if (orderId == null) return;
+      _priceProposalResponseCtrl.add(
+        OrderPriceProposalResponseEvent(
+          orderId: orderId,
+          accepted: data['accepted'] == true,
+        ),
+      );
+    });
+
     socket.on('orderStatusUpdated', (data) {
       if (data is! Map) return;
       final orderId = data['orderId']?.toString();
@@ -473,6 +522,8 @@ class OrderSocketController {
     await _newChatMessageCtrl.close();
     await _directMessageCtrl.close();
     await _newOrderAvailableCtrl.close();
+    await _priceProposalCtrl.close();
+    await _priceProposalResponseCtrl.close();
     await _connectedCtrl.close();
     await _lifecycleCtrl.close();
   }

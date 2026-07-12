@@ -33,8 +33,7 @@ class StatusTimeline extends StatelessWidget {
   bool get _isCancelled => status == 'CANCELLED';
   bool get _isFailed => status == 'FAILED';
 
-  int get _currentIndex =>
-      _milestones.indexWhere((m) => m.status == status);
+  int get _currentIndex => _milestones.indexWhere((m) => m.status == status);
 
   @override
   Widget build(BuildContext context) {
@@ -107,18 +106,18 @@ class _StepView extends StatelessWidget {
     final Color circleBg = done
         ? AppColors.go.withValues(alpha: 0.18)
         : now
-            ? AppColors.mango
-            : AppColors.line.withValues(alpha: 0.5);
+        ? AppColors.mango
+        : AppColors.line.withValues(alpha: 0.5);
     final Color iconColor = done
         ? AppColors.go
         : now
-            ? Colors.white
-            : AppColors.textMut;
+        ? Colors.white
+        : AppColors.textMut;
     final Color labelColor = now
         ? AppColors.textHi
         : done
-            ? AppColors.textHi.withValues(alpha: 0.8)
-            : AppColors.textMut;
+        ? AppColors.textHi.withValues(alpha: 0.8)
+        : AppColors.textMut;
 
     return Column(
       children: [
@@ -202,8 +201,11 @@ class _TerminalBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppColors.coral, size: 18),
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.coral,
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Text(
             label,

@@ -28,15 +28,20 @@ class SavedAddressesService {
     String? icon,
   }) async {
     try {
-      final res = await _api.post('/addresses/saved', body: {
-        'label': label,
-        'address': address,
-        'lat': lat,
-        'lng': lng,
-        if (icon != null) 'icon': icon,
-      });
+      final res = await _api.post(
+        '/addresses/saved',
+        body: {
+          'label': label,
+          'address': address,
+          'lat': lat,
+          'lng': lng,
+          if (icon != null) 'icon': icon,
+        },
+      );
       if (res.statusCode != 200 && res.statusCode != 201) return null;
-      return SavedAddress.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+      return SavedAddress.fromJson(
+        jsonDecode(res.body) as Map<String, dynamic>,
+      );
     } catch (_) {
       return null;
     }

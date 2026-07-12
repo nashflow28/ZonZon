@@ -10,7 +10,8 @@ double haversineKm(LatLng a, LatLng b) {
   final dLng = toRad(b.longitude - a.longitude);
   final lat1 = toRad(a.latitude);
   final lat2 = toRad(b.latitude);
-  final h = math.pow(math.sin(dLat / 2), 2) +
+  final h =
+      math.pow(math.sin(dLat / 2), 2) +
       math.cos(lat1) * math.cos(lat2) * math.pow(math.sin(dLng / 2), 2);
   return 2 * r * math.asin(math.sqrt(h));
 }

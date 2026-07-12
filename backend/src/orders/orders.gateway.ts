@@ -323,8 +323,9 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     clientId?: string,
     merchantId?: string,
     livreur?: Record<string, unknown>,
+    order?: Record<string, unknown>,
   ) {
-    const payload = { orderId, livreurId, livreur };
+    const payload = { orderId, livreurId, livreur, order };
     this.server.to(`role:${UserRole.LIVREUR}`).emit('orderAccepted', payload);
     if (clientId) {
       this.server.to(`user:${clientId}`).emit('orderAccepted', payload);
@@ -359,6 +360,19 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
       }
     }
+  }
+
+  broadcastPriceProposal(clientId: string, proposal: any) {
+    this.server.to(`user:${clientId}`).emit('orderPriceProposed', proposal);
+  }
+
+  broadcastPriceProposalResponse(
+    livreurId: string,
+    payload: { orderId: string; proposalId: string; accepted: boolean },
+  ) {
+    this.server
+      .to(`user:${livreurId}`)
+      .emit('orderPriceProposalResponded', payload);
   }
 
   broadcastStatusUpdate(

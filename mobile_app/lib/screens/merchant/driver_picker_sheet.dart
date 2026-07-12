@@ -161,7 +161,11 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: Colors.redAccent, size: 40),
+              const Icon(
+                Icons.error_outline,
+                color: Colors.redAccent,
+                size: 40,
+              ),
               const SizedBox(height: 12),
               Text(
                 _error!,
@@ -169,10 +173,7 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
                 style: const TextStyle(color: Colors.white70),
               ),
               const SizedBox(height: 16),
-              OutlinedButton(
-                onPressed: _load,
-                child: const Text('Réessayer'),
-              ),
+              OutlinedButton(onPressed: _load, child: const Text('Réessayer')),
             ],
           ),
         ),
@@ -203,10 +204,12 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
             ),
           )
         else
-          ..._drivers.map((d) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _driverOptionTile(d),
-              )),
+          ..._drivers.map(
+            (d) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _driverOptionTile(d),
+            ),
+          ),
       ],
     );
   }
@@ -256,7 +259,10 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -285,8 +291,7 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () =>
-            Navigator.of(context).pop(DriverPickerResult(driver)),
+        onTap: () => Navigator.of(context).pop(DriverPickerResult(driver)),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
@@ -322,10 +327,13 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
+                              horizontal: 6,
+                              vertical: 1,
+                            ),
                             decoration: BoxDecoration(
-                              color:
-                                  const Color(0xFF0FB271).withValues(alpha: 0.2),
+                              color: const Color(
+                                0xFF0FB271,
+                              ).withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Text(
@@ -343,7 +351,10 @@ class _DriverPickerSheetState extends State<_DriverPickerSheet> {
                     const SizedBox(height: 2),
                     Text(
                       subtitle,
-                      style: const TextStyle(color: Colors.white54, fontSize: 12),
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),

@@ -103,6 +103,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         // Le point de retrait a changé : la distance du livreur précédemment
         // choisi n'est plus pertinente, on redemande une sélection.
         _selectedDriver = null;
+        _runId = null;
       });
       _scheduleEstimate();
     }
@@ -174,7 +175,12 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
     // `null` si la bottom sheet a été fermée sans rien choisir (on ne
     // change alors rien à la sélection actuelle).
     if (!mounted || result == null) return;
-    setState(() => _selectedDriver = result.driver);
+    setState(() {
+      if (_selectedDriver?.id != result.driver?.id) {
+        _runId = null;
+      }
+      _selectedDriver = result.driver;
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -293,7 +299,10 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         _estimateKm = null;
         _estimatePrice = null;
       });
-      showAdaptiveSnack(context, 'Renseignez le prochain client de la tournée.');
+      showAdaptiveSnack(
+        context,
+        'Renseignez le prochain client de la tournée.',
+      );
     } on MerchantOrderException catch (e) {
       if (mounted) {
         hapticError();

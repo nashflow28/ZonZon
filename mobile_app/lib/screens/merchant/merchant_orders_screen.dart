@@ -963,7 +963,14 @@ class _MerchantOrderDetailsSheetState
     if (!_canTrackLive) return;
     final eta = await _etaService.fetchEta(_item.id);
     if (!mounted) return;
-    setState(() => _eta = eta);
+    setState(() {
+      _eta = eta;
+      final persistedPosition = eta?.driverPosition;
+      if (persistedPosition != null) {
+        _driverPosition = persistedPosition;
+        _driverPositionAt = eta?.positionAt ?? eta?.fetchedAt;
+      }
+    });
   }
 
   @override

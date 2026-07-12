@@ -26,8 +26,45 @@ class Place {
     return Place(
       displayName: display,
       shortName: short,
-      location: LatLng(lat, lon),
+      location: LatLng(lat.toDouble(), lon.toDouble()),
       type: json['type']?.toString(),
+    );
+  }
+
+  factory Place.fromPhoton(Map<String, dynamic> feature) {
+    final geometry = feature['geometry'] as Map<String, dynamic>?;
+    final coordinates = geometry?['coordinates'] as List?;
+    final properties =
+        feature['properties'] as Map<String, dynamic>? ?? const {};
+    final lon = coordinates != null && coordinates.isNotEmpty
+        ? (coordinates[0] as num?)?.toDouble() ?? 0
+        : 0;
+    final lat = coordinates != null && coordinates.length > 1
+        ? (coordinates[1] as num?)?.toDouble() ?? 0
+        : 0;
+    final parts = <String>[];
+    for (final key in const [
+      'name',
+      'street',
+      'district',
+      'city',
+      'county',
+      'state',
+      'country',
+    ]) {
+      final value = properties[key]?.toString().trim();
+      if (value != null && value.isNotEmpty && !parts.contains(value)) {
+        parts.add(value);
+      }
+    }
+    final shortName = properties['name']?.toString().trim();
+    return Place(
+      displayName: parts.join(', '),
+      shortName: shortName == null || shortName.isEmpty
+          ? (parts.isEmpty ? 'Lieu' : parts.first)
+          : shortName,
+      location: LatLng(lat.toDouble(), lon.toDouble()),
+      type: properties['type']?.toString(),
     );
   }
 
@@ -53,12 +90,12 @@ class Place {
   }
 
   Map<String, dynamic> toJson() => {
-        'displayName': displayName,
-        'shortName': shortName,
-        'lat': location.latitude,
-        'lng': location.longitude,
-        'type': type,
-      };
+    'displayName': displayName,
+    'shortName': shortName,
+    'lat': location.latitude,
+    'lng': location.longitude,
+    'type': type,
+  };
 
   factory Place.fromJson(Map<String, dynamic> json) {
     return Place(

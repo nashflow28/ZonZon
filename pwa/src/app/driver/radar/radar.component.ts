@@ -1,7 +1,15 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { Subscription, timer } from 'rxjs';
 import { AuthService } from '../../auth/auth.service';
 import { Order } from '../../shared/models/order.model';
 import { OrdersService } from '../../shared/services/orders.service';
@@ -31,7 +39,7 @@ export class DriverRadarComponent implements OnInit, OnDestroy {
   readonly approvalStatus = computed(() => this.user()?.driverApprovalStatus ?? 'PENDING');
   readonly isApproved = computed(() => this.approvalStatus() === 'APPROVED');
   readonly approvalTitle = computed(() =>
-    this.approvalStatus() === 'REJECTED' ? 'Compte refusé' : 'En attente de validation'
+    this.approvalStatus() === 'REJECTED' ? 'Compte refusé' : 'En attente de validation',
   );
   readonly approvalMessage = computed(() => {
     if (this.approvalStatus() === 'REJECTED') {
@@ -54,6 +62,8 @@ export class DriverRadarComponent implements OnInit, OnDestroy {
 
   readonly acceptingId = signal<string | null>(null);
   readonly acceptError = signal<string | null>(null);
+  readonly proposalOrder = signal<Order | null>(null);
+  readonly proposalPrice = signal('');
 
   private sub = new Subscription();
 
@@ -76,15 +86,31 @@ export class DriverRadarComponent implements OnInit, OnDestroy {
     this.sub.add(
       this.socketService.on$<Order>('newOrderAvailable').subscribe((order) => {
         if (!this.isAvailable() || !order?.id) return;
-        this.orders.update((list) => (list.some((o) => o.id === order.id) ? list : [order, ...list]));
-      })
+        this.orders.update((list) =>
+          list.some((o) => o.id === order.id) ? list : [order, ...list],
+        );
+      }),
+    );
+    this.sub.add(
+      this.socketService
+        .on$<{ orderId: string; accepted: boolean }>('orderPriceProposalResponded')
+        .subscribe((evt) => {
+          this.acceptingId.set(null);
+          if (evt.accepted) {
+            this.orders.update((list) => list.filter((o) => o.id !== evt.orderId));
+            this.router.navigate(['/driver/my-deliveries', evt.orderId]);
+          } else {
+            this.acceptError.set('Prix refusé par le client. La course reste disponible.');
+            this.loadIfAvailable();
+          }
+        }),
     );
     this.sub.add(
       this.socketService
         .on$<{ orderId: string; livreurId: string }>('orderAccepted')
         .subscribe((evt) => {
           this.orders.update((list) => list.filter((o) => o.id !== evt.orderId));
-        })
+        }),
     );
     // Resynchronisation HTTP après coupure/reconnexion socket.
     this.sub.add(this.socketService.connected$.subscribe(() => this.loadIfAvailable()));
@@ -163,6 +189,47 @@ export class DriverRadarComponent implements OnInit, OnDestroy {
           // Déjà prise par un autre livreur : la retirer du radar.
           this.orders.update((list) => list.filter((o) => o.id !== order.id));
         }
+        this.acceptError.set(this.extractMessage(err));
+      },
+    });
+  }
+
+  openPriceProposal(order: Order): void {
+    this.proposalOrder.set(order);
+    this.proposalPrice.set('');
+    this.acceptError.set(null);
+  }
+
+  closePriceProposal(): void {
+    if (this.acceptingId()) return;
+    this.proposalOrder.set(null);
+    this.proposalPrice.set('');
+  }
+
+  updateProposalPrice(event: Event): void {
+    this.proposalPrice.set((event.target as HTMLInputElement).value);
+  }
+
+  submitPriceProposal(): void {
+    const order = this.proposalOrder();
+    const price = Number(this.proposalPrice());
+    if (!order || !Number.isInteger(price) || price < 100 || this.acceptingId()) return;
+    this.acceptingId.set(order.id);
+    this.acceptError.set(null);
+    this.ordersService.proposePrice(order.id, price).subscribe({
+      next: (proposal) => {
+        this.proposalOrder.set(null);
+        this.acceptError.set('Prix envoyé. Réponse du client en attente.');
+        const delay = Math.max(0, new Date(proposal.expiresAt).getTime() - Date.now());
+        this.sub.add(
+          timer(delay).subscribe(() => {
+            if (this.acceptingId() === order.id) this.acceptingId.set(null);
+            this.loadIfAvailable();
+          }),
+        );
+      },
+      error: (err: HttpErrorResponse) => {
+        this.acceptingId.set(null);
         this.acceptError.set(this.extractMessage(err));
       },
     });

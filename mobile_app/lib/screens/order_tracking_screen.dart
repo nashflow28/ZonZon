@@ -58,6 +58,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   StreamSubscription<OrderPaymentUpdate>? _paymentSub;
   StreamSubscription<NewChatMessageEvent>? _chatMsgSub;
   StreamSubscription<void>? _realtimeReconnectSub;
+  StreamSubscription<OrderPriceProposalEvent>? _priceProposalSub;
 
   Place? _pickup;
   Place? _delivery;
@@ -74,6 +75,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   EtaResult? _eta;
   Timer? _etaTimer;
+  Timer? _proposalTimer;
+  Map<String, dynamic>? _pendingPriceProposal;
+  bool _respondingToPrice = false;
 
   bool _ratingPrompted = false;
 
@@ -88,6 +92,11 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _bootstrapFromStore();
     _attachStreams();
     _refreshDetails();
+    _refreshPriceProposal();
+    _proposalTimer = Timer.periodic(
+      const Duration(seconds: 8),
+      (_) => _refreshPriceProposal(),
+    );
     _startEtaPolling();
   }
 
@@ -176,7 +185,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _realtimeReconnectSub = _socketCtrl.connected$.listen((_) {
       // La mise à jour de statut peut avoir été envoyée pendant la coupure.
       _refreshDetails();
+      _refreshPriceProposal();
     });
+
+    _priceProposalSub = _socketCtrl.priceProposals$
+        .where((event) => event.orderId == widget.orderId)
+        .listen((event) {
+          if (!mounted) return;
+          setState(() => _pendingPriceProposal = event.raw);
+        });
 
     _driverPosSub = _socketCtrl.driverPosition$
         .where((e) => e.orderId == widget.orderId)
@@ -195,7 +212,9 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           if (!mounted) return;
           final livreur = event.raw['livreur'];
           if (livreur is Map) {
-            setState(() => _assignedLivreur = Map<String, dynamic>.from(livreur));
+            setState(
+              () => _assignedLivreur = Map<String, dynamic>.from(livreur),
+            );
           }
           await _refreshDetails();
           _startEtaPolling();
@@ -265,6 +284,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
         orElse: () => null,
       );
       if (mine is! Map) return;
+      final refreshed = Map<String, dynamic>.from(mine);
+      _store.onOrderRefreshed(refreshed);
       setState(() {
         _activeOrderStatus = mine['status']?.toString() ?? _activeOrderStatus;
         _paymentStatus = mine['paymentStatus']?.toString() ?? _paymentStatus;
@@ -272,13 +293,66 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           _assignedLivreur = Map<String, dynamic>.from(mine['livreur']);
         }
       });
-      _setPickupDeliveryFromRaw(Map<String, dynamic>.from(mine));
+      _setPickupDeliveryFromRaw(refreshed);
       // HTTP refresh is the fallback when the terminal socket event was missed.
       if (_activeOrderStatus == 'COMPLETED') {
         _stopEtaPolling();
         _promptRating();
       }
     } catch (_) {}
+  }
+
+  Future<void> _refreshPriceProposal() async {
+    if (_activeOrderStatus != null && _activeOrderStatus != 'PENDING') {
+      if (mounted && _pendingPriceProposal != null) {
+        setState(() => _pendingPriceProposal = null);
+      }
+      return;
+    }
+    try {
+      final res = await _api.get('/orders/${widget.orderId}/price-proposal');
+      if (!mounted || (res.statusCode != 200 && res.statusCode != 201)) return;
+      final data = jsonDecode(res.body);
+      setState(() {
+        _pendingPriceProposal = data is Map
+            ? Map<String, dynamic>.from(data)
+            : null;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _respondToPriceProposal(bool accept) async {
+    final proposalId = _pendingPriceProposal?['id']?.toString();
+    if (proposalId == null || _respondingToPrice) return;
+    setState(() => _respondingToPrice = true);
+    try {
+      final res = await _api.patch(
+        '/orders/${widget.orderId}/price-proposal/$proposalId',
+        body: {'accept': accept},
+      );
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        throw Exception(_extractApiError(res.statusCode, res.body));
+      }
+      if (!mounted) return;
+      setState(() => _pendingPriceProposal = null);
+      showAdaptiveSnack(
+        context,
+        accept
+            ? 'Prix accepté. Le livreur vous est attribué.'
+            : 'Prix refusé. Recherche d’un autre livreur relancée.',
+      );
+      await _refreshDetails();
+    } catch (e) {
+      if (!mounted) return;
+      showAdaptiveSnack(
+        context,
+        e.toString().replaceFirst('Exception: ', ''),
+        isError: true,
+      );
+      await _refreshPriceProposal();
+    } finally {
+      if (mounted) setState(() => _respondingToPrice = false);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -314,7 +388,14 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     if (!etaStatuses.contains(status)) return;
     final result = await _etaSvc.fetchEta(widget.orderId);
     if (!mounted) return;
-    setState(() => _eta = result);
+    setState(() {
+      _eta = result;
+      final persistedPosition = result?.driverPosition;
+      if (persistedPosition != null) {
+        _driverPosition = persistedPosition;
+        _driverPositionAt = result?.positionAt ?? result?.fetchedAt;
+      }
+    });
   }
 
   double? _distanceDriverToPickup() {
@@ -691,6 +772,8 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _paymentSub?.cancel();
     _chatMsgSub?.cancel();
     _realtimeReconnectSub?.cancel();
+    _priceProposalSub?.cancel();
+    _proposalTimer?.cancel();
     _etaTimer?.cancel();
     _estimateSvc.dispose();
     // NB : on ne dispose PAS le socket — il appartient à `ClientServices`
@@ -744,6 +827,15 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                   StatusTimeline(status: _activeOrderStatus),
                   const SizedBox(height: 18),
                 ],
+                if (_pendingPriceProposal != null) ...[
+                  _PriceProposalCard(
+                    proposal: _pendingPriceProposal!,
+                    loading: _respondingToPrice,
+                    onAccept: () => _respondToPriceProposal(true),
+                    onReject: () => _respondToPriceProposal(false),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 OrderAcceptedSection(
                   assignedLivreur: _assignedLivreur,
                   activeOrderStatus: _activeOrderStatus,
@@ -762,6 +854,73 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PriceProposalCard extends StatelessWidget {
+  final Map<String, dynamic> proposal;
+  final bool loading;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  const _PriceProposalCard({
+    required this.proposal,
+    required this.loading,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final driver = proposal['livreur'] is Map
+        ? proposal['livreur'] as Map
+        : null;
+    final name = driver == null
+        ? 'Un livreur'
+        : '${driver['firstName'] ?? ''} ${driver['lastName'] ?? ''}'.trim();
+    final price = (proposal['priceFcfa'] as num?)?.toInt();
+    return Card(
+      color: const Color(0xFF173447),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '$name propose ${price ?? '—'} FCFA',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'La course ne lui sera attribuée qu’après votre accord.',
+              style: TextStyle(color: Colors.white70),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: loading ? null : onReject,
+                    child: const Text('Refuser'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: loading ? null : onAccept,
+                    child: Text(loading ? 'Traitement…' : 'Accepter'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

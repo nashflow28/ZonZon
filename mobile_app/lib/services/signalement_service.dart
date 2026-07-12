@@ -23,11 +23,7 @@ class SignalementService {
   }) async {
     final res = await _api.post(
       '/signalements',
-      body: {
-        'targetType': targetType,
-        'targetId': targetId,
-        'reason': reason,
-      },
+      body: {'targetType': targetType, 'targetId': targetId, 'reason': reason},
     );
 
     if (res.statusCode == 200 || res.statusCode == 201) return;

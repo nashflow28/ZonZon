@@ -207,3 +207,51 @@
   opacity: 0.5;
   cursor: default;
 }
+
+.panel {
+  position: fixed;
+  inset: auto 12px calc(76px + env(safe-area-inset-bottom)) 12px;
+  z-index: 20;
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border: 1px solid var(--zz-line);
+  border-radius: 20px;
+  background: var(--zz-card);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 35%);
+}
+
+.panel h3,
+.panel p {
+  margin: 0;
+}
+
+.panel label {
+  color: var(--zz-text-mut);
+  font-size: 13px;
+}
+
+.panel input {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--zz-line);
+  border-radius: 12px;
+  background: var(--zz-surface);
+  color: var(--zz-text-hi);
+  font: inherit;
+}
+
+.panel-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 10px;
+}
+
+.btn-secondary {
+  margin-top: 8px;
+  border: 1px solid var(--zz-line);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--zz-text-hi);
+  font-weight: 700;
+}

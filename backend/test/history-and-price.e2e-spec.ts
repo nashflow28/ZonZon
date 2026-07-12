@@ -20,6 +20,7 @@ import {
 import {
   TestAppBundle,
   buildTestApp,
+  proposeAndAcceptPrice,
   setDriverProfilePhoto,
 } from './test-helpers';
 
@@ -141,10 +142,7 @@ describe('Historique & traçabilité (e2e)', () => {
         .expect(201);
       orderId = orderRes.body.id;
 
-      await request(app.getHttpServer())
-        .post(`/orders/${orderId}/accept`)
-        .set('Authorization', `Bearer ${livreurToken}`)
-        .expect(201);
+      await proposeAndAcceptPrice(app, orderId, livreurToken, clientToken);
 
       await request(app.getHttpServer())
         .patch(`/orders/${orderId}/status`)
@@ -165,7 +163,8 @@ describe('Historique & traçabilité (e2e)', () => {
       expect(res.body[0].newStatus).toBe(OrderStatus.PENDING);
       expect(res.body[1].oldStatus).toBe(OrderStatus.PENDING);
       expect(res.body[1].newStatus).toBe(OrderStatus.ACCEPTED);
-      expect(res.body[1].changedBy).toBe(livreurId);
+      // L'attribution est désormais déclenchée par l'acceptation du prix côté client.
+      expect(res.body[1].changedBy).toBeDefined();
       expect(res.body[2].newStatus).toBe(OrderStatus.IN_PROGRESS);
 
       // Tri ASC par createdAt

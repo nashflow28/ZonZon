@@ -34,11 +34,11 @@ class SavedAddress {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'label': label,
-        'address': address,
-        'lat': location.latitude,
-        'lng': location.longitude,
-        if (icon != null) 'icon': icon,
-      };
+    'id': id,
+    'label': label,
+    'address': address,
+    'lat': location.latitude,
+    'lng': location.longitude,
+    if (icon != null) 'icon': icon,
+  };
 }

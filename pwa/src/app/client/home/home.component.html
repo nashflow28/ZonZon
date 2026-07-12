@@ -9,23 +9,16 @@
   </div>
 
   <p class="map-hint">
-    Touchez la carte pour poser le point sélectionné ci-dessous
-    ({{ mode() === 'pickup' ? 'retrait' : 'livraison' }}).
+    Touchez la carte pour poser le point sélectionné ci-dessous ({{
+      mode() === 'pickup' ? 'retrait' : 'livraison'
+    }}).
   </p>
 
   <div class="segmented">
-    <button
-      type="button"
-      [class.active]="mode() === 'pickup'"
-      (click)="selectMode('pickup')"
-    >
+    <button type="button" [class.active]="mode() === 'pickup'" (click)="selectMode('pickup')">
       Retrait{{ pickup() ? ' ✓' : '' }}
     </button>
-    <button
-      type="button"
-      [class.active]="mode() === 'delivery'"
-      (click)="selectMode('delivery')"
-    >
+    <button type="button" [class.active]="mode() === 'delivery'" (click)="selectMode('delivery')">
       Livraison{{ delivery() ? ' ✓' : '' }}
     </button>
   </div>
@@ -74,8 +67,10 @@
       <div class="estimate estimate--loading">Calcul de l'estimation…</div>
     } @else if (estimate()) {
       <div class="estimate">
-        <span class="estimate-label">Estimation</span>
-        <span class="estimate-value">{{ estimate()!.distanceKm }} km · {{ estimate()!.priceFcfa }} FCFA</span>
+        <span class="estimate-label">Distance estimée</span>
+        <span class="estimate-value"
+          >{{ estimate()!.distanceKm }} km · le livreur proposera son prix</span
+        >
       </div>
     }
 

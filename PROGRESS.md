@@ -213,6 +213,9 @@ flyctl logs --app zonzon-backend --no-tail
 | POST | `/orders/estimate` | Estimer le prix d'une livraison |
 | GET | `/orders/mine` | Mes commandes |
 | POST | `/orders/:id/accept` | Accepter une course (livreur) |
+| POST | `/orders/:id/price-proposals` | Proposer un prix sur une course client (livreur) |
+| GET | `/orders/:id/price-proposal` | Proposition en attente (client) |
+| PATCH | `/orders/:id/price-proposal/:proposalId` | Accepter/refuser une proposition (client) |
 | PATCH | `/orders/:id/status` | Changer statut commande |
 | GET | `/users/:id/ratings/stats` | Stats de notation d'un utilisateur |
 
@@ -259,6 +262,68 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 ---
 
 ## Historique des sessions
+
+### Session 68 (2026-07-12) — Corrections complètes post-audit négociation
+
+- **Sécurité User** : `password` et `fcmToken` sont désormais `select:false`; l'authentification et le fallback FCM les sélectionnent explicitement. Assertions e2e ajoutées sur les réponses d'inscription.
+- **Négociation robuste** : expiration configurable (`PRICE_PROPOSAL_TTL_SECONDS`, 120 s par défaut), offres expirées/superseded, livreur actif ou indisponible rejeté, radar filtré pendant une offre en attente et migration unique `1780500000000` avec index d'expiration.
+- **Limite client** : maximum de cinq commandes ouvertes contrôlé sous transaction et verrou pessimiste; la sixième reçoit `409`, couvert en e2e.
+- **Temps réel Flutter** : l'acceptation négociée injecte la commande complète dans `orderAccepted`, synchronise le prix final, restaure les raccourcis actifs, ouvre le panneau course et démarre le GPS.
+- **PWA iOS** : négociation complète livreur/client, masquage du prix estimatif, notifications temps réel, expiration visuelle et quatre tests dont trois tests HTTP dédiés.
+- **Dépendances** : Nest Platform Express/Multer, Firebase Admin (API modulaire) et Angular admin mis à niveau. `npm audit --omit=dev` retourne 0 vulnérabilité pour backend et admin.
+- **Validation** : backend build OK, 373/373 unitaires, 60/60 e2e; Flutter analyze 0 et 35/35 tests; PWA build + 4/4 tests; admin build + 6/6 tests. Avertissement restant : budget initial admin 611 kB > 500 kB. Dette ESLint backend historique non masquée et conservée au backlog.
+- **Production** : aucun déploiement, commit, push ou APK généré pendant cette passe; l'item OPS reste ouvert.
+
+### Session 67 (2026-07-12) — Audit global post-négociation
+
+- **Verdict : FAIL**. Builds backend/admin/PWA et analyse Flutter passent, mais plusieurs défauts bloquants restent ouverts.
+- **Sécurité P0** : `User.password` et `User.fcmToken` restent sélectionnés par défaut. Les services renvoient directement des entités avec relations user (`/orders/available`, `/orders/mine`, utilisateurs admin, etc.) sans sérialiseur global, ce qui peut exposer hash et token FCM.
+- **Flux négociation P0** : après accord client, Flutter livreur retire seulement la course du radar et affiche un snackbar ; il ne peuple pas `_activeRunOrders`, n'ouvre pas la course et ne démarre donc pas le GPS. La PWA utilise encore `POST /orders/:id/accept`, affiche le prix estimé et n'offre aucun écran accepter/refuser.
+- **Disponibilité P0** : aucune expiration de proposition ; un livreur déjà en course peut proposer ; une proposition devenue inacceptable reste `PENDING` et bloque les autres livreurs. `findAvailable` continue parallèlement à montrer cette course à tous.
+- **Cohérence P1** : l'événement `orderAccepted` ne contient pas le prix final ; `ActiveOrdersStore` conserve donc l'ancien prix estimatif jusqu'à un refresh manuel. La limite Flutter de 5 commandes actives n'est pas appliquée par le backend.
+- **Qualité/sécurité dépendances** : test admin obsolète en échec (5/6), ESLint backend en échec (1837 constats), PWA seulement 1 smoke test. `npm audit --omit=dev` : backend 10 vulnérabilités prod (2 high, dont Multer DoS), admin 6 (5 high Angular, XSS/DoS/info leak), PWA 0.
+- **Migrations/ops** : timestamp `1780200000000` dupliqué (`AddNotificationData`/`AddOrderPriceProposals`) ; TypeORM déduplique par nom donc pas de blocage immédiat. Production saine (`/` 200) mais route de proposition absente (`404`) alors que tournées présentes (`401` sans auth) : code local non déployé.
+- **Commandes** : backend build + 373/373 unitaires + 58/58 e2e complets, puis spec commandes ciblée 13/13 après ajout du cas de refus ; Flutter analyze + 35/35 ; PWA build + 1/1 ; admin build OK mais tests 5/6 ; audit ESLint et dépendances exécutés séparément.
+
+### Session 66 (2026-07-12) — Négociation du prix client/livreur
+
+- **Nouveau modèle métier** : `OrderPriceProposal` historise montant, livreur, état (`PENDING/ACCEPTED/REJECTED/SUPERSEDED`) et réponse. Migration `1780200000000` ajoutée.
+- **Attribution transactionnelle** : une proposition ne réserve ni n'assigne la course. Seule l'acceptation par le client, sous verrous DB sur commande/proposition/livreur, fixe `priceFcfa`, assigne le livreur et passe à `ACCEPTED`. Un refus conserve `PENDING` et rediffuse la course.
+- **Compatibilité commerçant/tournées** : les livraisons créées par un commerçant conservent le prix fixé à la création et l'acceptation directe, notamment pour les tournées multi-colis.
+- **Temps réel** : événements `orderPriceProposed` et `orderPriceProposalResponded`, notifications persistées/push hors ligne, polling HTTP de secours côté client.
+- **Mobile livreur** : les courses client n'affichent plus l'ancien prix automatique dans le radar ; bouton « Proposer un prix », saisie FCFA et état d'attente. Les courses commerçant gardent « Accepter la course » et leur montant.
+- **Mobile client** : seul le kilométrage est présenté lors de la création et dans une commande `PENDING`; une carte permet d'accepter/refuser le prix et identifie le livreur. Le prix final devient effectif après acceptation.
+- **Carte de suivi** : le panneau d'informations fixe est remplacé par un `DraggableScrollableSheet` rétractable (16 %, 38 %, 82 %), laissant voir la carte. Le commerçant disposait déjà du suivi socket GPS, du fallback ETA et des statuts détaillés ; ces chemins restent inchangés et couverts par les tests existants.
+- **Vérifications** : build Nest OK, backend 373/373 unitaires, e2e 58/58 puis scénario ciblé 13/13 incluant refus et nouvelle proposition par un autre livreur ; `flutter analyze` sans erreur et 35/35 tests.
+- **Déploiement** : backend non déployé et APK non régénéré. La migration doit être appliquée par `migrationsRun` lors du prochain déploiement Fly avant distribution de la nouvelle APK.
+
+### Session 65 (2026-07-12) — GPS auto-réparable, cartes claire/sombre et autocomplétion
+
+- **Suivi GPS livreur renforcé** : stream `Geolocator` en précision navigation, service foreground Android avec wake lock, position fraîche forcée toutes les 30 s en cas de silence, reprise automatique après erreur et retour utilisateur lors de la perte/récupération du signal.
+- **Secours aux événements socket manqués** : `GET /orders/:id/eta` expose maintenant la dernière position persistée fraîche (`driverLat`, `driverLng`, `positionAt`). Les suivis client et commerçant Flutter, ainsi que le suivi client PWA, restaurent le marqueur lors du polling ETA sans remplacer le temps réel.
+- **Carte claire/sombre** : bouton sur les cartes de suivi et le sélecteur de lieu, styles CARTO light/dark, préférence persistée via stockage sécurisé avec comportement dégradé sûr si ce stockage est indisponible.
+- **Recherche de lieux** : Photon devient le moteur principal à partir de 2 caractères, centré sur Lomé, filtré sur le Togo, avec résultats préfixés prioritaires, déduplication et garde contre les réponses réseau obsolètes. Nominatim reste le fallback et le moteur de géocodage inverse. Test ajouté pour `Adi` → `Adidogomé`.
+- **Android** : permission `WAKE_LOCK` ajoutée ; le suivi reste limité aux courses actives.
+- **Vérifications** : `flutter analyze` sans erreur ; `flutter test` 35/35 ; backend `npm test -- --runInBand` 373/373 et build Nest OK ; PWA 1/1.
+- **Déploiement** : code non déployé et APK non régénéré pendant cette session. Il faut déployer le backend puis distribuer une nouvelle APK pour le test terrain complet.
+
+### Session 64 (2026-07-12) — Correctifs complets après audit tournées
+
+- **Mobile livreur multi-course** : état des courses actives isolé et testé; les événements de statut/paiement mettent à jour chaque arrêt, une course terminale est retirée sans toucher aux autres et le GPS reste actif tant qu'au moins une course subsiste. Les raccourcis actifs sont devenus un widget testé.
+- **Montant livreur** : prix FCFA formaté et visible sur le radar, les raccourcis de courses actives et dans le panneau de conduite; fallback lisible si le prix manque.
+- **Mobile commerçant** : `_runId` est réinitialisé si le point de retrait ou le livreur change, supprimant les associations incohérentes avec une tournée précédente.
+- **PWA iOS** : `DeliveryRun`/`runId`, API création/liste et mode explicite « Livrer plusieurs colis avec ce livreur » ajoutés. Le formulaire conserve retrait/livreur entre colis et propose de terminer la saisie de tournée. Build OK et test Angular 1/1 (mock `SwUpdate` réparé). Aucun projet Cloudflare Pages dédié à la PWA n'existe actuellement; seul `zonzon-admin` est listé.
+- **Backend/e2e** : harness enrichi avec `DeliveryRunRepository` et le query builder de recherche téléphone; scénario HTTP complet de deux colis acceptés puis terminés par un même livreur. Unitaires 373/373, e2e 57/57, build OK.
+- **Production** : backend Fly déployé en version 25, migrations tournées appliquées au démarrage, machine `started`; health `200`; `/v1/orders/runs/mine` renvoie `401` sans authentification (route présente) au lieu de `404`.
+- **Validation Flutter** : `flutter analyze` sans issue, `flutter test` 34/34. APK release produit dans `mobile_app/build/app/outputs/flutter-apk/app-release.apk` (60,3 Mo).
+
+### Session 63 (2026-07-12) — Audit de régression après tournées multi-colis
+
+- **Verdict : FAIL, pas de distribution de l'APK actuel.** La production Fly est restée sur l'image du `2026-07-12T16:21:31Z`, antérieure au commit `e099bb4` (`19:05Z`) : `GET https://zonzon-backend.fly.dev/v1/orders/runs/mine` retourne actuellement `404`. Or l'APK construit appelle `POST /v1/orders/runs` dès qu'un commerçant sélectionne un livreur; ce flux échoue donc en production tant que le backend et ses migrations ne sont pas déployés.
+- **Régression mobile confirmée sur une tournée** : `driver_screen.dart` conserve les arrêts terminés dans `_activeRunOrders` et appelle `_stopLocationUpdates()` à la fermeture de n'importe quel dialogue. Après avoir terminé/quitté le premier arrêt, le GPS peut donc être stoppé alors qu'un autre arrêt de la même tournée est toujours actif; les mises à jour socket ne traitent aussi que l'arrêt ouvert.
+- **Régression tests confirmée** : `npm run test:e2e -- --runInBand` ne démarre plus 6 suites (55 échecs), car le harness `backend/test/test-helpers.ts` n'injecte pas le nouveau `DeliveryRunRepository` requis par `OrdersService`. Les tests unitaires backend restent verts (373/373), mais ne remplacent pas ces scénarios HTTP.
+- **Parité incomplète** : la PWA iOS commerçant continue de créer une seule livraison (`preferredLivreurId` seulement), sans création ni réutilisation de `runId`.
+- **Vérifications exécutées** : backend `npm test -- --runInBand` (373/373) et `npm run build` OK; Flutter `flutter analyze` propre et `flutter test` 29/29; builds Angular admin et PWA OK. L'admin a seulement ses avertissements de taille de bundle et d'optional chaining déjà signalés.
 
 ### Session 61 (2026-07-12) — Tournées commerçant multi-colis
 

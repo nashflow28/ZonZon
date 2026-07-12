@@ -5,7 +5,9 @@
     <div class="empty">
       <h3>Commande introuvable</h3>
       <p>Cette course n'existe pas ou n'est plus accessible.</p>
-      <button type="button" class="btn-primary" (click)="backToOrders()">Retour aux commandes</button>
+      <button type="button" class="btn-primary" (click)="backToOrders()">
+        Retour aux commandes
+      </button>
     </div>
   } @else if (order(); as o) {
     <app-status-timeline [status]="o.status" />
@@ -21,13 +23,42 @@
     </div>
 
     <div class="badges-row">
-      <span [class]="paymentStatusPillClass(o.paymentStatus)">{{ paymentLabel(o.paymentStatus) }}</span>
+      <span [class]="paymentStatusPillClass(o.paymentStatus)">{{
+        paymentLabel(o.paymentStatus)
+      }}</span>
       @if (eta(); as e) {
         @if (e.basedOn !== 'unavailable' && e.etaMinutes != null) {
           <span class="eta-badge">~{{ e.etaMinutes }} min ({{ e.distanceKm }} km)</span>
         }
       }
     </div>
+
+    @if (priceProposal(); as proposal) {
+      <div class="panel">
+        <h4>Proposition de {{ proposal.livreur.firstName || 'votre livreur' }}</h4>
+        <p class="panel-hint">
+          {{ proposal.priceFcfa }} FCFA · la course ne sera attribuée qu'après votre accord.
+        </p>
+        <div class="panel-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            [disabled]="respondingToPrice()"
+            (click)="respondToPriceProposal(false)"
+          >
+            Refuser
+          </button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="respondingToPrice()"
+            (click)="respondToPriceProposal(true)"
+          >
+            {{ respondingToPrice() ? 'Traitement…' : 'Accepter le prix' }}
+          </button>
+        </div>
+      </div>
+    }
 
     <div class="info-card">
       <div class="info-row">
@@ -42,10 +73,12 @@
         <span class="info-label">Colis</span>
         <span class="info-value">{{ o.description }}</span>
       </div>
-      <div class="info-row">
-        <span class="info-label">Prix</span>
-        <span class="info-value">{{ o.priceFcfa ?? '—' }} FCFA</span>
-      </div>
+      @if (o.status !== 'PENDING' || o.merchant) {
+        <div class="info-row">
+          <span class="info-label">Prix</span>
+          <span class="info-value">{{ o.priceFcfa ?? '—' }} FCFA</span>
+        </div>
+      }
       @if (o.livreur) {
         <div class="info-row">
           <span class="info-label">Livreur</span>
@@ -92,7 +125,12 @@
         ></textarea>
         <div class="panel-actions">
           <button type="button" class="btn-secondary" (click)="closeCancelPanel()">Retour</button>
-          <button type="button" class="btn-danger" [disabled]="cancelling()" (click)="confirmCancel()">
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="cancelling()"
+            (click)="confirmCancel()"
+          >
             {{ cancelling() ? 'Annulation…' : "Confirmer l'annulation" }}
           </button>
         </div>

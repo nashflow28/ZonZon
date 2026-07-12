@@ -6,12 +6,14 @@ import {
   AvailableDriver,
   CreateMerchantOrderPayload,
   CreateOrderPayload,
+  DeliveryRun,
   EstimateResult,
   EtaResult,
   Order,
   OrderStatus,
   PaymentHistoryEntry,
   PaymentStatus,
+  PriceProposal,
   StatusHistoryEntry,
   isTerminalOrderStatus,
 } from '../models/order.model';
@@ -34,17 +36,15 @@ export class OrdersService {
   readonly orders = this._orders.asReadonly();
 
   readonly activeOrders = computed(() =>
-    this._orders().filter((o) => !isTerminalOrderStatus(o.status))
+    this._orders().filter((o) => !isTerminalOrderStatus(o.status)),
   );
   readonly pastOrders = computed(() =>
-    this._orders().filter((o) => isTerminalOrderStatus(o.status))
+    this._orders().filter((o) => isTerminalOrderStatus(o.status)),
   );
 
   /** Recharge `/orders/mine` et met à jour le store partagé. */
   refresh(): Observable<Order[]> {
-    return this.http
-      .get<Order[]>(`${BASE}/mine`)
-      .pipe(tap((orders) => this._orders.set(orders)));
+    return this.http.get<Order[]>(`${BASE}/mine`).pipe(tap((orders) => this._orders.set(orders)));
   }
 
   findCached(orderId: string): Order | undefined {
@@ -63,14 +63,12 @@ export class OrdersService {
   }
 
   patchCachedStatus(orderId: string, status: OrderStatus): void {
-    this._orders.update((list) =>
-      list.map((o) => (o.id === orderId ? { ...o, status } : o))
-    );
+    this._orders.update((list) => list.map((o) => (o.id === orderId ? { ...o, status } : o)));
   }
 
   patchCachedPayment(orderId: string, paymentStatus: PaymentStatus): void {
     this._orders.update((list) =>
-      list.map((o) => (o.id === orderId ? { ...o, paymentStatus } : o))
+      list.map((o) => (o.id === orderId ? { ...o, paymentStatus } : o)),
     );
   }
 
@@ -86,9 +84,7 @@ export class OrdersService {
   }
 
   create(payload: CreateOrderPayload): Observable<Order> {
-    return this.http
-      .post<Order>(BASE, payload)
-      .pipe(tap((order) => this.upsertCached(order)));
+    return this.http.post<Order>(BASE, payload).pipe(tap((order) => this.upsertCached(order)));
   }
 
   /** Crée une livraison Type 1 (rôle COMMERCANT). */
@@ -96,6 +92,14 @@ export class OrdersService {
     return this.http
       .post<Order>(`${BASE}/merchant`, payload)
       .pipe(tap((order) => this.upsertCached(order)));
+  }
+
+  createRun(livreurId: string): Observable<DeliveryRun> {
+    return this.http.post<DeliveryRun>(`${BASE}/runs`, { livreurId });
+  }
+
+  findMyRuns(): Observable<DeliveryRun[]> {
+    return this.http.get<DeliveryRun[]>(`${BASE}/runs/mine`);
   }
 
   /**
@@ -143,6 +147,27 @@ export class OrdersService {
       .pipe(tap((order) => this.upsertCached(order)));
   }
 
+  proposePrice(orderId: string, priceFcfa: number): Observable<PriceProposal> {
+    return this.http.post<PriceProposal>(`${BASE}/${orderId}/price-proposals`, { priceFcfa });
+  }
+
+  pendingPriceProposal(orderId: string): Observable<PriceProposal | null> {
+    return this.http.get<PriceProposal | null>(`${BASE}/${orderId}/price-proposal`);
+  }
+
+  respondToPriceProposal(
+    orderId: string,
+    proposalId: string,
+    accept: boolean,
+  ): Observable<{ accepted: boolean; order: Order }> {
+    return this.http
+      .patch<{ accepted: boolean; order: Order }>(
+        `${BASE}/${orderId}/price-proposal/${proposalId}`,
+        { accept },
+      )
+      .pipe(tap((result) => this.upsertCached(result.order)));
+  }
+
   eta(orderId: string): Observable<EtaResult> {
     return this.http.get<EtaResult>(`${BASE}/${orderId}/eta`);
   }
@@ -150,7 +175,7 @@ export class OrdersService {
   updateStatus(
     orderId: string,
     status: OrderStatus,
-    cancellationReason?: string
+    cancellationReason?: string,
   ): Observable<Order> {
     return this.http
       .patch<Order>(`${BASE}/${orderId}/status`, { status, cancellationReason })
@@ -162,9 +187,7 @@ export class OrdersService {
   }
 
   paymentHistory(orderId: string): Observable<PaymentHistoryEntry[]> {
-    return this.http.get<PaymentHistoryEntry[]>(
-      `${BASE}/${orderId}/payment-history`
-    );
+    return this.http.get<PaymentHistoryEntry[]>(`${BASE}/${orderId}/payment-history`);
   }
 
   submitRating(
@@ -174,7 +197,7 @@ export class OrdersService {
       punctualityScore?: number;
       communicationScore?: number;
       courtesyScore?: number;
-    }
+    },
   ): Observable<unknown> {
     return this.http.post(`${BASE}/${orderId}/rating`, payload);
   }
