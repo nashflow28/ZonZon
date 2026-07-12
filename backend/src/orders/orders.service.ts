@@ -1210,6 +1210,12 @@ export class OrdersService {
       livreur.id,
       updated.client?.id,
       updated.merchant?.id,
+      {
+        id: livreur.id,
+        firstName: livreur.firstName,
+        lastName: livreur.lastName,
+        phone: livreur.phone,
+      },
     );
 
     // Push notification au client si offline

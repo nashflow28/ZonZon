@@ -235,6 +235,7 @@ class _DriverScreenState extends State<DriverScreen> {
   StreamSubscription<OrderPaymentUpdate>? _paymentSub;
   StreamSubscription<void>? _connectedSub;
   StreamSubscription<SocketLifecycleEvent>? _socketLifecycleSub;
+  Timer? _radarRefreshTimer;
 
   /// Statuts pour lesquels une course est considérée « active » côté livreur
   /// (mêmes valeurs que ACTIVE_DELIVERY_STATUSES backend).
@@ -335,6 +336,11 @@ class _DriverScreenState extends State<DriverScreen> {
     await _refreshDriverStatus();
 
     await _initSocket();
+    _radarRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (_isApproved && _isAvailable && mounted) {
+        unawaited(_reconcileAvailableOrders());
+      }
+    });
 
     // On n'interroge le radar que si le compte est validé : sinon le
     // backend répond 403 (ce qui déclencherait un état d'erreur opaque).
@@ -1354,6 +1360,7 @@ class _DriverScreenState extends State<DriverScreen> {
     _paymentSub?.cancel();
     _connectedSub?.cancel();
     _socketLifecycleSub?.cancel();
+    _radarRefreshTimer?.cancel();
     _socketCtrl.dispose();
     super.dispose();
   }

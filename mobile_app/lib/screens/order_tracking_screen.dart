@@ -191,8 +191,12 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
     _orderAcceptedSub = _socketCtrl.orderAccepted$
         .where((e) => e.orderId == widget.orderId)
-        .listen((_) async {
+        .listen((event) async {
           if (!mounted) return;
+          final livreur = event.raw['livreur'];
+          if (livreur is Map) {
+            setState(() => _assignedLivreur = Map<String, dynamic>.from(livreur));
+          }
           await _refreshDetails();
           _startEtaPolling();
         });

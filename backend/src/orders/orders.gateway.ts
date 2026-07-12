@@ -320,19 +320,21 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     livreurId: string,
     clientId?: string,
     merchantId?: string,
+    livreur?: Record<string, unknown>,
   ) {
+    const payload = { orderId, livreurId, livreur };
     this.server
       .to(`role:${UserRole.LIVREUR}`)
-      .emit('orderAccepted', { orderId, livreurId });
+      .emit('orderAccepted', payload);
     if (clientId) {
       this.server
         .to(`user:${clientId}`)
-        .emit('orderAccepted', { orderId, livreurId });
+        .emit('orderAccepted', payload);
     }
     if (merchantId) {
       this.server
         .to(`user:${merchantId}`)
-        .emit('orderAccepted', { orderId, livreurId });
+        .emit('orderAccepted', payload);
     }
     // Mémorise le mapping pour forwarder la position du livreur au client
     // et au commerçant (GPS strict, CDC V1 §11.2).
