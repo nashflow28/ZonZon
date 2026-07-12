@@ -93,6 +93,8 @@
 
 ### Qualité UI mobile (2026-07-12)
 
+- [x] **Tournées commerçant multi-colis** — tournées persistées, commandes rattachables à `runId`, même livreur autorisé sur plusieurs courses de la même tournée, cartes d'arrêts actives côté livreur et ajout successif de colis côté commerçant. *(2026-07-12)*
+
 - [x] **Accès persistant course livreur** — le radar affiche une carte « Course en cours » qui rouvre le panneau complet (itinéraire, chat, statuts) après un retour arrière. *(2026-07-12)*
 
 - [x] **Passe Material Design 3 / HIG iOS des parcours principaux** — thème M3 centralisé (app bars, cartes, champs, navigation, snackbars), navigation client/livreur adaptative (NavigationBar/CupertinoTabBar), formulaires et écrans auth/profil/historique/messagerie/commerçant rendus responsives et adaptés iOS. `flutter analyze` sans issue, `flutter test` 29/29, APK release construit. Validation visuelle sur un appareil iOS réel à effectuer avant une distribution iOS.

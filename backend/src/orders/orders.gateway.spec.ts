@@ -51,12 +51,12 @@ function buildMockServer(
 
 describe('OrdersGateway', () => {
   let jwtService: { verify: jest.Mock; sign: jest.Mock };
-  let ordersRepository: { findOne: jest.Mock };
+  let ordersRepository: { find: jest.Mock; findOne: jest.Mock };
   let gateway: OrdersGateway;
 
   beforeEach(() => {
     jwtService = { verify: jest.fn(), sign: jest.fn() };
-    ordersRepository = { findOne: jest.fn() };
+    ordersRepository = { find: jest.fn(), findOne: jest.fn() };
     gateway = new OrdersGateway(
       jwtService as unknown as JwtService,
       ordersRepository as any,
@@ -333,19 +333,21 @@ describe('OrdersGateway', () => {
     });
 
     it.each(['COMPLETED', 'CANCELLED', 'FAILED'])(
-      'nettoie le mapping activeOrders du livreur pour le statut terminal %s',
+      'retire seulement la commande terminale du mapping activeOrders du livreur pour le statut terminal %s',
       (status) => {
         const { server } = buildMockServer([]);
         gateway.server = server;
         const activeOrders: Map<string, any> = (gateway as any).activeOrders;
-        activeOrders.set('driver-1', {
-          orderId: 'ord-1',
-          clientId: 'client-1',
-        });
+        activeOrders.set('driver-1', [
+          { orderId: 'ord-1', clientId: 'client-1' },
+          { orderId: 'ord-2', clientId: 'client-2' },
+        ]);
 
         gateway.broadcastStatusUpdate('ord-1', status, 'client-1', 'driver-1');
 
-        expect(activeOrders.has('driver-1')).toBe(false);
+        expect(activeOrders.get('driver-1')).toEqual([
+          { orderId: 'ord-2', clientId: 'client-2' },
+        ]);
       },
     );
 
@@ -353,7 +355,9 @@ describe('OrdersGateway', () => {
       const { server } = buildMockServer([]);
       gateway.server = server;
       const activeOrders: Map<string, any> = (gateway as any).activeOrders;
-      activeOrders.set('driver-1', { orderId: 'ord-1', clientId: 'client-1' });
+      activeOrders.set('driver-1', [
+        { orderId: 'ord-1', clientId: 'client-1' },
+      ]);
 
       gateway.broadcastStatusUpdate(
         'ord-1',
@@ -457,11 +461,13 @@ describe('OrdersGateway', () => {
       expect(emits).toHaveLength(1);
 
       const activeOrders: Map<string, any> = (gateway as any).activeOrders;
-      expect(activeOrders.get('driver-1')).toEqual({
-        orderId: 'ord-1',
-        clientId: 'client-1',
-        merchantId: 'merchant-1',
-      });
+      expect(activeOrders.get('driver-1')).toEqual([
+        {
+          orderId: 'ord-1',
+          clientId: 'client-1',
+          merchantId: 'merchant-1',
+        },
+      ]);
     });
 
     it("n'émet pas au commerçant si merchantId est absent (rétro-compat)", () => {
@@ -541,11 +547,13 @@ describe('OrdersGateway', () => {
       const { server, emitCalls } = buildMockServer([]);
       gateway.server = server;
       const activeOrders: Map<string, any> = (gateway as any).activeOrders;
-      activeOrders.set('driver-1', {
-        orderId: 'ord-1',
-        clientId: 'client-1',
-        merchantId: 'merchant-1',
-      });
+      activeOrders.set('driver-1', [
+        {
+          orderId: 'ord-1',
+          clientId: 'client-1',
+          merchantId: 'merchant-1',
+        },
+      ]);
       const client = buildLivreurClientMock('driver-1');
 
       await gateway.handleDriverLocation(client, { lat: 6.13, lng: 1.22 });
@@ -564,7 +572,9 @@ describe('OrdersGateway', () => {
       (gateway as any).positionsService = positionsService;
 
       const activeOrders: Map<string, any> = (gateway as any).activeOrders;
-      activeOrders.set('driver-1', { orderId: 'ord-1', clientId: 'client-1' });
+      activeOrders.set('driver-1', [
+        { orderId: 'ord-1', clientId: 'client-1' },
+      ]);
       const client = buildLivreurClientMock('driver-1');
 
       await gateway.handleDriverLocation(client, { lat: 6.13, lng: 1.22 });
@@ -581,7 +591,9 @@ describe('OrdersGateway', () => {
       const { server, emitCalls } = buildMockServer([]);
       gateway.server = server;
       const activeOrders: Map<string, any> = (gateway as any).activeOrders;
-      activeOrders.set('driver-1', { orderId: 'ord-1', clientId: 'client-1' });
+      activeOrders.set('driver-1', [
+        { orderId: 'ord-1', clientId: 'client-1' },
+      ]);
       const client = buildLivreurClientMock('driver-1');
 
       await gateway.handleDriverLocation(client, {
@@ -599,10 +611,12 @@ describe('OrdersGateway', () => {
       const { server, emitCalls } = buildMockServer([]);
       gateway.server = server;
       const activeOrders: Map<string, any> = (gateway as any).activeOrders;
-      activeOrders.set('client-not-driver', {
-        orderId: 'ord-1',
-        clientId: 'client-1',
-      });
+      activeOrders.set('client-not-driver', [
+        {
+          orderId: 'ord-1',
+          clientId: 'client-1',
+        },
+      ]);
       const client = {
         data: { user: { sub: 'client-not-driver', role: UserRole.CLIENT } },
       } as any;
@@ -618,16 +632,18 @@ describe('OrdersGateway', () => {
     it('rehydrate la course active depuis la DB après redémarrage puis forward la position', async () => {
       const { server, emitCalls } = buildMockServer([]);
       gateway.server = server;
-      ordersRepository.findOne.mockResolvedValue({
-        id: 'ord-hydrated',
-        client: { id: 'client-1' },
-        merchant: { id: 'merchant-1' },
-      });
+      ordersRepository.find.mockResolvedValue([
+        {
+          id: 'ord-hydrated',
+          client: { id: 'client-1' },
+          merchant: { id: 'merchant-1' },
+        },
+      ]);
       const client = buildLivreurClientMock('driver-1');
 
       await gateway.handleDriverLocation(client, { lat: 6.13, lng: 1.22 });
 
-      expect(ordersRepository.findOne).toHaveBeenCalledWith(
+      expect(ordersRepository.find).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             livreur: { id: 'driver-1' },
@@ -640,11 +656,31 @@ describe('OrdersGateway', () => {
       const rooms = positionEmits.map((event) => event.room).sort();
       expect(rooms).toEqual(['user:client-1', 'user:merchant-1']);
       const activeOrders: Map<string, any> = (gateway as any).activeOrders;
-      expect(activeOrders.get('driver-1')).toEqual({
-        orderId: 'ord-hydrated',
-        clientId: 'client-1',
-        merchantId: 'merchant-1',
-      });
+      expect(activeOrders.get('driver-1')).toEqual([
+        {
+          orderId: 'ord-hydrated',
+          clientId: 'client-1',
+          merchantId: 'merchant-1',
+        },
+      ]);
+    });
+
+    it('forward la position à plusieurs commandes actives de la même tournée', async () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+      const activeOrders: Map<string, any> = (gateway as any).activeOrders;
+      activeOrders.set('driver-1', [
+        { orderId: 'ord-1', clientId: 'client-1', merchantId: 'merchant-1' },
+        { orderId: 'ord-2', clientId: 'client-2', merchantId: 'merchant-1' },
+      ]);
+      const client = buildLivreurClientMock('driver-1');
+
+      await gateway.handleDriverLocation(client, { lat: 6.13, lng: 1.22 });
+
+      const positionEmits = emitCalls.filter(
+        (c) => c.event === 'driver:position',
+      );
+      expect(positionEmits).toHaveLength(4);
     });
   });
 

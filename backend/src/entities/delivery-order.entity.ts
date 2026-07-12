@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Zone } from './zone.entity';
+import { DeliveryRun } from './delivery-run.entity';
 
 export enum OrderStatus {
   PENDING = 'PENDING',
@@ -69,6 +70,13 @@ export class DeliveryOrder {
    */
   @ManyToOne(() => User, { nullable: true })
   preferredLivreur: User | null;
+
+  /** Optional merchant delivery batch; orders keep independent statuses. */
+  @ManyToOne(() => DeliveryRun, (run) => run.orders, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  run: DeliveryRun | null;
 
   /**
    * Zone de retrait (référentiel `zones`, CDC V1 §7) — renseignée

@@ -23,6 +23,10 @@ import {
 import { DeliveryStatusHistory } from '../entities/delivery-status-history.entity';
 import { PriceChange } from '../entities/price-change.entity';
 import { PaymentStatusHistory } from '../entities/payment-status-history.entity';
+import {
+  DeliveryRun,
+  DeliveryRunStatus,
+} from '../entities/delivery-run.entity';
 import { Zone } from '../entities/zone.entity';
 import { User, UserRole, UserStatus } from '../entities/user.entity';
 
@@ -87,6 +91,13 @@ const mockHistoryRepo = () => ({
   create: jest.fn((data: any) => ({ ...data })),
 });
 
+const mockDeliveryRunsRepo = () => ({
+  find: jest.fn(),
+  findOne: jest.fn(),
+  save: jest.fn(async (entity: any) => entity),
+  create: jest.fn((data: any) => ({ ...data })),
+});
+
 const clientUser = {
   id: 'client-1',
   role: UserRole.CLIENT,
@@ -130,6 +141,7 @@ describe('OrdersService', () => {
   let statusHistoryRepository: ReturnType<typeof mockHistoryRepo>;
   let priceChangeRepository: ReturnType<typeof mockHistoryRepo>;
   let paymentHistoryRepository: ReturnType<typeof mockHistoryRepo>;
+  let deliveryRunsRepository: ReturnType<typeof mockDeliveryRunsRepo>;
   let usersService: {
     findOne: jest.Mock;
     findByPhone: jest.Mock;
@@ -192,6 +204,7 @@ describe('OrdersService', () => {
     statusHistoryRepository = mockHistoryRepo();
     priceChangeRepository = mockHistoryRepo();
     paymentHistoryRepository = mockHistoryRepo();
+    deliveryRunsRepository = mockDeliveryRunsRepo();
     usersService = {
       findOne: jest.fn(),
       findByPhone: jest.fn(),
@@ -252,6 +265,10 @@ describe('OrdersService', () => {
         {
           provide: getRepositoryToken(PaymentStatusHistory),
           useValue: paymentHistoryRepository,
+        },
+        {
+          provide: getRepositoryToken(DeliveryRun),
+          useValue: deliveryRunsRepository,
         },
         {
           provide: getRepositoryToken(Zone),
@@ -833,6 +850,10 @@ describe('OrdersService', () => {
         livreurUser.id,
         clientUser.id,
         undefined,
+        expect.objectContaining({
+          id: livreurUser.id,
+          firstName: livreurUser.firstName,
+        }),
       );
     });
 
@@ -867,6 +888,10 @@ describe('OrdersService', () => {
         livreurUser.id,
         clientUser.id,
         merchantUser.id,
+        expect.objectContaining({
+          id: livreurUser.id,
+          firstName: livreurUser.firstName,
+        }),
       );
     });
 
@@ -951,12 +976,111 @@ describe('OrdersService', () => {
           status: OrderStatus.IN_PROGRESS,
           livreur: { id: livreurUser.id },
         },
-        byId: {},
+        byId: {
+          'ord-new': [
+            {
+              id: 'ord-new',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+            },
+          ],
+        },
       });
 
       await expect(
         service.acceptOrder('ord-new', livreurUser.id),
       ).rejects.toBeInstanceOf(ConflictException);
+      expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
+    });
+
+    it('autorise plusieurs acceptations actives si toutes appartiennent à la même tournée', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      deliveryRunsRepository.findOne.mockResolvedValue({
+        id: 'run-1',
+        status: DeliveryRunStatus.IN_PROGRESS,
+      });
+      routeFindOne({
+        activeOrder: {
+          id: 'ord-run-a',
+          status: OrderStatus.IN_PROGRESS,
+          livreur: { id: livreurUser.id },
+          run: { id: 'run-1' },
+        },
+        byId: {
+          'ord-run-b': [
+            {
+              id: 'ord-run-b',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+              run: { id: 'run-1', livreur: { id: livreurUser.id } },
+            },
+            {
+              id: 'ord-run-b',
+              status: OrderStatus.ACCEPTED,
+              client: { id: clientUser.id },
+              livreur: livreurUser,
+              run: { id: 'run-1' },
+            },
+          ],
+        },
+      });
+      ordersRepository.__updateExecute.mockResolvedValue({ affected: 1 });
+      ordersRepository.find.mockResolvedValue([
+        { id: 'ord-run-a', status: OrderStatus.IN_PROGRESS },
+        { id: 'ord-run-b', status: OrderStatus.ACCEPTED },
+      ]);
+
+      const result = await service.acceptOrder('ord-run-b', livreurUser.id);
+
+      expect(result.status).toBe(OrderStatus.ACCEPTED);
+      expect(ordersRepository.__updateExecute).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuse une 2e acceptation active si elle appartient à une autre tournée', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      routeFindOne({
+        activeOrder: {
+          id: 'ord-run-a',
+          status: OrderStatus.IN_PROGRESS,
+          livreur: { id: livreurUser.id },
+          run: { id: 'run-1' },
+        },
+        byId: {
+          'ord-run-b': [
+            {
+              id: 'ord-run-b',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+              run: { id: 'run-2', livreur: { id: livreurUser.id } },
+            },
+          ],
+        },
+      });
+
+      await expect(
+        service.acceptOrder('ord-run-b', livreurUser.id),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
+    });
+
+    it('refuse si la tournée de la commande est assignée à un autre livreur', async () => {
+      usersService.findOne.mockResolvedValue(livreurUser);
+      routeFindOne({
+        byId: {
+          'ord-run-owned': [
+            {
+              id: 'ord-run-owned',
+              status: OrderStatus.PENDING,
+              client: { id: clientUser.id },
+              run: { id: 'run-1', livreur: { id: 'other-driver' } },
+            },
+          ],
+        },
+      });
+
+      await expect(
+        service.acceptOrder('ord-run-owned', livreurUser.id),
+      ).rejects.toBeInstanceOf(ForbiddenException);
       expect(ordersRepository.__updateExecute).not.toHaveBeenCalled();
     });
 
@@ -1029,6 +1153,10 @@ describe('OrdersService', () => {
         livreurUser.id,
         clientUser.id,
         undefined,
+        expect.objectContaining({
+          id: livreurUser.id,
+          firstName: livreurUser.firstName,
+        }),
       );
     });
 
@@ -1252,9 +1380,18 @@ describe('OrdersService', () => {
     });
 
     it('permet ACCEPTED → IN_PROGRESS par le livreur', async () => {
-      ordersRepository.findOne.mockResolvedValue(
-        buildOrder(OrderStatus.ACCEPTED),
-      );
+      deliveryRunsRepository.findOne.mockResolvedValue({
+        id: 'run-1',
+        status: DeliveryRunStatus.OPEN,
+        startedAt: null,
+      });
+      ordersRepository.find.mockResolvedValue([
+        { id: 'o', status: OrderStatus.IN_PROGRESS },
+      ]);
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildOrder(OrderStatus.ACCEPTED),
+        run: { id: 'run-1' },
+      });
       ordersRepository.save.mockImplementation(async (o: any) => o);
       const result = await service.updateStatus(
         'o',
@@ -1263,6 +1400,12 @@ describe('OrdersService', () => {
       );
       expect(result.status).toBe(OrderStatus.IN_PROGRESS);
       expect(gateway.broadcastStatusUpdate).toHaveBeenCalled();
+      expect(deliveryRunsRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'run-1',
+          status: DeliveryRunStatus.IN_PROGRESS,
+        }),
+      );
     });
 
     // ── P2 (CDC V1 §11.2) : accès commerçant ────────────────────────────────
@@ -1286,9 +1429,20 @@ describe('OrdersService', () => {
     });
 
     it('permet IN_PROGRESS → COMPLETED par le livreur', async () => {
-      ordersRepository.findOne.mockResolvedValue(
-        buildOrder(OrderStatus.IN_PROGRESS),
-      );
+      deliveryRunsRepository.findOne.mockResolvedValue({
+        id: 'run-1',
+        status: DeliveryRunStatus.IN_PROGRESS,
+        completedAt: null,
+        cancelledAt: null,
+      });
+      ordersRepository.find.mockResolvedValue([
+        { id: 'o1', status: OrderStatus.COMPLETED },
+        { id: 'o2', status: OrderStatus.FAILED },
+      ]);
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildOrder(OrderStatus.IN_PROGRESS),
+        run: { id: 'run-1' },
+      });
       ordersRepository.save.mockImplementation(async (o: any) => o);
       const result = await service.updateStatus(
         'o',
@@ -1296,12 +1450,28 @@ describe('OrdersService', () => {
         livreurUser,
       );
       expect(result.status).toBe(OrderStatus.COMPLETED);
+      expect(deliveryRunsRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'run-1',
+          status: DeliveryRunStatus.COMPLETED,
+        }),
+      );
     });
 
     it('permet PENDING → CANCELLED par le client', async () => {
+      deliveryRunsRepository.findOne.mockResolvedValue({
+        id: 'run-2',
+        status: DeliveryRunStatus.IN_PROGRESS,
+        completedAt: null,
+        cancelledAt: null,
+      });
+      ordersRepository.find.mockResolvedValue([
+        { id: 'o', status: OrderStatus.CANCELLED },
+      ]);
       ordersRepository.findOne.mockResolvedValue({
         ...buildOrder(OrderStatus.PENDING),
         livreur: null,
+        run: { id: 'run-2' },
       });
       ordersRepository.save.mockImplementation(async (o: any) => o);
       const result = await service.updateStatus(
@@ -1310,6 +1480,12 @@ describe('OrdersService', () => {
         clientUser,
       );
       expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(deliveryRunsRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'run-2',
+          status: DeliveryRunStatus.CANCELLED,
+        }),
+      );
     });
 
     it('interdit une transition illégale (COMPLETED → PENDING) → BadRequest', async () => {
@@ -1572,6 +1748,52 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('delivery runs', () => {
+    it('createDeliveryRun crée une tournée OPEN pour un commerçant actif', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === livreurUser.id) return livreurUser;
+        return null;
+      });
+      deliveryRunsRepository.save.mockImplementation(async (run: any) => ({
+        id: 'run-created',
+        ...run,
+      }));
+
+      const result = await service.createDeliveryRun(
+        merchantUser.id,
+        livreurUser.id,
+      );
+
+      expect(deliveryRunsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          merchant: merchantUser,
+          livreur: livreurUser,
+          status: DeliveryRunStatus.OPEN,
+        }),
+      );
+      expect(result.id).toBe('run-created');
+    });
+
+    it('findRunsForUser charge la tournée avec ses commandes pour le commerçant', async () => {
+      const runs = [{ id: 'run-1' }];
+      deliveryRunsRepository.find.mockResolvedValue(runs);
+
+      const result = await service.findRunsForUser(
+        merchantUser.id,
+        UserRole.COMMERCANT,
+      );
+
+      expect(result).toBe(runs);
+      expect(deliveryRunsRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { merchant: { id: merchantUser.id } },
+          relations: expect.arrayContaining(['orders', 'orders.client']),
+        }),
+      );
+    });
+  });
+
   describe('createMerchantOrder', () => {
     const dto = {
       pickupAddress: 'Boutique A',
@@ -1740,6 +1962,51 @@ describe('OrdersService', () => {
       );
     });
 
+    it('rattache la commande à une tournée ouverte et impose le livreur de la tournée', async () => {
+      usersService.findOne.mockImplementation(async (id: string) => {
+        if (id === merchantUser.id) return merchantUser;
+        if (id === livreurUser.id) return livreurUser;
+        return null;
+      });
+      deliveryRunsRepository.findOne.mockResolvedValue({
+        id: 'run-1',
+        merchant: { id: merchantUser.id },
+        livreur: { id: livreurUser.id },
+        status: DeliveryRunStatus.OPEN,
+      });
+
+      await service.createMerchantOrder(merchantUser.id, {
+        ...dto,
+        clientPhone: '+22899999999',
+        runId: 'run-1',
+      } as any);
+
+      expect(ordersRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          run: expect.objectContaining({ id: 'run-1' }),
+          preferredLivreur: expect.objectContaining({ id: livreurUser.id }),
+        }),
+      );
+    });
+
+    it('rejette l’ajout d’une commande à une tournée terminale', async () => {
+      usersService.findOne.mockResolvedValue(merchantUser);
+      deliveryRunsRepository.findOne.mockResolvedValue({
+        id: 'run-done',
+        merchant: { id: merchantUser.id },
+        livreur: { id: livreurUser.id },
+        status: DeliveryRunStatus.COMPLETED,
+      });
+
+      await expect(
+        service.createMerchantOrder(merchantUser.id, {
+          ...dto,
+          clientPhone: '+22899999999',
+          runId: 'run-done',
+        } as any),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
     it('rejette si les coordonnées GPS sont manquantes', async () => {
       usersService.findOne.mockResolvedValue(merchantUser);
       usersService.findByPhone.mockResolvedValue(null);
@@ -1775,14 +2042,13 @@ describe('OrdersService', () => {
 
     // ── Priorité 3, Lot 3, item 1 : attribution manuelle (preferredLivreurId) ──
 
-    it('preferredLivreurId affilié et disponible → réserve la course et broadcast ciblé (Set d’un seul id)', async () => {
+    it('preferredLivreurId valide → réserve la course et broadcast ciblé (Set d’un seul id)', async () => {
       usersService.findOne.mockImplementation(async (id: string) => {
         if (id === merchantUser.id) return merchantUser;
         if (id === livreurUser.id) return livreurUser;
         return null;
       });
       usersService.findByPhone.mockResolvedValue(null);
-      merchantDriversService.isAffiliated.mockResolvedValue(true);
 
       const result = await service.createMerchantOrder(merchantUser.id, {
         ...dto,
@@ -1790,10 +2056,6 @@ describe('OrdersService', () => {
         preferredLivreurId: livreurUser.id,
       } as any);
 
-      expect(merchantDriversService.isAffiliated).toHaveBeenCalledWith(
-        merchantUser.id,
-        livreurUser.id,
-      );
       expect(ordersRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           preferredLivreur: expect.objectContaining({ id: livreurUser.id }),
@@ -1808,7 +2070,7 @@ describe('OrdersService', () => {
       expect(usersService.findEligibleLivreurIds).not.toHaveBeenCalled();
     });
 
-    it('preferredLivreurId non affilié ET indisponible → BadRequestException', async () => {
+    it('preferredLivreurId indisponible → BadRequestException', async () => {
       usersService.findOne.mockImplementation(async (id: string) => {
         if (id === merchantUser.id) return merchantUser;
         if (id === livreurUser.id)
@@ -1816,7 +2078,6 @@ describe('OrdersService', () => {
         return null;
       });
       usersService.findByPhone.mockResolvedValue(null);
-      merchantDriversService.isAffiliated.mockResolvedValue(false);
 
       await expect(
         service.createMerchantOrder(merchantUser.id, {
@@ -1827,14 +2088,13 @@ describe('OrdersService', () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
-    it('preferredLivreurId non affilié MAIS disponible → autorisé', async () => {
+    it('preferredLivreurId disponible → autorisé', async () => {
       usersService.findOne.mockImplementation(async (id: string) => {
         if (id === merchantUser.id) return merchantUser;
         if (id === livreurUser.id) return livreurUser; // isAvailable: true
         return null;
       });
       usersService.findByPhone.mockResolvedValue(null);
-      merchantDriversService.isAffiliated.mockResolvedValue(false);
 
       const result = await service.createMerchantOrder(merchantUser.id, {
         ...dto,

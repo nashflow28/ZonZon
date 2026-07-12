@@ -90,6 +90,11 @@ export class CreateMerchantOrderDto {
   @IsUUID()
   preferredLivreurId?: string;
 
+  /** Tournée commerçant existante à laquelle rattacher ce colis. */
+  @IsOptional()
+  @IsUUID()
+  runId?: string;
+
   /**
    * Zone de retrait (référentiel `zones`, CDC V1 §7) — optionnelle,
    * renseignée par le commerçant. Aucune dérivation automatique depuis les

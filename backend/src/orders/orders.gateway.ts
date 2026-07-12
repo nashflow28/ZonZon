@@ -74,8 +74,8 @@ function resolveWsCorsOrigin():
 export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(OrdersGateway.name);
   private driverPositions = new Map<string, DriverPosition>();
-  /** Pour chaque livreur, l'ordre actif (ACCEPTED/IN_PROGRESS) → sert au forwarding live de la position. */
-  private activeOrders = new Map<string, ActiveOrderRef>();
+  /** Pour chaque livreur, toutes les commandes actives (supporte plusieurs commandes d'une même tournée). */
+  private activeOrders = new Map<string, ActiveOrderRef[]>();
 
   constructor(
     private jwtService: JwtService,
@@ -142,10 +142,10 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return;
     }
 
-    const active =
+    const activeOrders =
       this.activeOrders.get(user.sub) ??
-      (await this.hydrateActiveOrderForDriver(user.sub));
-    if (!active) {
+      (await this.hydrateActiveOrdersForDriver(user.sub));
+    if (!activeOrders || activeOrders.length === 0) {
       // Pas de course active : on ignore silencieusement (pas de forward,
       // pas de persistance).
       return;
@@ -170,23 +170,25 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.driverPositions.set(user.sub, { lat, lng, at });
 
     // Forward au client ET au commerçant de la course active.
-    if (active.clientId) {
-      this.server.to(`user:${active.clientId}`).emit('driver:position', {
-        orderId: active.orderId,
-        livreurId: user.sub,
-        lat,
-        lng,
-        at,
-      });
-    }
-    if (active.merchantId) {
-      this.server.to(`user:${active.merchantId}`).emit('driver:position', {
-        orderId: active.orderId,
-        livreurId: user.sub,
-        lat,
-        lng,
-        at,
-      });
+    for (const active of activeOrders) {
+      if (active.clientId) {
+        this.server.to(`user:${active.clientId}`).emit('driver:position', {
+          orderId: active.orderId,
+          livreurId: user.sub,
+          lat,
+          lng,
+          at,
+        });
+      }
+      if (active.merchantId) {
+        this.server.to(`user:${active.merchantId}`).emit('driver:position', {
+          orderId: active.orderId,
+          livreurId: user.sub,
+          lat,
+          lng,
+          at,
+        });
+      }
     }
 
     // Persistance fire-and-forget (n'attend pas la DB pour ne pas bloquer le forwarding WS).
@@ -196,7 +198,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
         user.sub,
         lat,
         lng,
-        active.orderId,
+        activeOrders[0].orderId,
       );
     }
   }
@@ -323,22 +325,16 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     livreur?: Record<string, unknown>,
   ) {
     const payload = { orderId, livreurId, livreur };
-    this.server
-      .to(`role:${UserRole.LIVREUR}`)
-      .emit('orderAccepted', payload);
+    this.server.to(`role:${UserRole.LIVREUR}`).emit('orderAccepted', payload);
     if (clientId) {
-      this.server
-        .to(`user:${clientId}`)
-        .emit('orderAccepted', payload);
+      this.server.to(`user:${clientId}`).emit('orderAccepted', payload);
     }
     if (merchantId) {
-      this.server
-        .to(`user:${merchantId}`)
-        .emit('orderAccepted', payload);
+      this.server.to(`user:${merchantId}`).emit('orderAccepted', payload);
     }
-    // Mémorise le mapping pour forwarder la position du livreur au client
-    // et au commerçant (GPS strict, CDC V1 §11.2).
-    this.activeOrders.set(livreurId, { orderId, clientId, merchantId });
+    // Mémorise le mapping pour forwarder la position du livreur à toutes les
+    // commandes actives de sa tournée éventuelle (GPS strict, CDC V1 §11.2).
+    this.upsertActiveOrder(livreurId, { orderId, clientId, merchantId });
 
     // Si on a déjà la dernière position connue du livreur, on la pousse tout de suite
     // pour que le client voie un marker dès l'acceptation (sinon il faut attendre ~30s).
@@ -385,7 +381,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       livreurId &&
       (status === 'COMPLETED' || status === 'CANCELLED' || status === 'FAILED')
     ) {
-      this.activeOrders.delete(livreurId);
+      this.removeActiveOrder(livreurId, orderId);
     }
   }
 
@@ -408,9 +404,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (livreurId)
       this.server.to(`user:${livreurId}`).emit('orderPaymentUpdated', payload);
     if (merchantId)
-      this.server
-        .to(`user:${merchantId}`)
-        .emit('orderPaymentUpdated', payload);
+      this.server.to(`user:${merchantId}`).emit('orderPaymentUpdated', payload);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -557,30 +551,51 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return !!room && room.size > 0;
   }
 
-  private async hydrateActiveOrderForDriver(
+  private upsertActiveOrder(livreurId: string, activeOrder: ActiveOrderRef) {
+    const existing = this.activeOrders.get(livreurId) ?? [];
+    const next = existing.filter(
+      (order) => order.orderId !== activeOrder.orderId,
+    );
+    next.push(activeOrder);
+    this.activeOrders.set(livreurId, next);
+  }
+
+  private removeActiveOrder(livreurId: string, orderId: string) {
+    const existing = this.activeOrders.get(livreurId) ?? [];
+    const next = existing.filter((order) => order.orderId !== orderId);
+    if (next.length === 0) {
+      this.activeOrders.delete(livreurId);
+      return;
+    }
+    this.activeOrders.set(livreurId, next);
+  }
+
+  private async hydrateActiveOrdersForDriver(
     livreurId: string,
-  ): Promise<ActiveOrderRef | null> {
-    const activeOrder = await this.ordersRepository.findOne({
-      where: {
-        livreur: { id: livreurId } as any,
-        status: In([
-          'ACCEPTED',
-          'EN_ROUTE_PICKUP',
-          'AT_PICKUP',
-          'IN_PROGRESS',
-          'NEAR_CLIENT',
-        ]),
-      },
-      relations: ['client', 'merchant'],
-      order: { updatedAt: 'DESC' as any, createdAt: 'DESC' as any },
-    });
-    if (!activeOrder) return null;
-    const hydrated = {
+  ): Promise<ActiveOrderRef[]> {
+    const activeOrders =
+      (await this.ordersRepository.find({
+        where: {
+          livreur: { id: livreurId } as any,
+          status: In([
+            'ACCEPTED',
+            'EN_ROUTE_PICKUP',
+            'AT_PICKUP',
+            'IN_PROGRESS',
+            'NEAR_CLIENT',
+          ]),
+        },
+        relations: ['client', 'merchant'],
+        order: { updatedAt: 'DESC' as any, createdAt: 'DESC' as any },
+      })) ?? [];
+    const hydrated = activeOrders.map((activeOrder) => ({
       orderId: activeOrder.id,
       clientId: activeOrder.client?.id,
       merchantId: activeOrder.merchant?.id,
-    };
-    this.activeOrders.set(livreurId, hydrated);
+    }));
+    if (hydrated.length > 0) {
+      this.activeOrders.set(livreurId, hydrated);
+    }
     return hydrated;
   }
 }

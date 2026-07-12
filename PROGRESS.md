@@ -260,6 +260,12 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 61 (2026-07-12) — Tournées commerçant multi-colis
+
+- Ajout de `DeliveryRun`, migrations, API création/liste de tournées, rattachement des commandes commerçant et exception transactionnelle contrôlée à la course unique pour une même tournée.
+- Mobile: création automatique de tournée avec ajout successif de colis et cartes d'arrêts actifs côté livreur.
+- Vérifications: backend 373/373, Flutter 29/29, analyse propre.
+
 ### Session 60 (2026-07-12) — Rouvrir une course active côté livreur
 
 - Le dialogue de course pouvait être fermé par le retour Android alors que `_activeOrderData` restait en mémoire, sans aucun accès UI pour le rouvrir. Le radar affiche maintenant une carte persistante « Course en cours » qui restaure le même panneau avec itinéraire, discussion et actions de statut.

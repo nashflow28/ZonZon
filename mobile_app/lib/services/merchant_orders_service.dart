@@ -57,6 +57,19 @@ class MerchantOrdersService {
     'REFUNDED',
   ];
 
+  Future<String> createRun(String livreurId) async {
+    final res = await _api.post('/orders/runs', body: {'livreurId': livreurId});
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw MerchantOrderException('Impossible de créer la tournée.');
+    }
+    final decoded = jsonDecode(res.body);
+    final id = decoded is Map ? decoded['id']?.toString() : null;
+    if (id == null || id.isEmpty) {
+      throw const MerchantOrderException('Réponse tournée invalide.');
+    }
+    return id;
+  }
+
   static List<String> allowedMerchantPaymentStatuses({
     required String orderStatus,
     String? currentPaymentStatus,
@@ -104,6 +117,7 @@ class MerchantOrdersService {
     int? priceFcfa,
     String? priceReason,
     String? preferredLivreurId,
+    String? runId,
     String? pickupZoneId,
     String? destinationZoneId,
   }) async {
@@ -135,6 +149,7 @@ class MerchantOrdersService {
             'priceReason': priceReason,
           if (preferredLivreurId != null && preferredLivreurId.isNotEmpty)
             'preferredLivreurId': preferredLivreurId,
+          if (runId != null && runId.isNotEmpty) 'runId': runId,
           if (pickupZoneId != null && pickupZoneId.isNotEmpty)
             'pickupZoneId': pickupZoneId,
           if (destinationZoneId != null && destinationZoneId.isNotEmpty)

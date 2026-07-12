@@ -47,6 +47,8 @@ import { haversineKm } from '../common/geo';
 import { PricingService } from '../pricing/pricing.service';
 import { MerchantDriversService } from '../merchant-drivers/merchant-drivers.service';
 import { Zone } from '../entities/zone.entity';
+import { DeliveryRun } from '../entities/delivery-run.entity';
+import { DeliveryRunStatus } from '../entities/delivery-run.entity';
 
 type RouteCacheEntry = { km: number; at: number };
 type RouteWithGeometry = { km: number; geometry: number[][] };
@@ -116,6 +118,12 @@ const ACTIVE_DELIVERY_STATUSES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.NEAR_CLIENT,
 ]);
 
+const TERMINAL_ORDER_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  OrderStatus.COMPLETED,
+  OrderStatus.CANCELLED,
+  OrderStatus.FAILED,
+]);
+
 const SETTLED_PAYMENT_STATUSES: ReadonlySet<PaymentStatus> = new Set([
   PaymentStatus.PAID,
   PaymentStatus.RECEIVED_BY_LIVREUR,
@@ -150,6 +158,8 @@ export class OrdersService {
     private priceChangeRepository: Repository<PriceChange>,
     @InjectRepository(PaymentStatusHistory)
     private paymentHistoryRepository: Repository<PaymentStatusHistory>,
+    @InjectRepository(DeliveryRun)
+    private deliveryRunsRepository: Repository<DeliveryRun>,
     private usersService: UsersService,
     private ordersGateway: OrdersGateway,
     private notifications: NotificationsService,
@@ -189,6 +199,109 @@ export class OrdersService {
         `Échec journalisation historique statut (delivery=${entry.deliveryId}): ${(err as Error).message}`,
       );
     }
+  }
+
+  private resolveRunStatus(statuses: OrderStatus[]): DeliveryRunStatus {
+    if (statuses.length === 0) {
+      return DeliveryRunStatus.OPEN;
+    }
+
+    const hasActive = statuses.some((status) =>
+      ACTIVE_DELIVERY_STATUSES.has(status),
+    );
+    const hasStarted = statuses.some(
+      (status) => status !== OrderStatus.PENDING,
+    );
+    const hasCompleted = statuses.includes(OrderStatus.COMPLETED);
+    const allTerminal = statuses.every((status) =>
+      TERMINAL_ORDER_STATUSES.has(status),
+    );
+
+    if (allTerminal) {
+      return hasCompleted
+        ? DeliveryRunStatus.COMPLETED
+        : DeliveryRunStatus.CANCELLED;
+    }
+    if (hasActive || hasStarted) {
+      return DeliveryRunStatus.IN_PROGRESS;
+    }
+    return DeliveryRunStatus.OPEN;
+  }
+
+  private async syncRunStatus(runId?: string | null): Promise<void> {
+    if (!runId) return;
+
+    const run = await this.deliveryRunsRepository.findOne({
+      where: { id: runId },
+    });
+    if (!run) return;
+
+    const orders =
+      (await this.ordersRepository.find({
+        where: { run: { id: runId } },
+        select: ['id', 'status'],
+        order: { createdAt: 'ASC' },
+      })) ?? [];
+    const nextStatus = this.resolveRunStatus(
+      orders.map((order) => order.status),
+    );
+
+    if (run.status === nextStatus) {
+      return;
+    }
+
+    run.status = nextStatus;
+    if (nextStatus === DeliveryRunStatus.IN_PROGRESS && !run.startedAt) {
+      run.startedAt = new Date();
+    }
+    if (nextStatus === DeliveryRunStatus.COMPLETED) {
+      run.completedAt = run.completedAt ?? new Date();
+      run.cancelledAt = null;
+    } else if (nextStatus === DeliveryRunStatus.CANCELLED) {
+      run.cancelledAt = run.cancelledAt ?? new Date();
+      run.completedAt = null;
+    } else {
+      run.completedAt = null;
+      run.cancelledAt = null;
+    }
+
+    await this.deliveryRunsRepository.save(run);
+  }
+
+  async createDeliveryRun(merchantId: string, livreurId: string) {
+    const merchant = await this.usersService.findOne(merchantId);
+    if (merchant.role !== UserRole.COMMERCANT) {
+      throw new ForbiddenException('Seul un commerçant peut créer une tournée');
+    }
+    if (merchant.status === UserStatus.SUSPENDED) {
+      throw new ForbiddenException('Compte suspendu');
+    }
+    const livreur = await this.assertValidPreferredLivreur(livreurId);
+    return this.deliveryRunsRepository.save(
+      this.deliveryRunsRepository.create({
+        merchant,
+        livreur,
+        status: DeliveryRunStatus.OPEN,
+      }),
+    );
+  }
+
+  async findRunsForUser(userId: string, role: UserRole) {
+    const where =
+      role === UserRole.COMMERCANT
+        ? { merchant: { id: userId } }
+        : { livreur: { id: userId } };
+    return this.deliveryRunsRepository.find({
+      where,
+      relations: [
+        'merchant',
+        'livreur',
+        'orders',
+        'orders.client',
+        'orders.livreur',
+      ],
+      order: { createdAt: 'DESC' },
+    });
   }
 
   /** Même principe fire-and-forget que `logStatusChange`, pour le prix. */
@@ -513,7 +626,13 @@ export class OrdersService {
    * Lot 3 item 1) désigne bien un livreur APPROVED. Lève BadRequestException
    * sinon. Renvoie le User chargé (utile pour la notif FCM ciblée).
    */
-  private async assertValidPreferredLivreur(preferredLivreurId: string) {
+  private async assertValidPreferredLivreur(
+    preferredLivreurId: string,
+    options?: {
+      allowActiveRunId?: string | null;
+      excludeOrderId?: string;
+    },
+  ) {
     const driver = await this.usersService.findOne(preferredLivreurId);
     if (driver.role !== UserRole.LIVREUR) {
       throw new BadRequestException(
@@ -545,9 +664,23 @@ export class OrdersService {
         livreur: { id: preferredLivreurId } as any,
         status: In([...ACTIVE_DELIVERY_STATUSES]),
       },
+      relations: ['run'],
       select: ['id'],
     });
-    if (busyOrder) {
+    const busyOnAnotherRun =
+      !!busyOrder &&
+      (!!busyOrder.run || !!options?.allowActiveRunId) &&
+      busyOrder.run?.id !== options?.allowActiveRunId;
+    const busyOnAnotherOrderWithoutRun =
+      !!busyOrder && !busyOrder.run && !options?.allowActiveRunId;
+    if (
+      (busyOrder &&
+        busyOrder.id !== options?.excludeOrderId &&
+        busyOnAnotherRun) ||
+      (busyOrder &&
+        busyOrder.id !== options?.excludeOrderId &&
+        busyOnAnotherOrderWithoutRun)
+    ) {
       throw new BadRequestException(
         'Le livreur sélectionné est déjà engagé sur une autre course',
       );
@@ -693,17 +826,45 @@ export class OrdersService {
     // APPROVED + actuellement disponible (comme pour un broadcast normal) —
     // ce qui permet aussi de réserver un livreur externe recommandé.
     let preferredLivreur: any = null;
+    let run: DeliveryRun | null = null;
+    if (dto.runId) {
+      run = await this.deliveryRunsRepository.findOne({
+        where: { id: dto.runId },
+        relations: ['merchant', 'livreur'],
+      });
+      if (!run || run.merchant.id !== merchantId) {
+        throw new ForbiddenException('Tournée introuvable ou non autorisée');
+      }
+      if (
+        run.status === DeliveryRunStatus.COMPLETED ||
+        run.status === DeliveryRunStatus.CANCELLED
+      ) {
+        throw new BadRequestException(
+          'Impossible d’ajouter une commande à une tournée terminée',
+        );
+      }
+      if (!run.livreur?.id) {
+        throw new BadRequestException(
+          "Cette tournée n'a plus de livreur assigné",
+        );
+      }
+      preferredLivreur = await this.assertValidPreferredLivreur(
+        run.livreur.id,
+        {
+          allowActiveRunId: run.id,
+        },
+      );
+    }
     if (dto.preferredLivreurId) {
       preferredLivreur = await this.assertValidPreferredLivreur(
         dto.preferredLivreurId,
+        {
+          allowActiveRunId: run?.id,
+        },
       );
-      const affiliated = await this.merchantDriversService?.isAffiliated(
-        merchantId,
-        dto.preferredLivreurId,
-      );
-      if (!affiliated && !preferredLivreur.isAvailable) {
+      if (run?.livreur && run.livreur.id !== preferredLivreur.id) {
         throw new BadRequestException(
-          'Ce livreur doit être affilié à votre compte ou actuellement disponible',
+          'Le livreur doit être celui de la tournée',
         );
       }
     }
@@ -772,6 +933,7 @@ export class OrdersService {
       status: OrderStatus.PENDING,
       paymentStatus: PaymentStatus.UNPAID,
       preferredLivreur,
+      run,
       pickupZone: dto.pickupZoneId ? ({ id: dto.pickupZoneId } as any) : null,
       destinationZone: dto.destinationZoneId
         ? ({ id: dto.destinationZoneId } as any)
@@ -779,6 +941,7 @@ export class OrdersService {
     });
 
     const saved = await this.ordersRepository.save(order);
+    await this.syncRunStatus(saved.run?.id);
 
     void this.logStatusChange({
       deliveryId: saved.id,
@@ -948,7 +1111,7 @@ export class OrdersService {
 
     const [items, total] = await this.ordersRepository.findAndCount({
       where,
-      relations: ['client', 'livreur'],
+      relations: ['client', 'livreur', 'merchant', 'run'],
       order: { createdAt: 'DESC' },
       take: limit,
       skip: (page - 1) * limit,
@@ -998,7 +1161,7 @@ export class OrdersService {
           livreur: IsNull(),
           preferredLivreur: { id: u.id },
         },
-        relations: ['client'],
+        relations: ['client', 'merchant', 'run'],
         order: { createdAt: 'DESC' },
       });
     }
@@ -1019,7 +1182,7 @@ export class OrdersService {
           preferredLivreur: { id: u.id },
         },
       ],
-      relations: ['client'],
+      relations: ['client', 'merchant', 'run'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -1029,21 +1192,21 @@ export class OrdersService {
     if (user.role === UserRole.CLIENT) {
       return this.ordersRepository.find({
         where: { client: { id: userId } },
-        relations: ['livreur'],
+        relations: ['livreur', 'merchant', 'run'],
         order: { createdAt: 'DESC' },
       });
     }
     if (user.role === UserRole.LIVREUR) {
       return this.ordersRepository.find({
         where: { livreur: { id: userId } },
-        relations: ['client'],
+        relations: ['client', 'merchant', 'run'],
         order: { createdAt: 'DESC' },
       });
     }
     if (user.role === UserRole.COMMERCANT) {
       return this.ordersRepository.find({
         where: { merchant: { id: userId } },
-        relations: ['client', 'livreur'],
+        relations: ['client', 'livreur', 'run'],
         order: { createdAt: 'DESC' },
       });
     }
@@ -1098,8 +1261,17 @@ export class OrdersService {
         livreur: { id: livreurId },
         status: In([...ACTIVE_DELIVERY_STATUSES]),
       },
+      relations: ['run'],
     });
-    if (activeOrder) {
+    const requestedOrder = await this.ordersRepository.findOne({
+      where: { id: orderId },
+      relations: ['preferredLivreur', 'run', 'run.livreur'],
+    });
+    if (!requestedOrder) throw new NotFoundException('Commande introuvable');
+    if (
+      activeOrder &&
+      (!requestedOrder.run || activeOrder.run?.id !== requestedOrder.run.id)
+    ) {
       throw new ConflictException(
         "Vous avez déjà une course active. Terminez-la avant d'en accepter une autre.",
       );
@@ -1108,11 +1280,7 @@ export class OrdersService {
     // 1) Vérifier l'existence avant l'UPDATE pour distinguer 404 (introuvable)
     //    de 409 (déjà prise par un autre livreur) et 403 (réservée à un
     //    autre livreur — attribution manuelle, Priorité 3 Lot 3 item 1).
-    const existing = await this.ordersRepository.findOne({
-      where: { id: orderId },
-      relations: ['preferredLivreur'],
-    });
-    if (!existing) throw new NotFoundException('Commande introuvable');
+    const existing = requestedOrder;
 
     if (
       existing.preferredLivreur?.id &&
@@ -1128,6 +1296,11 @@ export class OrdersService {
     ) {
       throw new ForbiddenException(
         'Votre profil privé ne peut accepter que les courses qui vous sont réservées',
+      );
+    }
+    if (existing.run?.livreur?.id && existing.run.livreur.id !== livreurId) {
+      throw new ForbiddenException(
+        'Cette tournée est assignée à un autre livreur',
       );
     }
 
@@ -1149,8 +1322,12 @@ export class OrdersService {
             livreur: { id: livreurId },
             status: In([...ACTIVE_DELIVERY_STATUSES]),
           },
+          relations: ['run'],
         });
-        if (concurrentActive) {
+        if (
+          concurrentActive &&
+          (!existing.run || concurrentActive.run?.id !== existing.run.id)
+        ) {
           throw new ConflictException(
             "Vous avez déjà une course active. Terminez-la avant d'en accepter une autre.",
           );
@@ -1195,7 +1372,7 @@ export class OrdersService {
     // 3) Recharger l'order avec ses relations pour le broadcast et la push
     const updated = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['client', 'livreur', 'merchant'],
+      relations: ['client', 'livreur', 'merchant', 'run'],
     });
     if (!updated) {
       // Edge case ultra-improbable (suppression concurrente)
@@ -1229,6 +1406,7 @@ export class OrdersService {
         data: { kind: 'order_accepted', orderId: updated.id },
       });
     }
+    await this.syncRunStatus(updated.run?.id);
     return updated;
   }
 
@@ -1240,7 +1418,7 @@ export class OrdersService {
   ) {
     const order = await this.ordersRepository.findOne({
       where: { id },
-      relations: ['client', 'livreur', 'merchant'],
+      relations: ['client', 'livreur', 'merchant', 'run'],
     });
     if (!order) throw new NotFoundException('Commande introuvable');
 
@@ -1290,6 +1468,7 @@ export class OrdersService {
       }
     }
     const saved = await this.ordersRepository.save(order);
+    await this.syncRunStatus(order.run?.id);
 
     void this.logStatusChange({
       deliveryId: order.id,
@@ -1854,7 +2033,14 @@ export class OrdersService {
   ): Promise<DeliveryOrder> {
     const order = await this.ordersRepository.findOne({
       where: { id: orderId },
-      relations: ['client', 'livreur', 'preferredLivreur', 'merchant'],
+      relations: [
+        'client',
+        'livreur',
+        'preferredLivreur',
+        'merchant',
+        'run',
+        'run.livreur',
+      ],
     });
     if (!order) throw new NotFoundException('Commande introuvable');
 
@@ -1873,7 +2059,16 @@ export class OrdersService {
       );
     }
 
-    const driver = await this.assertValidPreferredLivreur(livreurId);
+    if (order.run?.livreur?.id && order.run.livreur.id !== livreurId) {
+      throw new BadRequestException(
+        'Une commande de tournée doit rester assignée au livreur de la tournée',
+      );
+    }
+
+    const driver = await this.assertValidPreferredLivreur(livreurId, {
+      allowActiveRunId: order.run?.id,
+      excludeOrderId: order.id,
+    });
     order.preferredLivreur = driver;
     const saved = await this.ordersRepository.save(order);
 

@@ -256,6 +256,7 @@ class _DriverScreenState extends State<DriverScreen> {
   /// le dialog, pour que les mises à jour distantes (paiement) soient
   /// visibles au prochain rebuild.
   Map<String, dynamic>? _activeOrderData;
+  List<Map<String, dynamic>> _activeRunOrders = const [];
 
   /// Callback branché par le dialog : reçoit les statuts poussés par le
   /// serveur (`orderStatusUpdated`) — annulation client/admin comprise.
@@ -363,14 +364,14 @@ class _DriverScreenState extends State<DriverScreen> {
       if (res.statusCode != 200 && res.statusCode != 201) return;
       final data = jsonDecode(res.body);
       if (data is! List) return;
-      // /orders/mine est trié createdAt DESC → la première course active
-      // trouvée est la plus récente.
-      final active = data.firstWhere(
-        (o) => o is Map && _activeStatuses.contains(o['status']?.toString()),
-        orElse: () => null,
-      );
-      if (active is! Map || !mounted) return;
-      _showActiveOrderDialog(Map<String, dynamic>.from(active), restored: true);
+      final active = data
+          .whereType<Map>()
+          .where((o) => _activeStatuses.contains(o['status']?.toString()))
+          .map((o) => Map<String, dynamic>.from(o))
+          .toList();
+      if (active.isEmpty || !mounted) return;
+      setState(() => _activeRunOrders = active);
+      _showActiveOrderDialog(active.first, restored: true);
     } catch (_) {
       // Hors-ligne au boot : rien à restaurer pour l'instant.
     }
@@ -947,6 +948,9 @@ class _DriverScreenState extends State<DriverScreen> {
         : Map<String, dynamic>.from(orderData as Map);
     _activeOrderId = orderId;
     _activeOrderData = data;
+    if (!_activeRunOrders.any((order) => order['id']?.toString() == orderId)) {
+      _activeRunOrders = [..._activeRunOrders, data];
+    }
 
     // P2 (GPS strict) : le tracking ne tourne que pendant une course active.
     _startLocationUpdates();
@@ -1486,7 +1490,7 @@ class _DriverScreenState extends State<DriverScreen> {
     return Column(
       children: [
         _buildAvailabilityHeader(),
-        if (_activeOrderData != null) _buildActiveOrderShortcut(),
+        if (_activeRunOrders.isNotEmpty) _buildActiveOrderShortcuts(),
         Expanded(child: _buildRadarBody()),
       ],
     );
@@ -1495,8 +1499,7 @@ class _DriverScreenState extends State<DriverScreen> {
   /// Point d'entrée permanent vers la course après fermeture du dialogue.
   /// Le livreur peut consulter le radar, l'historique ou son profil sans
   /// perdre l'accès à l'itinéraire, au chat et aux actions de course.
-  Widget _buildActiveOrderShortcut() {
-    final order = _activeOrderData!;
+  Widget _buildActiveOrderShortcutFor(Map<String, dynamic> order) {
     final status = order['status']?.toString() ?? 'ACCEPTED';
     final pickup = order['pickupAddress']?.toString() ?? 'Retrait';
     final delivery = order['deliveryAddress']?.toString() ?? 'Livraison';
@@ -1543,6 +1546,10 @@ class _DriverScreenState extends State<DriverScreen> {
       ),
     );
   }
+
+  Widget _buildActiveOrderShortcuts() => Column(
+    children: _activeRunOrders.map(_buildActiveOrderShortcutFor).toList(),
+  );
 
   /// En-tête toujours visible en haut du Radar : bandeau de statut si le
   /// compte n'est pas validé, sinon le switch de disponibilité.

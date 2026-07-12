@@ -62,6 +62,7 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
   /// Livreur choisi manuellement (optionnel). `null` = laisser la
   /// plateforme choisir (broadcast normal à tous les livreurs disponibles).
   AvailableDriver? _selectedDriver;
+  String? _runId;
 
   @override
   void initState() {
@@ -230,6 +231,12 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
 
     setState(() => _saving = true);
     try {
+      final selectedDriver = _selectedDriver;
+      // Une tournée est créée une seule fois pour le livreur choisi. Les
+      // prochains colis peuvent réutiliser `_runId` dans ce formulaire.
+      if (selectedDriver != null && _runId == null) {
+        _runId = await _service.createRun(selectedDriver.id);
+      }
       await _service.createMerchantOrder(
         pickupAddress: pickup.displayName,
         pickupLat: pickup.location.latitude,
@@ -247,14 +254,46 @@ class _CreateDeliveryScreenState extends State<CreateDeliveryScreen> {
         priceReason: _priceReason.text.trim().isEmpty
             ? null
             : _priceReason.text.trim(),
-        preferredLivreurId: _selectedDriver?.id,
+        preferredLivreurId: selectedDriver?.id,
+        runId: _runId,
         pickupZoneId: _pickupZoneId,
         destinationZoneId: _destinationZoneId,
       );
       if (!mounted) return;
       hapticSuccess();
-      showAdaptiveSnack(context, 'Livraison créée avec succès.');
-      Navigator.of(context).pop(true);
+      if (_runId == null) {
+        showAdaptiveSnack(context, 'Livraison créée avec succès.');
+        Navigator.of(context).pop(true);
+        return;
+      }
+      // L'état est vérifié juste après le retour du dialogue ci-dessous.
+      // ignore: use_build_context_synchronously
+      final addAnother = await showAdaptiveConfirmDialog(
+        context,
+        title: 'Colis ajouté à la tournée',
+        message: 'Voulez-vous ajouter un autre colis pour ce même livreur ?',
+        confirmLabel: 'Ajouter un colis',
+        cancelLabel: 'Terminer la tournée',
+      );
+      if (!mounted) return;
+      if (addAnother != true) {
+        Navigator.of(context).pop(true);
+        return;
+      }
+      setState(() {
+        _selectedClient = null;
+        _clientSearch.clear();
+        _clientPhoneLocal.clear();
+        _clientPhoneFull = '';
+        _clientName.clear();
+        _delivery = null;
+        _description.text = '1 colis';
+        _manualPrice.clear();
+        _priceReason.clear();
+        _estimateKm = null;
+        _estimatePrice = null;
+      });
+      showAdaptiveSnack(context, 'Renseignez le prochain client de la tournée.');
     } on MerchantOrderException catch (e) {
       if (mounted) {
         hapticError();

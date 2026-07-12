@@ -21,6 +21,7 @@ import { ListOrdersDto } from './dto/list-orders.dto';
 import { AvailableDriversQueryDto } from './dto/available-drivers-query.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
 import { SearchMerchantClientsQueryDto } from './dto/search-merchant-clients-query.dto';
+import { CreateDeliveryRunDto } from './dto/create-delivery-run.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
@@ -60,6 +61,24 @@ export class OrdersController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.ordersService.createMerchantOrder(user.id ?? user.sub, dto);
+  }
+
+  @Roles(UserRole.COMMERCANT)
+  @Post('runs')
+  createRun(
+    @Body() dto: CreateDeliveryRunDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ordersService.createDeliveryRun(user.id ?? user.sub, dto.livreurId);
+  }
+
+  @Roles(UserRole.COMMERCANT, UserRole.LIVREUR)
+  @Get('runs/mine')
+  findMyRuns(@CurrentUser() user: AuthenticatedUser) {
+    return this.ordersService.findRunsForUser(
+      user.id ?? user.sub,
+      user.role as UserRole,
+    );
   }
 
   @Roles(UserRole.ADMIN, UserRole.LIVREUR)
