@@ -10,6 +10,7 @@ class AppNotification {
   final String type;
   final String title;
   final String body;
+  final Map<String, String> data;
   final DateTime? readAt;
   final DateTime? createdAt;
 
@@ -19,6 +20,7 @@ class AppNotification {
     required this.type,
     required this.title,
     required this.body,
+    this.data = const {},
     this.readAt,
     this.createdAt,
   });
@@ -37,6 +39,16 @@ class AppNotification {
       type: json['type']?.toString() ?? '',
       title: json['title']?.toString() ?? '',
       body: json['body']?.toString() ?? '',
+      data: json['data'] is Map
+          ? Map<String, String>.fromEntries(
+              (json['data'] as Map).entries
+                  .where((entry) => entry.key is String && entry.value != null)
+                  .map(
+                    (entry) =>
+                        MapEntry(entry.key as String, entry.value.toString()),
+                  ),
+            )
+          : const {},
       readAt: parseDate(json['readAt']),
       createdAt: parseDate(json['createdAt']),
     );
@@ -63,9 +75,11 @@ class NotificationsPage {
     final rawItems = json['items'];
     final items = rawItems is List
         ? rawItems
-            .whereType<Map>()
-            .map((m) => AppNotification.fromJson(Map<String, dynamic>.from(m)))
-            .toList()
+              .whereType<Map>()
+              .map(
+                (m) => AppNotification.fromJson(Map<String, dynamic>.from(m)),
+              )
+              .toList()
         : <AppNotification>[];
     return NotificationsPage(
       items: items,
@@ -87,8 +101,8 @@ class NotificationsService {
   final ApiClient _api = ApiClient();
 
   /// Récupère une page de notifications de l'utilisateur courant.
-  Future<NotificationsPage> list({int page = 1}) async {
-    final res = await _api.get('/notifications?page=$page');
+  Future<NotificationsPage> list({int page = 1, int limit = 20}) async {
+    final res = await _api.get('/notifications?page=$page&limit=$limit');
     if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception(_extractError(res));
     }
@@ -97,6 +111,17 @@ class NotificationsService {
       throw Exception('Réponse inattendue du serveur.');
     }
     return NotificationsPage.fromJson(data);
+  }
+
+  Future<List<AppNotification>> listAll() async {
+    final all = <AppNotification>[];
+    var page = 1;
+    while (true) {
+      final result = await list(page: page, limit: 100);
+      all.addAll(result.items);
+      if (!result.hasMore) return all;
+      page++;
+    }
   }
 
   /// Marque une notification comme lue.

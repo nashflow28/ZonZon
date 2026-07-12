@@ -875,7 +875,8 @@ class _DriverScreenState extends State<DriverScreen> {
   /// course est `ACCEPTED` ou `IN_PROGRESS`.
   Future<void> _openWhatsappToClient(dynamic orderData) async {
     final client = orderData['client'] as Map<String, dynamic>?;
-    final phone = client?['phone']?.toString();
+    final phone =
+        client?['phone']?.toString() ?? orderData['clientPhone']?.toString();
     if (phone == null || phone.trim().isEmpty) {
       if (mounted) {
         showAdaptiveSnack(
@@ -1123,32 +1124,42 @@ class _DriverScreenState extends State<DriverScreen> {
                     child: ElevatedButton.icon(
                       onPressed: dialogProcessing
                           ? null
-                          : () => pushAdaptive<void>(
-                              dlgCtx,
-                              DriverNavigationScreen(
-                                status: dialogStatus,
-                                pickupAddress:
-                                    orderData['pickupAddress']?.toString() ??
-                                    '',
-                                deliveryAddress:
-                                    orderData['deliveryAddress']?.toString() ??
-                                    '',
-                                pickupLat: (orderData['pickupLat'] as num?)
-                                    ?.toDouble(),
-                                pickupLng: (orderData['pickupLng'] as num?)
-                                    ?.toDouble(),
-                                deliveryLat: (orderData['deliveryLat'] as num?)
-                                    ?.toDouble(),
-                                deliveryLng: (orderData['deliveryLng'] as num?)
-                                    ?.toDouble(),
-                                driverPosition: _lastKnownPosition == null
-                                    ? null
-                                    : LatLng(
-                                        _lastKnownPosition!.latitude,
-                                        _lastKnownPosition!.longitude,
-                                      ),
-                              ),
-                            ),
+                          : () {
+                              if (_lastKnownPosition == null) {
+                                showAdaptiveSnack(
+                                  context,
+                                  'Position GPS en cours de récupération. Réessayez dans un instant.',
+                                );
+                                return;
+                              }
+                              pushAdaptive<void>(
+                                dlgCtx,
+                                DriverNavigationScreen(
+                                  status: dialogStatus,
+                                  pickupAddress:
+                                      orderData['pickupAddress']?.toString() ??
+                                      '',
+                                  deliveryAddress:
+                                      orderData['deliveryAddress']
+                                          ?.toString() ??
+                                      '',
+                                  pickupLat: (orderData['pickupLat'] as num?)
+                                      ?.toDouble(),
+                                  pickupLng: (orderData['pickupLng'] as num?)
+                                      ?.toDouble(),
+                                  deliveryLat:
+                                      (orderData['deliveryLat'] as num?)
+                                          ?.toDouble(),
+                                  deliveryLng:
+                                      (orderData['deliveryLng'] as num?)
+                                          ?.toDouble(),
+                                  driverPosition: LatLng(
+                                    _lastKnownPosition!.latitude,
+                                    _lastKnownPosition!.longitude,
+                                  ),
+                                ),
+                              );
+                            },
                       icon: const Icon(Icons.map_outlined, color: Colors.white),
                       label: const Text(
                         'Ouvrir la carte de navigation',
@@ -1172,7 +1183,9 @@ class _DriverScreenState extends State<DriverScreen> {
                                 otherPartyName: clientName.isEmpty
                                     ? 'Client'
                                     : clientName,
-                                otherPartyPhone: client?['phone']?.toString(),
+                                otherPartyPhone:
+                                    client?['phone']?.toString() ??
+                                    orderData['clientPhone']?.toString(),
                                 otherPartyRole: 'CLIENT',
                                 orderStatus: dialogStatus,
                               ),

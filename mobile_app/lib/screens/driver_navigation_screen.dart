@@ -85,6 +85,14 @@ class _DriverNavigationScreenState extends State<DriverNavigationScreen> {
     });
   }
 
+  @override
+  void didUpdateWidget(covariant DriverNavigationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.driverPosition == null && widget.driverPosition != null) {
+      _loadRoadRoute();
+    }
+  }
+
   Future<void> _loadRoadRoute() async {
     final start = widget.driverPosition;
     final target = _headingToDelivery ? _delivery?.location : _pickup?.location;

@@ -334,6 +334,13 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 - **Vérifs** : `ng build` (prod) **OK** — initial 262 kB (budget 500k/1M, 0 warning), service worker généré. Vérifié indépendamment. Aucun autre dossier touché.
 - **Reste (rounds suivants)** : R2 client (accueil/carte, suivi temps réel + frise statut, chat, historique, profil) → R3 livreur → R4 commerçant → R5 finition PWA (install home-screen, offline shell, web push iOS 16.4+). Limites connues à traiter explicitement : Socket.IO et **web push iOS** (uniquement iOS ≥ 16.4 et app ajoutée à l'écran d'accueil).
 
+### Session 59 (2026-07-12) — Correctifs complets de l'audit mobile
+
+- Les notifications persistées conservent désormais leur contexte FCM dans `notifications.data` (migration `1780200000000`). Les taps `direct_message` ouvrent la messagerie du rôle concerné; les anciens enregistrements restent compatibles.
+- Le fil direct ne propose plus que les courses impliquant réellement le contact et affiche les erreurs serveur. Les réponses rapides du client visent maintenant le livreur.
+- Les actions livreur utilisent `clientPhone` quand une livraison commerçant n'a pas de compte client; l'ouverture de navigation attend un premier fix GPS. Le centre de notifications et les badges parcourent toutes les pages (lots de 100).
+- Vérifications: backend `npm run build` + Jest **365/365**; mobile `flutter analyze` sans issue + `flutter test` **29/29**.
+
 ### Session 58 (2026-07-12) — Audit des flux mobiles et accès messagerie client
 
 - **Correction confirmée** : le backend autorisait déjà le rôle `CLIENT` dans `DirectMessagesService`, mais le shell mobile ne proposait que quatre onglets et aucun accès à `MessagingHubScreen`. Une branche `StatefulShellRoute` et un cinquième onglet `Messages` ont été ajoutés entre `Commandes` et `Boutiques`.

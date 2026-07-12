@@ -37,6 +37,10 @@ export class Notification {
   @Column({ type: 'varchar', length: 500 })
   body: string;
 
+  /** Contexte FCM conservé pour router correctement depuis le centre in-app. */
+  @Column({ type: 'json', nullable: true })
+  data: Record<string, string> | null;
+
   @Column({ type: 'datetime', nullable: true })
   readAt: Date | null;
 

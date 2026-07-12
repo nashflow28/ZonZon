@@ -51,6 +51,7 @@ class AppRoutes {
   static const String history = '/history';
   static const String driverProfile = '/driver/profile';
   static const String notifications = '/notifications';
+  static const String messages = '/messages';
 
   // Merchant sub-screens (Priorité 2 — livraisons pour un client)
   static const String merchantCreateDelivery = '/home/merchant/create-delivery';
@@ -269,6 +270,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: AppRoutes.notifications,
       builder: (context, state) => const NotificationsScreen(),
+    ),
+    GoRoute(
+      path: AppRoutes.messages,
+      builder: (context, state) => const MessagingHubScreen(),
     ),
   ],
 

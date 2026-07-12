@@ -80,6 +80,7 @@ describe('NotificationsService', () => {
           type: 'NEW_ORDER',
           title: 'Nouvelle course',
           body: 'Une course vous attend',
+          data: { kind: 'NEW_ORDER', orderId: 'order-1' },
           readAt: null,
         }),
       );

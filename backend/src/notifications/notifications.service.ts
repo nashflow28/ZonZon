@@ -57,6 +57,7 @@ export class NotificationsService {
           type: payload.data?.kind ?? 'generic',
           title: payload.title,
           body: payload.body,
+          data: payload.data ?? null,
           readAt: null,
         }),
       );

@@ -155,10 +155,12 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   /// l'icône cloche. Non bloquant : échec silencieux (badge à 0).
   Future<void> _loadUnreadNotificationsCount() async {
     try {
-      final page = await _notificationsService.list();
+      final notifications = await _notificationsService.listAll();
       if (!mounted) return;
       setState(() {
-        _unreadNotificationsCount = page.items.where((n) => n.isUnread).length;
+        _unreadNotificationsCount = notifications
+            .where((n) => n.isUnread)
+            .length;
       });
     } catch (_) {}
   }

@@ -32,10 +32,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _load() async {
     try {
-      final page = await _service.list();
+      final items = await _service.listAll();
       if (!mounted) return;
       setState(() {
-        _items = page.items;
+        _items = items;
         _initialLoading = false;
         _hasError = false;
         _errorMessage = null;
@@ -63,6 +63,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       type: it.type,
                       title: it.title,
                       body: it.body,
+                      data: it.data,
                       readAt: DateTime.now(),
                       createdAt: it.createdAt,
                     )
@@ -77,6 +78,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     }
     await NotificationNavigationService.openFromPayload({
+      ...n.data,
       if ((n.deliveryId ?? '').isNotEmpty) 'deliveryId': n.deliveryId!,
       if (n.type.isNotEmpty) 'kind': n.type,
     });
@@ -98,6 +100,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 type: it.type,
                 title: it.title,
                 body: it.body,
+                data: it.data,
                 readAt: it.readAt ?? now,
                 createdAt: it.createdAt,
               ),

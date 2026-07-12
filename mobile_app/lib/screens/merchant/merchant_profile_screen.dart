@@ -71,10 +71,12 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
 
   Future<void> _loadUnreadNotificationsCount() async {
     try {
-      final page = await _notificationsService.list();
+      final notifications = await _notificationsService.listAll();
       if (!mounted) return;
       setState(() {
-        _unreadNotificationsCount = page.items.where((n) => n.isUnread).length;
+        _unreadNotificationsCount = notifications
+            .where((n) => n.isUnread)
+            .length;
       });
     } catch (_) {}
   }

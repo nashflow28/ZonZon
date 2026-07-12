@@ -13,6 +13,15 @@ class NotificationNavigationService {
         ? orderId
         : ((deliveryId != null && deliveryId.isNotEmpty) ? deliveryId : null);
 
+    if (data['kind'] == 'direct_message') {
+      if (role == 'CLIENT') {
+        appRouter.go(AppRoutes.clientMessages);
+      } else {
+        appRouter.go(AppRoutes.messages);
+      }
+      return;
+    }
+
     switch (role) {
       case 'CLIENT':
         if (targetId != null) {

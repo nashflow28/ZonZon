@@ -151,7 +151,7 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
               ChatScreen(
                 orderId: o.id,
                 otherPartyName: 'Course #${o.id.substring(0, 6)}',
-                otherPartyRole: _role == 'COMMERCANT' ? 'LIVREUR' : 'CLIENT',
+                otherPartyRole: _role == 'LIVREUR' ? 'CLIENT' : 'LIVREUR',
                 orderStatus: o.status,
               ),
             ),
@@ -244,10 +244,20 @@ class _DirectThreadState extends State<_DirectThread> {
   Future<void> _send() async {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
-    await _service.send(widget.contact.id, text, orderId: _linkedOrderId);
-    _ctrl.clear();
-    setState(() => _linkedOrderId = null);
-    await _load();
+    try {
+      await _service.send(widget.contact.id, text, orderId: _linkedOrderId);
+      _ctrl.clear();
+      setState(() => _linkedOrderId = null);
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        showAdaptiveSnack(
+          context,
+          e.toString().replaceFirst('Exception: ', ''),
+          isError: true,
+        );
+      }
+    }
   }
 
   Future<void> _pickOrderContext() async {
@@ -266,7 +276,7 @@ class _DirectThreadState extends State<_DirectThread> {
               ),
               onTap: () => Navigator.pop(ctx),
             ),
-            ...widget.orders.map(
+            ..._sharedOrders().map(
               (order) => ListTile(
                 leading: const Icon(
                   Icons.local_shipping_outlined,
@@ -291,6 +301,17 @@ class _DirectThreadState extends State<_DirectThread> {
     );
     if (mounted) setState(() => _linkedOrderId = selected);
   }
+
+  List<OrderHistoryItem> _sharedOrders() => widget.orders.where((order) {
+    final partyIds = <String>{
+      order.client?['id']?.toString() ?? '',
+      order.livreur?['id']?.toString() ?? '',
+      order.raw['merchant'] is Map
+          ? (order.raw['merchant'] as Map)['id']?.toString() ?? ''
+          : '',
+    };
+    return partyIds.contains(widget.contact.id);
+  }).toList();
 
   @override
   Widget build(BuildContext context) => Scaffold(
