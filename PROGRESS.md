@@ -260,6 +260,11 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 60 (2026-07-12) — Rouvrir une course active côté livreur
+
+- Le dialogue de course pouvait être fermé par le retour Android alors que `_activeOrderData` restait en mémoire, sans aucun accès UI pour le rouvrir. Le radar affiche maintenant une carte persistante « Course en cours » qui restaure le même panneau avec itinéraire, discussion et actions de statut.
+- Vérification: `flutter analyze` sans issue. Aucun APK généré à la demande du PO.
+
 ### Session 62 (2026-07-12) — PWA iOS (Angular) — Round 5 : finition PWA + polish HIG (dernier round)
 
 - **Installation « Ajouter à l'écran d'accueil »** : `PwaInstallService` (`pwa/src/app/shared/services/pwa-install.service.ts`) détecte iOS+Safari (regex UA excluant CriOS/FxiOS/EdgiOS/OPiOS — ces navigateurs iOS tiers n'ont pas le même flux Partager) et mode standalone (`navigator.standalone` + `matchMedia('(display-mode: standalone)')`) ; expose `showIosGuide` (dismiss mémorisé en `localStorage`) et capture `beforeinstallprompt`/`appinstalled` pour un vrai bouton Android (bonus). `InstallGuideComponent` (guide 3 étapes iOS + bouton Android) monté dans les 3 shells (`shells/*/*.component.html`, entre le header et le contenu — flux normal, pas de position fixe, pour ne jamais perturber le `height:100dvh` des shells).

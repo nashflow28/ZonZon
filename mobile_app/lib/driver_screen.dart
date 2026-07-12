@@ -1486,8 +1486,61 @@ class _DriverScreenState extends State<DriverScreen> {
     return Column(
       children: [
         _buildAvailabilityHeader(),
+        if (_activeOrderData != null) _buildActiveOrderShortcut(),
         Expanded(child: _buildRadarBody()),
       ],
+    );
+  }
+
+  /// Point d'entrée permanent vers la course après fermeture du dialogue.
+  /// Le livreur peut consulter le radar, l'historique ou son profil sans
+  /// perdre l'accès à l'itinéraire, au chat et aux actions de course.
+  Widget _buildActiveOrderShortcut() {
+    final order = _activeOrderData!;
+    final status = order['status']?.toString() ?? 'ACCEPTED';
+    final pickup = order['pickupAddress']?.toString() ?? 'Retrait';
+    final delivery = order['deliveryAddress']?.toString() ?? 'Livraison';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Material(
+        color: const Color(0xFF0FB271).withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _showActiveOrderDialog(order, restored: true),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                const Icon(Icons.navigation, color: Color(0xFF0FB271)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Course en cours - ${OrderStatusUtils.label(status)}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '$pickup -> $delivery',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right, color: Colors.white),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
