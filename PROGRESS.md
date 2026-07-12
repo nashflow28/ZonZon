@@ -267,6 +267,12 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 - **Vérifs** : `ng build` (prod) **OK** — initial 262 kB (budget 500k/1M, 0 warning), service worker généré. Vérifié indépendamment. Aucun autre dossier touché.
 - **Reste (rounds suivants)** : R2 client (accueil/carte, suivi temps réel + frise statut, chat, historique, profil) → R3 livreur → R4 commerçant → R5 finition PWA (install home-screen, offline shell, web push iOS 16.4+). Limites connues à traiter explicitement : Socket.IO et **web push iOS** (uniquement iOS ≥ 16.4 et app ajoutée à l'écran d'accueil).
 
+### Session 58 (2026-07-12) — Audit des flux mobiles et accès messagerie client
+
+- **Correction confirmée** : le backend autorisait déjà le rôle `CLIENT` dans `DirectMessagesService`, mais le shell mobile ne proposait que quatre onglets et aucun accès à `MessagingHubScreen`. Une branche `StatefulShellRoute` et un cinquième onglet `Messages` ont été ajoutés entre `Commandes` et `Boutiques`.
+- **Revue indépendante** : aucun P0. P1 à traiter: notification de message général sans deep-link vers le fil, sélection possible d'une course non partagée avec le contact dans un message général, et absence de fallback `clientPhone` pour un livreur sur les courses commerçant créées sans compte client. P2: navigation ouverte avant premier fix GPS, pagination/compteur des notifications limités à 20, et réponses rapides incorrectes pour un client depuis `Messages > Courses`.
+- **Vérifications du correctif d'accès** : `flutter analyze` : **No issues found**; `flutter test` : **29/29**. Les autres findings restent volontairement séparés et documentés dans `TODO.md` pour une correction atomique sans masquer les risques.
+
 ### Session 57 (2026-07-12) — Synchronisation temps réel messages et statuts
 
 - **Cause** : le backend diffusait déjà `direct:message` et `orderStatusUpdated`, mais l'application n'exposait pas le premier dans son contrôleur partagé. Les écrans ne rattrapaient pas non plus les changements intervenus pendant une coupure/reconnexion Socket.IO.

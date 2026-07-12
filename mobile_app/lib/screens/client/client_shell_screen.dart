@@ -8,7 +8,7 @@ import '../../services/active_orders_store.dart';
 import '../../services/client_services.dart';
 import '../../utils/platform_adapter.dart';
 
-/// Coquille du client avec bottom-nav 4 onglets.
+/// Coquille du client avec bottom-nav 5 onglets.
 ///
 /// Hôte du [StatefulNavigationShell] de go_router : préserve l'état de
 /// chaque onglet (carte, formulaire, scroll de liste, etc.) et bascule
@@ -116,6 +116,10 @@ class _ClientBottomNav extends StatelessWidget {
             label: 'Commandes',
           ),
           const BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.chat_bubble_2),
+            label: 'Messages',
+          ),
+          const BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.bag),
             label: 'Boutiques',
           ),
@@ -149,6 +153,11 @@ class _ClientBottomNav extends StatelessWidget {
             isActive: true,
           ),
           label: 'Commandes',
+        ),
+        const NavigationDestination(
+          icon: Icon(Icons.chat_bubble_outline),
+          selectedIcon: Icon(Icons.chat_bubble),
+          label: 'Messages',
         ),
         const NavigationDestination(
           icon: Icon(Icons.storefront_outlined),

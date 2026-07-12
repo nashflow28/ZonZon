@@ -15,6 +15,7 @@ import '../screens/merchant/merchant_drivers_screen.dart';
 import '../screens/merchant/merchant_orders_screen.dart';
 import '../screens/merchant/merchant_profile_screen.dart';
 import '../screens/merchant_home_screen.dart';
+import '../screens/messaging_hub_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/order_history_screen.dart';
 import '../screens/order_tracking_screen.dart';
@@ -40,6 +41,7 @@ class AppRoutes {
   // Client shell branches
   static const String clientHome = '/home/client/home';
   static const String clientOrders = '/home/client/orders';
+  static const String clientMessages = '/home/client/messages';
   static const String clientShops = '/home/client/shops';
   static const String clientProfile = '/home/client/profile';
 
@@ -89,6 +91,8 @@ final GlobalKey<NavigatorState> _clientOrdersNavKey = GlobalKey<NavigatorState>(
 final GlobalKey<NavigatorState> _clientShopsNavKey = GlobalKey<NavigatorState>(
   debugLabel: 'clientShops',
 );
+final GlobalKey<NavigatorState> _clientMessagesNavKey =
+    GlobalKey<NavigatorState>(debugLabel: 'clientMessages');
 final GlobalKey<NavigatorState> _clientProfileNavKey =
     GlobalKey<NavigatorState>(debugLabel: 'clientProfile');
 
@@ -126,7 +130,7 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // -----------------------------------------------------------------------
-    // CLIENT shell — bottom-nav 4 onglets (StatefulShellRoute).
+    // CLIENT shell — bottom-nav 5 onglets (StatefulShellRoute).
     // -----------------------------------------------------------------------
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {
@@ -157,6 +161,15 @@ final GoRouter appRouter = GoRouter(
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _clientMessagesNavKey,
+          routes: [
+            GoRoute(
+              path: AppRoutes.clientMessages,
+              builder: (context, state) => const MessagingHubScreen(),
             ),
           ],
         ),
