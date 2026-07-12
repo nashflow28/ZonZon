@@ -1,0 +1,101 @@
+import { HttpClient } from '@angular/common/http';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { Observable, tap } from 'rxjs';
+import { environment } from '../../environments/environment';
+import { LoginPayload, LoginResponse, RegisterPayload, Role, User } from './models/user.model';
+
+const TOKEN_KEY = 'zonzon_token';
+const USER_KEY = 'zonzon_user';
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private http = inject(HttpClient);
+  private router = inject(Router);
+
+  /** Signal réactif pour suivre l'utilisateur courant (layout, guards, shells). */
+  readonly currentUser = signal<User | null>(this.readUserFromStorage());
+
+  /** Rôle courant, dérivé de l'utilisateur courant. */
+  readonly role = computed<Role | null>(() => this.currentUser()?.role ?? null);
+
+  login(phone: string, password: string): Observable<LoginResponse> {
+    const payload: LoginPayload = { phone, password };
+    return this.http
+      .post<LoginResponse>(`${environment.apiUrl}${environment.apiPrefix}/auth/login`, payload)
+      .pipe(tap((res) => this.persistSession(res)));
+  }
+
+  register(payload: RegisterPayload): Observable<LoginResponse> {
+    return this.http
+      .post<LoginResponse>(`${environment.apiUrl}${environment.apiPrefix}/auth/register`, payload)
+      .pipe(tap((res) => this.persistSession(res)));
+  }
+
+  /** Récupère l'utilisateur courant depuis l'API (utile après reload / refresh du profil). */
+  fetchMe(): Observable<User> {
+    return this.http.get<User>(`${environment.apiUrl}${environment.apiPrefix}/users/me`).pipe(
+      tap((user) => {
+        localStorage.setItem(USER_KEY, JSON.stringify(user));
+        this.currentUser.set(user);
+      })
+    );
+  }
+
+  logout(): void {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    this.currentUser.set(null);
+    this.router.navigate(['/login']);
+  }
+
+  /** Purge silencieuse de la session (appelée par l'intercepteur sur 401), sans navigation forcée en double. */
+  clearSession(): void {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    this.currentUser.set(null);
+  }
+
+  getToken(): string | null {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+
+  getCurrentUser(): User | null {
+    return this.currentUser() ?? this.readUserFromStorage();
+  }
+
+  isAuthenticated(): boolean {
+    return !!this.getToken() && !!this.getCurrentUser();
+  }
+
+  /** Chemin du shell correspondant au rôle courant (utilisé pour les redirections). */
+  homePathForRole(role: Role | null | undefined): string {
+    switch (role) {
+      case 'CLIENT':
+        return '/client';
+      case 'LIVREUR':
+        return '/driver';
+      case 'COMMERCANT':
+        return '/merchant';
+      default:
+        // ADMIN (ou inconnu) : la PWA ne gère pas le back-office, retour au login.
+        return '/login';
+    }
+  }
+
+  private persistSession(res: LoginResponse): void {
+    localStorage.setItem(TOKEN_KEY, res.access_token);
+    localStorage.setItem(USER_KEY, JSON.stringify(res.user));
+    this.currentUser.set(res.user);
+  }
+
+  private readUserFromStorage(): User | null {
+    const raw = localStorage.getItem(USER_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as User;
+    } catch {
+      return null;
+    }
+  }
+}

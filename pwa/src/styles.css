@@ -1,0 +1,140 @@
+/* ============================================================
+   ZonZon PWA — styles globaux
+   Design tokens partagés avec admin-dashboard et mobile_app.
+   Thème unique : sombre (produit nocturne, pas de thème clair pour l'instant).
+   ============================================================ */
+
+:root {
+  --zz-bg: #0C1A22;
+  --zz-card: #122530;
+  --zz-line: #24404C;
+  --zz-go: #0FB271;
+  --zz-mango: #FF9E1B;
+  --zz-sky: #2E90FA;
+  --zz-coral: #F0453D;
+  --zz-text-hi: #EAF2F0;
+  --zz-text-mut: #8FA6AE;
+
+  /* Safe areas iOS (actives grâce à viewport-fit=cover dans index.html) */
+  --zz-safe-top: env(safe-area-inset-top, 0px);
+  --zz-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --zz-safe-left: env(safe-area-inset-left, 0px);
+  --zz-safe-right: env(safe-area-inset-right, 0px);
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  /* Supprime le halo bleu au tap sur iOS/Android */
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--zz-bg);
+  color: var(--zz-text-hi);
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui,
+    sans-serif;
+  -webkit-touch-callout: none;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* Comportement iOS pour tout élément scrollable (contenu sous la tab bar, listes...) */
+.zz-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* Supprime le délai de 300ms sur les éléments interactifs */
+a,
+button,
+input,
+select,
+textarea,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+button {
+  font-family: inherit;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* ------------------------------------------------------------
+   Helpers safe-area — à utiliser sur header / tab bar / conteneurs
+   plein écran pour respecter l'encoche et le home indicator.
+   ------------------------------------------------------------ */
+.zz-safe-top {
+  padding-top: var(--zz-safe-top);
+}
+
+.zz-safe-bottom {
+  padding-bottom: var(--zz-safe-bottom);
+}
+
+.zz-safe-x {
+  padding-left: var(--zz-safe-left);
+  padding-right: var(--zz-safe-right);
+}
+
+/* ------------------------------------------------------------
+   Pills de statut — mêmes variantes que admin-dashboard/status-colors.ts
+   (go = terminé/livré, mango = en cours, sky = info/retrait,
+    coral = annulé/échoué, mut = en attente/neutre)
+   ------------------------------------------------------------ */
+.zz-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.zz-pill--go {
+  background: color-mix(in srgb, var(--zz-go) 16%, transparent);
+  border-color: color-mix(in srgb, var(--zz-go) 40%, transparent);
+  color: var(--zz-go);
+}
+
+.zz-pill--mango {
+  background: color-mix(in srgb, var(--zz-mango) 16%, transparent);
+  border-color: color-mix(in srgb, var(--zz-mango) 40%, transparent);
+  color: var(--zz-mango);
+}
+
+.zz-pill--sky {
+  background: color-mix(in srgb, var(--zz-sky) 16%, transparent);
+  border-color: color-mix(in srgb, var(--zz-sky) 40%, transparent);
+  color: var(--zz-sky);
+}
+
+.zz-pill--coral {
+  background: color-mix(in srgb, var(--zz-coral) 16%, transparent);
+  border-color: color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  color: var(--zz-coral);
+}
+
+.zz-pill--mut {
+  background: color-mix(in srgb, var(--zz-text-mut) 16%, transparent);
+  border-color: color-mix(in srgb, var(--zz-text-mut) 40%, transparent);
+  color: var(--zz-text-mut);
+}

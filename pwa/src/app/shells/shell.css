@@ -1,0 +1,28 @@
+/* Structure commune aux 3 shells de rôle (client / driver / merchant). */
+
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  background: var(--zz-bg);
+  overflow: hidden;
+}
+
+.shell-header {
+  flex: 0 0 auto;
+  padding: 8px 20px 12px;
+  background: var(--zz-bg);
+}
+
+.shell-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--zz-text-hi);
+  letter-spacing: -0.02em;
+}
+
+.shell-content {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}

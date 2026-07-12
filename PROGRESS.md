@@ -258,6 +258,15 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 58 (2026-07-12) — PWA iOS (Angular) — Round 1 : fondations HIG
+- Décision : PWA iOS en **Angular 21** (cohérence avec l'admin, tokens/services réutilisés), **3 rôles** visés (parité Flutter). Nouveau dossier `pwa/` (sibling de `admin-dashboard/` et `mobile_app/`). Le backend de prod (`https://zonzon-backend.fly.dev/v1`) est consommé tel quel.
+- **Scaffold** : `ng new pwa` (Angular 21, standalone, sans SSR) + `ng add @angular/pwa` (service worker + manifest). Versions alignées sur l'admin.
+- **Chrome iOS conforme HIG** : `index.html` avec `viewport-fit=cover`, `apple-mobile-web-app-capable`, `status-bar-style=black-translucent`, `apple-touch-icon`, `theme-color #0C1A22` ; `manifest.webmanifest` (standalone, portrait, icônes 72→512 + maskable) ; `styles.css` avec tokens `--zz-*` partagés (thème sombre permanent), police système `-apple-system`, `-webkit-tap-highlight-color:transparent`, `touch-action:manipulation` (no-tap-delay), helpers safe-area (`env(safe-area-inset-*)`) appliqués au header et à la tab bar, pills `.zz-pill--go/mango/sky/coral/mut`.
+- **App shell** : header large-title + `router-outlet` scrollable + **tab bar iOS** en bas (respectant `safe-area-inset-bottom`). 3 shells de rôle avec onglets prévus (contenu = placeholder « Bientôt ») : Client (Accueil/Commandes/Boutiques/Profil), Livreur (Radar/Mes courses/Profil), Commerçant (Livraisons/Créer/Livreurs/Profil).
+- **Auth + plomberie** : `AuthService` (login/register/logout, JWT localStorage, signal `currentUser`, `role()`, `homePathForRole()`) ; **intercepteur HTTP** (Bearer + `timeout(20000)` + purge session & redirection `/login` sur 401 — corrige proactivement 2 findings d'audit : JWT expiré non purgé + appels sans timeout) ; guards `authGuard`/`roleGuard`/`smartRedirectGuard` ; routage lazy par rôle. Écrans **Login** et **Register** (sélecteur de rôle en segmented control iOS + véhicule si Livreur), stylés HIG.
+- **Vérifs** : `ng build` (prod) **OK** — initial 262 kB (budget 500k/1M, 0 warning), service worker généré. Vérifié indépendamment. Aucun autre dossier touché.
+- **Reste (rounds suivants)** : R2 client (accueil/carte, suivi temps réel + frise statut, chat, historique, profil) → R3 livreur → R4 commerçant → R5 finition PWA (install home-screen, offline shell, web push iOS 16.4+). Limites connues à traiter explicitement : Socket.IO et **web push iOS** (uniquement iOS ≥ 16.4 et app ajoutée à l'écran d'accueil).
+
 ### Session 57 (2026-07-12) — Synchronisation temps réel messages et statuts
 
 - **Cause** : le backend diffusait déjà `direct:message` et `orderStatusUpdated`, mais l'application n'exposait pas le premier dans son contrôleur partagé. Les écrans ne rattrapaient pas non plus les changements intervenus pendant une coupure/reconnexion Socket.IO.

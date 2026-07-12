@@ -455,3 +455,11 @@ Pour l'historique complet, voir la section "Historique des sessions" dans [PROGR
 - [x] Fix double-clic annulation livreur (StatefulBuilder)
 - [x] Fix MIME multipart upload photo produit
 - [x] Modération boutiques côté admin (PENDING/APPROVED/REJECTED/SUSPENDED)
+
+### 🍏 PWA iOS (Angular) — après V1 Android
+> Nouveau dossier `pwa/`. Backend prod consommé tel quel. 3 rôles visés (parité Flutter). Détail: PROGRESS.md Session 58.
+- [x] **Round 1 — Fondations HIG** *(2026-07-12)* : scaffold Angular 21 PWA (SW+manifest), chrome iOS (safe areas, tab bar, grands titres, police système, no-tap-delay), auth JWT + intercepteur 401/timeout, guards+routage par rôle, écrans Login/Register. `ng build` OK.
+- [ ] **Round 2 — Client** : accueil (créer course + carte), suivi temps réel (Socket.IO + frise statut), chat, historique, profil.
+- [ ] **Round 3 — Livreur** : radar, validation/dispo, course active + statuts étendus, GPS, historique/gains, profil.
+- [ ] **Round 4 — Commerçant** : créer livraison, mes livraisons + suivi, livreurs affiliés, profil.
+- [ ] **Round 5 — Finition PWA** : install home-screen, offline shell, web push (iOS ≥ 16.4, app installée), polish HIG.
