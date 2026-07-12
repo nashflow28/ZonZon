@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../config/env.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
@@ -30,9 +32,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _obscure = true;
 
-  /// Photo de profil, OBLIGATOIRE pour le rôle LIVREUR (CDC §2 : le coursier
-  /// s'enregistre avec nom, prénoms, téléphone, type d'engin ET photo de
-  /// profil). Optionnelle pour les autres rôles (non demandée dans l'UI).
   final ImagePicker _picker = ImagePicker();
   XFile? _profilePhoto;
 
@@ -55,8 +54,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _profilePhoto = picked);
   }
 
-  /// Envoie la photo de profil sur `POST /users/me/photo` avec le token
-  /// émis par l'inscription, avant de publier la session localement.
   Future<bool> _uploadProfilePhoto(XFile photo, String accessToken) async {
     try {
       MediaType mimeFromPath(String p) {
@@ -97,8 +94,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       showAdaptiveSnack(context, 'Veuillez remplir tous les champs.');
       return;
     }
-    // CDC §2 : la photo de profil fait partie des prérequis d'inscription
-    // du coursier (avec nom, prénoms, téléphone et type d'engin).
     if (_role == 'LIVREUR' && _profilePhoto == null) {
       showAdaptiveSnack(
         context,
@@ -120,8 +115,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         persistSession: false,
       );
 
-      // Tant que la photo n'est pas réellement envoyée, on ne publie PAS la
-      // session locale. Cela évite toute sortie prématurée du flux d'inscription.
       if (_profilePhoto != null) {
         var uploaded = await _uploadProfilePhoto(
           _profilePhoto!,
@@ -181,10 +174,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       await AuthService().persistSession(result);
       if (!mounted) return;
-      // Redirect to the role-appropriate home, clearing the back-stack.
-      final user = result.user;
-      if (!mounted) return;
-      context.go(AppRoutes.homeForRole(user.role));
+      context.go(AppRoutes.homeForRole(result.user.role));
     } catch (e) {
       if (!mounted) return;
       showAdaptiveSnack(context, 'Inscription échouée : $e', isError: true);
@@ -206,222 +196,258 @@ class _RegisterScreenState extends State<RegisterScreen> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
       ),
-      body: Stack(
-        children: [
-          Positioned(
-            bottom: -120,
-            left: -80,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF0FB271).withValues(alpha: 0.3),
-                    Colors.transparent,
-                  ],
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Stack(
+          children: [
+            Positioned(
+              bottom: -120,
+              left: -80,
+              child: Container(
+                width: 320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF0FB271).withValues(alpha: 0.3),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF122530).withValues(alpha: 0.7),
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildInput(
-                          controller: _firstNameController,
-                          icon: Icons.person_outline,
-                          hint: 'Prénom',
-                        ),
-                        const SizedBox(height: 12),
-                        _buildInput(
-                          controller: _lastNameController,
-                          icon: Icons.person,
-                          hint: 'Nom',
-                        ),
-                        const SizedBox(height: 12),
-                        PhoneField(
-                          controller: _phoneController,
-                          onFullNumberChanged: (full) => _fullPhone = full,
-                        ),
-                        const SizedBox(height: 12),
-                        _buildInput(
-                          controller: _passwordController,
-                          icon: Icons.lock_outline,
-                          hint: 'Mot de passe',
-                          obscure: _obscure,
-                          suffix: IconButton(
-                            icon: Icon(
-                              _obscure
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: Colors.white60,
-                            ),
-                            onPressed: () =>
-                                setState(() => _obscure = !_obscure),
+            SafeArea(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.all(20),
+                child: adaptiveConstrainedContent(
+                  maxWidth: 560,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF122530).withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
                           ),
                         ),
-                        const SizedBox(height: 20),
-                        const Text(
-                          'Je suis :',
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildRoleOption(
-                                'CLIENT',
-                                'Client',
-                                Icons.person,
+                        child: AutofillGroup(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildInput(
+                                controller: _firstNameController,
+                                icon: Icons.person_outline,
+                                hint: 'Prénom',
+                                keyboardType: TextInputType.name,
+                                textCapitalization: TextCapitalization.words,
+                                autofillHints: const [AutofillHints.givenName],
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _buildRoleOption(
-                                'LIVREUR',
-                                'Livreur',
-                                Icons.motorcycle,
+                              const SizedBox(height: 12),
+                              _buildInput(
+                                controller: _lastNameController,
+                                icon: Icons.person,
+                                hint: 'Nom',
+                                keyboardType: TextInputType.name,
+                                textCapitalization: TextCapitalization.words,
+                                autofillHints: const [AutofillHints.familyName],
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _buildRoleOption(
-                                'COMMERCANT',
-                                'Commerçant',
-                                Icons.storefront,
+                              const SizedBox(height: 12),
+                              PhoneField(
+                                controller: _phoneController,
+                                onFullNumberChanged: (full) =>
+                                    _fullPhone = full,
+                                autofillHints: const [
+                                  AutofillHints.telephoneNumber,
+                                ],
+                                onSubmitted: (_) =>
+                                    FocusScope.of(context).nextFocus(),
                               ),
-                            ),
-                          ],
-                        ),
-                        if (_role == 'LIVREUR') ...[
-                          const SizedBox(height: 18),
-                          const Text(
-                            'Type d’engin :',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.white.withValues(alpha: 0.08),
-                              ),
-                            ),
-                            child: DropdownButton<String>(
-                              value: _vehicleType,
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              dropdownColor: const Color(0xFF122530),
-                              iconEnabledColor: const Color(0xFF2E90FA),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: 'MOTO',
-                                  child: Text('Moto'),
+                              const SizedBox(height: 12),
+                              _buildInput(
+                                controller: _passwordController,
+                                icon: Icons.lock_outline,
+                                hint: 'Mot de passe',
+                                obscure: _obscure,
+                                textInputAction: TextInputAction.done,
+                                autofillHints: const [
+                                  AutofillHints.newPassword,
+                                ],
+                                onSubmitted: (_) => _submit(),
+                                suffix: IconButton(
+                                  icon: Icon(
+                                    _obscure
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: Colors.white60,
+                                  ),
+                                  onPressed: () =>
+                                      setState(() => _obscure = !_obscure),
                                 ),
-                                DropdownMenuItem(
-                                  value: 'VOITURE',
-                                  child: Text('Voiture'),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text(
+                                'Je suis :',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
                                 ),
-                                DropdownMenuItem(
-                                  value: 'TRICYCLE',
-                                  child: Text('Tricycle'),
+                              ),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildRoleOption(
+                                      'CLIENT',
+                                      'Client',
+                                      Icons.person,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _buildRoleOption(
+                                      'LIVREUR',
+                                      'Livreur',
+                                      Icons.motorcycle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: _buildRoleOption(
+                                      'COMMERCANT',
+                                      'Commerçant',
+                                      Icons.storefront,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_role == 'LIVREUR') ...[
+                                const SizedBox(height: 18),
+                                const Text(
+                                  'Type d’engin :',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
                                 ),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.05),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.08,
+                                      ),
+                                    ),
+                                  ),
+                                  child: DropdownButton<String>(
+                                    value: _vehicleType,
+                                    isExpanded: true,
+                                    underline: const SizedBox(),
+                                    dropdownColor: const Color(0xFF122530),
+                                    iconEnabledColor: const Color(0xFF2E90FA),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'MOTO',
+                                        child: Text('Moto'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'VOITURE',
+                                        child: Text('Voiture'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'TRICYCLE',
+                                        child: Text('Tricycle'),
+                                      ),
+                                    ],
+                                    onChanged: (v) => setState(
+                                      () => _vehicleType = v ?? 'MOTO',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 18),
+                                const Text(
+                                  'Photo de profil (obligatoire) :',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                _buildProfilePhotoPicker(),
                               ],
-                              onChanged: (v) =>
-                                  setState(() => _vehicleType = v ?? 'MOTO'),
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          const Text(
-                            'Photo de profil (obligatoire) :',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          _buildProfilePhotoPicker(),
-                        ],
-                        const SizedBox(height: 28),
-                        Container(
-                          height: 58,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF2E90FA), Color(0xFF2E90FA)],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(
-                                  0xFF2E90FA,
-                                ).withValues(alpha: 0.45),
-                                blurRadius: 20,
-                                offset: const Offset(0, 6),
+                              const SizedBox(height: 28),
+                              Container(
+                                height: 58,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(18),
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF2E90FA),
+                                      Color(0xFF2E90FA),
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF2E90FA,
+                                      ).withValues(alpha: 0.45),
+                                      blurRadius: 20,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _submit,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                  ),
+                                  child: _isLoading
+                                      ? adaptiveLoader(color: Colors.white)
+                                      : const Text(
+                                          'Créer mon compte',
+                                          style: TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 0.4,
+                                          ),
+                                        ),
+                                ),
                               ),
                             ],
                           ),
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              shadowColor: Colors.transparent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                              ),
-                            ),
-                            child: _isLoading
-                                ? adaptiveLoader(color: Colors.white)
-                                : const Text(
-                                    'Créer mon compte',
-                                    style: TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                      letterSpacing: 0.4,
-                                    ),
-                                  ),
-                          ),
                         ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  /// Sélecteur de photo de profil livreur : aperçu circulaire + bouton.
-  /// La validation d'obligation est faite dans [_submit].
   Widget _buildProfilePhotoPicker() {
     final photo = _profilePhoto;
     return GestureDetector(
@@ -525,6 +551,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
     TextInputType? keyboardType,
     bool obscure = false,
     Widget? suffix,
+    TextInputAction? textInputAction,
+    Iterable<String>? autofillHints,
+    ValueChanged<String>? onSubmitted,
+    TextCapitalization textCapitalization = TextCapitalization.none,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -536,6 +566,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         controller: controller,
         obscureText: obscure,
         keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        autofillHints: autofillHints,
+        onSubmitted: onSubmitted,
+        textCapitalization: textCapitalization,
         style: const TextStyle(color: Colors.white, fontSize: 16),
         decoration: InputDecoration(
           hintText: hint,

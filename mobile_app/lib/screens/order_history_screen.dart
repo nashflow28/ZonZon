@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../models/order_history_item.dart';
@@ -124,8 +125,14 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
         ? Center(child: adaptiveLoader())
         : Column(
             children: [
-              if (_currentUserRole == 'LIVREUR') _buildDriverEarningsCard(),
-              _buildFilterChips(),
+              if (_currentUserRole == 'LIVREUR')
+                adaptiveConstrainedContent(child: _buildDriverEarningsCard()),
+              adaptiveConstrainedContent(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: _buildFilterSelector(),
+                ),
+              ),
               Expanded(
                 child: RefreshIndicator(
                   color: const Color(0xFF2E90FA),
@@ -154,18 +161,73 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
     );
   }
 
-  Widget _buildFilterChips() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: Row(
-        children: [
-          _filterChip('Toutes', _HistoryFilter.all),
-          const SizedBox(width: 8),
-          _filterChip('En cours', _HistoryFilter.active),
-          const SizedBox(width: 8),
-          _filterChip('Terminées', _HistoryFilter.finished),
-        ],
+  Widget _buildFilterSelector() {
+    if (isCupertinoPlatform) {
+      return CupertinoSlidingSegmentedControl<_HistoryFilter>(
+        groupValue: _filter,
+        backgroundColor: const Color(0xFF122530),
+        thumbColor: const Color(0xFF2E90FA),
+        children: const {
+          _HistoryFilter.all: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Text('Toutes'),
+          ),
+          _HistoryFilter.active: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Text('En cours'),
+          ),
+          _HistoryFilter.finished: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Text('Terminées'),
+          ),
+        },
+        onValueChanged: (value) {
+          if (value == null || value == _filter) return;
+          hapticSelection();
+          setState(() => _filter = value);
+        },
+      );
+    }
+
+    return SegmentedButton<_HistoryFilter>(
+      segments: const [
+        ButtonSegment<_HistoryFilter>(
+          value: _HistoryFilter.all,
+          label: Text('Toutes'),
+        ),
+        ButtonSegment<_HistoryFilter>(
+          value: _HistoryFilter.active,
+          label: Text('En cours'),
+        ),
+        ButtonSegment<_HistoryFilter>(
+          value: _HistoryFilter.finished,
+          label: Text('Terminées'),
+        ),
+      ],
+      selected: {_filter},
+      showSelectedIcon: false,
+      multiSelectionEnabled: false,
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          return states.contains(WidgetState.selected)
+              ? const Color(0xFF2E90FA).withValues(alpha: 0.2)
+              : const Color(0xFF122530);
+        }),
+        foregroundColor: const WidgetStatePropertyAll(Colors.white),
+        side: WidgetStateProperty.resolveWith((states) {
+          return BorderSide(
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFF2E90FA)
+                : Colors.white.withValues(alpha: 0.08),
+          );
+        }),
       ),
+      onSelectionChanged: (selection) {
+        final selected = selection.first;
+        if (selected == _filter) return;
+        hapticSelection();
+        setState(() => _filter = selected);
+      },
     );
   }
 
@@ -212,45 +274,6 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
             style: const TextStyle(color: Colors.white70, fontSize: 12),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _filterChip(String label, _HistoryFilter value) {
-    final selected = _filter == value;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (_filter != value) {
-            hapticSelection();
-            setState(() => _filter = value);
-          }
-        },
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: selected
-                ? const Color(0xFF2E90FA).withValues(alpha: 0.18)
-                : Colors.white.withValues(alpha: 0.04),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFF2E90FA)
-                  : Colors.white.withValues(alpha: 0.08),
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : Colors.white70,
-              fontSize: 13,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -332,11 +355,13 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       itemCount: list.length,
-      itemBuilder: (ctx, i) => _OrderHistoryCard(
-        item: list[i],
-        viewerRole: _currentUserRole,
-        onTap: () => _showDetails(list[i]),
-        formatDate: _formatDate,
+      itemBuilder: (ctx, i) => adaptiveConstrainedContent(
+        child: _OrderHistoryCard(
+          item: list[i],
+          viewerRole: _currentUserRole,
+          onTap: () => _showDetails(list[i]),
+          formatDate: _formatDate,
+        ),
       ),
     );
   }

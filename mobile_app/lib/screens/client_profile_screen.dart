@@ -227,38 +227,41 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ? Center(child: adaptiveLoader(color: const Color(0xFF2E90FA)))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildPhotoSection(),
-                  const SizedBox(height: 24),
-                  _buildHistoryTile(),
-                  const SizedBox(height: 16),
-                  _buildSection(
-                    'Informations personnelles',
-                    _buildProfileFields(),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _logout,
-                      icon: const Icon(Icons.logout, color: Colors.redAccent),
-                      label: const Text(
-                        'Se déconnecter',
-                        style: TextStyle(color: Colors.redAccent),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.redAccent),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+              child: adaptiveConstrainedContent(
+                maxWidth: 720,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildPhotoSection(),
+                    const SizedBox(height: 24),
+                    _buildHistoryTile(),
+                    const SizedBox(height: 16),
+                    _buildSection(
+                      'Informations personnelles',
+                      _buildProfileFields(),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: _logout,
+                        icon: const Icon(Icons.logout, color: Colors.redAccent),
+                        label: const Text(
+                          'Se déconnecter',
+                          style: TextStyle(color: Colors.redAccent),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: Colors.redAccent),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
     );

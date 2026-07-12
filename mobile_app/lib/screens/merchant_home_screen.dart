@@ -203,14 +203,21 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
           ? ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                _DeliveriesQuickActions(
-                  onCreate: _openCreateDelivery,
-                  onViewOrders: _openMerchantOrders,
-                  onViewDrivers: _openMerchantDrivers,
-                  stats: _orders,
+                adaptiveConstrainedContent(
+                  maxWidth: 760,
+                  child: Column(
+                    children: [
+                      _DeliveriesQuickActions(
+                        onCreate: _openCreateDelivery,
+                        onViewOrders: _openMerchantOrders,
+                        onViewDrivers: _openMerchantDrivers,
+                        stats: _orders,
+                      ),
+                      const SizedBox(height: 24),
+                      _OnboardingState(onCreate: _openShopForm),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 24),
-                _OnboardingState(onCreate: _openShopForm),
               ],
             )
           : RefreshIndicator(
@@ -219,66 +226,76 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  _DeliveriesQuickActions(
-                    onCreate: _openCreateDelivery,
-                    onViewOrders: _openMerchantOrders,
-                    onViewDrivers: _openMerchantDrivers,
-                    stats: _orders,
-                  ),
-                  const SizedBox(height: 24),
-                  _ShopHeaderCard(
-                    shop: _shop!,
-                    onEdit: _openShopForm,
-                    onPickLogo: _pickShopLogo,
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Mes produits',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                  adaptiveConstrainedContent(
+                    maxWidth: 760,
+                    child: Column(
+                      children: [
+                        _DeliveriesQuickActions(
+                          onCreate: _openCreateDelivery,
+                          onViewOrders: _openMerchantOrders,
+                          onViewDrivers: _openMerchantDrivers,
+                          stats: _orders,
                         ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _openProductForm(),
-                        icon: const Icon(Icons.add, color: Color(0xFF0FB271)),
-                        label: const Text(
-                          'Ajouter',
-                          style: TextStyle(color: Color(0xFF0FB271)),
+                        const SizedBox(height: 24),
+                        _ShopHeaderCard(
+                          shop: _shop!,
+                          onEdit: _openShopForm,
+                          onPickLogo: _pickShopLogo,
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (_products.isEmpty)
-                    _EmptyProducts(onAdd: () => _openProductForm())
-                  else
-                    ..._products.map(
-                      (p) => _ProductTile(
-                        product: p,
-                        onEdit: () => _openProductForm(edit: p),
-                        onToggle: () => _toggleAvailable(p),
-                        onDelete: () async {
-                          final ok = await showAdaptiveConfirmDialog(
-                            context,
-                            title: 'Supprimer ?',
-                            message:
-                                'Le produit "${p.name}" sera retiré du catalogue.',
-                            confirmLabel: 'Supprimer',
-                            cancelLabel: 'Annuler',
-                            isDestructive: true,
-                          );
-                          if (ok != true) return;
-                          await _shops.deleteProduct(p.id);
-                          _refresh();
-                        },
-                      ),
+                        const SizedBox(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Mes produits',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _openProductForm(),
+                              icon: const Icon(
+                                Icons.add,
+                                color: Color(0xFF0FB271),
+                              ),
+                              label: const Text(
+                                'Ajouter',
+                                style: TextStyle(color: Color(0xFF0FB271)),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (_products.isEmpty)
+                          _EmptyProducts(onAdd: () => _openProductForm())
+                        else
+                          ..._products.map(
+                            (p) => _ProductTile(
+                              product: p,
+                              onEdit: () => _openProductForm(edit: p),
+                              onToggle: () => _toggleAvailable(p),
+                              onDelete: () async {
+                                final ok = await showAdaptiveConfirmDialog(
+                                  context,
+                                  title: 'Supprimer ?',
+                                  message:
+                                      'Le produit "${p.name}" sera retiré du catalogue.',
+                                  confirmLabel: 'Supprimer',
+                                  cancelLabel: 'Annuler',
+                                  isDestructive: true,
+                                );
+                                if (ok != true) return;
+                                await _shops.deleteProduct(p.id);
+                                _refresh();
+                              },
+                            ),
+                          ),
+                        const SizedBox(height: 32),
+                      ],
                     ),
-                  const SizedBox(height: 32),
+                  ),
                 ],
               ),
             ),
@@ -712,7 +729,6 @@ class _StatusBadge extends StatelessWidget {
         icon = Icons.pause_circle;
         break;
       case ShopStatus.pending:
-      default:
         color = const Color(0xFFFBBF24);
         label = 'En attente de validation';
         icon = Icons.hourglass_top;

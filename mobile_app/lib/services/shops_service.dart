@@ -39,16 +39,13 @@ class ShopsService {
     if (radiusKm != null) params['radius'] = radiusKm.toString();
     final qs = params.isEmpty
         ? ''
-        : '?' + params.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&');
+        : '?${params.entries.map((e) => '${e.key}=${Uri.encodeQueryComponent(e.value)}').join('&')}';
     try {
       final res = await _api.get('/shops$qs');
       if (res.statusCode != 200 && res.statusCode != 201) return [];
       final data = jsonDecode(res.body);
       if (data is! List) return [];
-      return data
-          .whereType<Map<String, dynamic>>()
-          .map(Shop.fromJson)
-          .toList();
+      return data.whereType<Map<String, dynamic>>().map(Shop.fromJson).toList();
     } catch (_) {
       return [];
     }
@@ -78,10 +75,7 @@ class ShopsService {
     if (data is! List) {
       throw Exception('Réponse inattendue du serveur.');
     }
-    return data
-        .whereType<Map<String, dynamic>>()
-        .map(Shop.fromJson)
-        .toList();
+    return data.whereType<Map<String, dynamic>>().map(Shop.fromJson).toList();
   }
 
   /// Charge uniquement les IDs des shops favoris (utile pour les listes).
@@ -144,16 +138,20 @@ class ShopsService {
     String? hours,
   }) async {
     try {
-      final res = await _api.post('/shops/me', body: {
-        'name': name,
-        'category': category,
-        'address': address,
-        'lat': lat,
-        'lng': lng,
-        if (description != null && description.isNotEmpty) 'description': description,
-        if (phone != null && phone.isNotEmpty) 'phone': phone,
-        if (hours != null && hours.isNotEmpty) 'hours': hours,
-      });
+      final res = await _api.post(
+        '/shops/me',
+        body: {
+          'name': name,
+          'category': category,
+          'address': address,
+          'lat': lat,
+          'lng': lng,
+          if (description != null && description.isNotEmpty)
+            'description': description,
+          if (phone != null && phone.isNotEmpty) 'phone': phone,
+          if (hours != null && hours.isNotEmpty) 'hours': hours,
+        },
+      );
       if (res.statusCode != 200 && res.statusCode != 201) return null;
       return Shop.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
     } catch (_) {
@@ -197,12 +195,16 @@ class ShopsService {
     bool available = true,
   }) async {
     try {
-      final res = await _api.post('/shops/me/products', body: {
-        'name': name,
-        'priceFcfa': priceFcfa,
-        if (description != null && description.isNotEmpty) 'description': description,
-        'available': available,
-      });
+      final res = await _api.post(
+        '/shops/me/products',
+        body: {
+          'name': name,
+          'priceFcfa': priceFcfa,
+          if (description != null && description.isNotEmpty)
+            'description': description,
+          'available': available,
+        },
+      );
       if (res.statusCode != 200 && res.statusCode != 201) return null;
       return Product.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
     } catch (_) {
@@ -210,7 +212,10 @@ class ShopsService {
     }
   }
 
-  Future<Product?> updateProduct(String id, Map<String, dynamic> changes) async {
+  Future<Product?> updateProduct(
+    String id,
+    Map<String, dynamic> changes,
+  ) async {
     try {
       final res = await _api.patch('/shops/me/products/$id', body: changes);
       if (res.statusCode != 200 && res.statusCode != 201) return null;
@@ -230,7 +235,10 @@ class ShopsService {
   }
 
   Future<Product?> uploadProductPhoto(String productId, String filePath) async {
-    final res = await _uploadImageRaw('/shops/me/products/$productId/photo', filePath);
+    final res = await _uploadImageRaw(
+      '/shops/me/products/$productId/photo',
+      filePath,
+    );
     if (res == null) return null;
     return Product.fromJson(res);
   }
@@ -259,16 +267,21 @@ class ShopsService {
     }
   }
 
-  Future<Map<String, dynamic>?> _uploadImageRaw(String path, String filePath) async {
+  Future<Map<String, dynamic>?> _uploadImageRaw(
+    String path,
+    String filePath,
+  ) async {
     final token = await _auth.getToken();
     final uri = Uri.parse('$apiUrl$apiPrefix$path');
     final req = http.MultipartRequest('POST', uri);
     if (token != null) req.headers['Authorization'] = 'Bearer $token';
-    req.files.add(await http.MultipartFile.fromPath(
-      'file',
-      filePath,
-      contentType: _contentTypeFromPath(filePath),
-    ));
+    req.files.add(
+      await http.MultipartFile.fromPath(
+        'file',
+        filePath,
+        contentType: _contentTypeFromPath(filePath),
+      ),
+    );
     try {
       final streamed = await req.send();
       final body = await streamed.stream.bytesToString();

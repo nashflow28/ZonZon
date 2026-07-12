@@ -136,7 +136,9 @@ class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       final latLng = LatLng(position.latitude, position.longitude);
       if (mounted) {

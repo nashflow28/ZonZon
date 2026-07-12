@@ -294,13 +294,19 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: [
-        _MerchantOrdersStats(orders: _orders),
+        adaptiveConstrainedContent(
+          maxWidth: 760,
+          child: _MerchantOrdersStats(orders: _orders),
+        ),
         const SizedBox(height: 12),
         ..._orders.map(
-          (item) => _MerchantOrderCard(
-            item: item,
-            formatDate: _formatDate,
-            onTap: () => _openDetails(item),
+          (item) => adaptiveConstrainedContent(
+            maxWidth: 760,
+            child: _MerchantOrderCard(
+              item: item,
+              formatDate: _formatDate,
+              onTap: () => _openDetails(item),
+            ),
           ),
         ),
       ],

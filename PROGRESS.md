@@ -258,6 +258,14 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 56 (2026-07-12) — Passe UI Material 3 et adaptation HIG iOS
+
+- **Portée** : revue et correction des parcours les plus utilisés (authentification/inscription, shell client, radar livreur, profils, historique, messagerie, notifications, accueil et commandes commerçant). Aucune API, route métier ni règle de livraison n'a été modifiée.
+- **Material Design 3** : thème centralisé dans `mobile_app/lib/main.dart` (AppBar, Card, InputDecoration, NavigationBar, SnackBar, couleurs et formes cohérentes). Les navigations client et livreur utilisent désormais les composants M3 au lieu des anciennes barres.
+- **HIG / responsive** : `platform_adapter.dart` expose le comportement Cupertino; sur iOS les shells utilisent `CupertinoTabBar`, les transitions/confirmations restent natives. Les écrans principaux contraignent leur largeur sur tablette/desktop afin d'éviter les formulaires et fils de discussion trop étirés.
+- **Robustesse** : les API Geolocator dépréciées ont été migrées vers `LocationSettings`; les lints restants ont été corrigés. `flutter analyze` : **No issues found**; `flutter test` : **29/29**; `flutter build apk --release` : succès (`app-release.apk`, 58.6 MB).
+- **Limite honnête** : l'APK reste une livraison Android. La base adaptive applique les conventions Cupertino pour un futur build iOS, mais une validation visuelle sur appareil/simulateur iOS demeure nécessaire avant de revendiquer une conformité HIG validée par test matériel.
+
 ### Session 55 (2026-07-12) — Régression P0 historique client après déploiement messagerie
 
 - **Incident** : l'écran client « Historique des courses » affichait `TimeoutException after 0:00:15.000000`. La cause n'était pas le client : `/v1/orders/mine` ne répondait plus car le processus Nest ne démarrait pas.

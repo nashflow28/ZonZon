@@ -7,7 +7,11 @@ class CountryCode {
   final String code; // ex: '+228'
   final String label;
   final String flag;
-  const CountryCode({required this.code, required this.label, required this.flag});
+  const CountryCode({
+    required this.code,
+    required this.label,
+    required this.flag,
+  });
 }
 
 const List<CountryCode> kCountryCodes = [
@@ -32,6 +36,9 @@ class PhoneField extends StatefulWidget {
   final String initialCode;
   final ValueChanged<String>? onFullNumberChanged;
   final String hint;
+  final TextInputAction textInputAction;
+  final Iterable<String>? autofillHints;
+  final ValueChanged<String>? onSubmitted;
 
   const PhoneField({
     super.key,
@@ -39,6 +46,9 @@ class PhoneField extends StatefulWidget {
     this.initialCode = '+228',
     this.onFullNumberChanged,
     this.hint = 'Numéro de téléphone',
+    this.textInputAction = TextInputAction.next,
+    this.autofillHints,
+    this.onSubmitted,
   });
 
   /// Helper pour découper un numéro sauvegardé en (indicatif, partie locale).
@@ -125,11 +135,24 @@ class _PhoneFieldState extends State<PhoneField> {
                     final selected = c.code == _code;
                     return ListTile(
                       onTap: () => Navigator.pop(context, c),
-                      leading: Text(c.flag, style: const TextStyle(fontSize: 24)),
-                      title: Text(c.label,
-                          style: const TextStyle(color: Colors.white, fontSize: 15)),
-                      subtitle: Text(c.code,
-                          style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      leading: Text(
+                        c.flag,
+                        style: const TextStyle(fontSize: 24),
+                      ),
+                      title: Text(
+                        c.label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                        ),
+                      ),
+                      subtitle: Text(
+                        c.code,
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
                       trailing: selected
                           ? const Icon(Icons.check, color: Color(0xFF2E90FA))
                           : null,
@@ -165,7 +188,8 @@ class _PhoneFieldState extends State<PhoneField> {
           InkWell(
             onTap: _pickCountry,
             borderRadius: const BorderRadius.horizontal(
-                left: Radius.circular(16)),
+              left: Radius.circular(16),
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
               child: Row(
@@ -181,8 +205,11 @@ class _PhoneFieldState extends State<PhoneField> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const Icon(Icons.arrow_drop_down,
-                      color: Colors.white60, size: 20),
+                  const Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.white60,
+                    size: 20,
+                  ),
                 ],
               ),
             ),
@@ -196,14 +223,21 @@ class _PhoneFieldState extends State<PhoneField> {
             child: TextField(
               controller: widget.controller,
               keyboardType: TextInputType.phone,
+              textInputAction: widget.textInputAction,
+              autofillHints: widget.autofillHints,
+              onSubmitted: widget.onSubmitted,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               style: const TextStyle(color: Colors.white, fontSize: 16),
               decoration: InputDecoration(
                 hintText: widget.hint,
-                hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4),
+                ),
                 border: InputBorder.none,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 16,
+                ),
               ),
             ),
           ),

@@ -1,8 +1,10 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/active_orders_store.dart';
 import '../../services/client_services.dart';
+import '../../utils/platform_adapter.dart';
 
 /// Coquille du client avec bottom-nav 4 onglets.
 ///
@@ -53,10 +55,13 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
       bottomNavigationBar: AnimatedBuilder(
         animation: ClientServices.activeOrders,
         builder: (context, _) {
-          return _ClientBottomNav(
-            currentIndex: widget.navigationShell.currentIndex,
-            ordersBadgeCount: ClientServices.activeOrders.count,
-            onTap: _onTabTapped,
+          return SafeArea(
+            top: false,
+            child: _ClientBottomNav(
+              currentIndex: widget.navigationShell.currentIndex,
+              ordersBadgeCount: ClientServices.activeOrders.count,
+              onTap: _onTabTapped,
+            ),
           );
         },
       ),
@@ -77,40 +82,68 @@ class _ClientBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
-      currentIndex: currentIndex,
-      onTap: onTap,
-      backgroundColor: const Color(0xFF122530),
-      selectedItemColor: const Color(0xFF2E90FA),
-      unselectedItemColor: Colors.white60,
-      selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
-      items: [
-        const BottomNavigationBarItem(
+    if (isCupertinoPlatform) {
+      return CupertinoTabBar(
+        currentIndex: currentIndex,
+        onTap: onTap,
+        backgroundColor: const Color(0xF2122530),
+        activeColor: const Color(0xFF2E90FA),
+        inactiveColor: CupertinoColors.inactiveGray,
+        items: [
+          const BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.home),
+            label: 'Accueil',
+          ),
+          BottomNavigationBarItem(
+            icon: _BadgedIcon(
+              icon: CupertinoIcons.doc_text,
+              count: ordersBadgeCount,
+            ),
+            label: 'Commandes',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.bag),
+            label: 'Boutiques',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.person),
+            label: 'Profil',
+          ),
+        ],
+      );
+    }
+
+    return NavigationBar(
+      selectedIndex: currentIndex,
+      onDestinationSelected: onTap,
+      height: 72,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      destinations: [
+        const NavigationDestination(
           icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
+          selectedIcon: Icon(Icons.home),
           label: 'Accueil',
         ),
-        BottomNavigationBarItem(
+        NavigationDestination(
           icon: _BadgedIcon(
             icon: Icons.receipt_long_outlined,
             count: ordersBadgeCount,
           ),
-          activeIcon: _BadgedIcon(
+          selectedIcon: _BadgedIcon(
             icon: Icons.receipt_long,
             count: ordersBadgeCount,
             isActive: true,
           ),
           label: 'Commandes',
         ),
-        const BottomNavigationBarItem(
+        const NavigationDestination(
           icon: Icon(Icons.storefront_outlined),
-          activeIcon: Icon(Icons.storefront),
+          selectedIcon: Icon(Icons.storefront),
           label: 'Boutiques',
         ),
-        const BottomNavigationBarItem(
+        const NavigationDestination(
           icon: Icon(Icons.person_outline),
-          activeIcon: Icon(Icons.person),
+          selectedIcon: Icon(Icons.person),
           label: 'Profil',
         ),
       ],
@@ -148,10 +181,7 @@ class _BadgedIcon extends StatelessWidget {
                   ? const Color(0xFFF0453D)
                   : const Color(0xFF2E90FA),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: const Color(0xFF122530),
-                width: 1.5,
-              ),
+              border: Border.all(color: const Color(0xFF122530), width: 1.5),
             ),
             child: Text(
               '$count',

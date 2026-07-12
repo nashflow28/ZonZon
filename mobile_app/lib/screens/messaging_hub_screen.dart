@@ -90,34 +90,38 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
     child: ListView(
       children: _contacts.isEmpty
           ? [
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'Aucun contact disponible. Les contacts apparaissent après une course partagée ou une affiliation active.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white60),
+              adaptiveConstrainedContent(
+                child: const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Text(
+                    'Aucun contact disponible. Les contacts apparaissent après une course partagée ou une affiliation active.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.white60),
+                  ),
                 ),
               ),
             ]
           : _contacts
                 .map(
-                  (c) => ListTile(
-                    onTap: () => pushAdaptive(
-                      context,
-                      _DirectThread(contact: c, orders: _orders),
-                    ),
-                    leading: const CircleAvatar(child: Icon(Icons.person)),
-                    title: Text(
-                      c.name.isEmpty ? 'Contact' : c.name,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                    subtitle: Text(
-                      c.role,
-                      style: const TextStyle(color: Colors.white60),
-                    ),
-                    trailing: const Icon(
-                      Icons.chevron_right,
-                      color: Colors.white54,
+                  (c) => adaptiveConstrainedContent(
+                    child: ListTile(
+                      onTap: () => pushAdaptive(
+                        context,
+                        _DirectThread(contact: c, orders: _orders),
+                      ),
+                      leading: const CircleAvatar(child: Icon(Icons.person)),
+                      title: Text(
+                        c.name.isEmpty ? 'Contact' : c.name,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        c.role,
+                        style: const TextStyle(color: Colors.white60),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right,
+                        color: Colors.white54,
+                      ),
                     ),
                   ),
                 )
@@ -131,33 +135,35 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
       itemCount: _orders.length,
       itemBuilder: (_, i) {
         final o = _orders[i];
-        return ListTile(
-          onTap: () => pushAdaptive(
-            context,
-            ChatScreen(
-              orderId: o.id,
-              otherPartyName: 'Course #${o.id.substring(0, 6)}',
-              otherPartyRole: _role == 'COMMERCANT' ? 'LIVREUR' : 'CLIENT',
-              orderStatus: o.status,
+        return adaptiveConstrainedContent(
+          child: ListTile(
+            onTap: () => pushAdaptive(
+              context,
+              ChatScreen(
+                orderId: o.id,
+                otherPartyName: 'Course #${o.id.substring(0, 6)}',
+                otherPartyRole: _role == 'COMMERCANT' ? 'LIVREUR' : 'CLIENT',
+                orderStatus: o.status,
+              ),
             ),
-          ),
-          leading: const Icon(
-            Icons.local_shipping_outlined,
-            color: Color(0xFF2E90FA),
-          ),
-          title: Text(
-            'Course #${o.id.substring(0, 6)}',
-            style: const TextStyle(color: Colors.white),
-          ),
-          subtitle: Text(
-            '${o.pickupAddress} → ${o.deliveryAddress}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Colors.white60),
-          ),
-          trailing: Text(
-            o.status,
-            style: const TextStyle(color: Color(0xFF0FB271), fontSize: 11),
+            leading: const Icon(
+              Icons.local_shipping_outlined,
+              color: Color(0xFF2E90FA),
+            ),
+            title: Text(
+              'Course #${o.id.substring(0, 6)}',
+              style: const TextStyle(color: Colors.white),
+            ),
+            subtitle: Text(
+              '${o.pickupAddress} → ${o.deliveryAddress}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white60),
+            ),
+            trailing: Text(
+              o.status,
+              style: const TextStyle(color: Color(0xFF0FB271), fontSize: 11),
+            ),
           ),
         );
       },
@@ -196,11 +202,12 @@ class _DirectThreadState extends State<_DirectThread> {
   Future<void> _load() async {
     final u = await _auth.getCurrentUser();
     final items = await _service.thread(widget.contact.id);
-    if (mounted)
+    if (mounted) {
       setState(() {
         _me = u?.id ?? '';
         _items = items;
       });
+    }
   }
 
   Future<void> _send() async {
@@ -271,36 +278,41 @@ class _DirectThreadState extends State<_DirectThread> {
             itemBuilder: (_, i) {
               final m = _items[i];
               final mine = m.senderId == _me;
-              return Align(
-                alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: mine
-                        ? const Color(0xFF2E90FA)
-                        : const Color(0xFF122530),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        m.content,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      if ((m.orderId ?? '').isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 5),
-                          child: Text(
-                            'Lié à la course #${m.orderId!.substring(0, 6)}',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
+              return adaptiveConstrainedContent(
+                maxWidth: 760,
+                child: Align(
+                  alignment: mine
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: mine
+                          ? const Color(0xFF2E90FA)
+                          : const Color(0xFF122530),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m.content,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        if ((m.orderId ?? '').isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 5),
+                            child: Text(
+                              'Lié à la course #${m.orderId!.substring(0, 6)}',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -330,16 +342,19 @@ class _DirectThreadState extends State<_DirectThread> {
                       tooltip: 'Lier à une course',
                     ),
                     Expanded(
-                      child: TextField(
-                        controller: _ctrl,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
-                          hintText: 'Message général',
-                          hintStyle: TextStyle(color: Colors.white54),
-                          filled: true,
-                          fillColor: Color(0xFF122530),
-                          border: OutlineInputBorder(
-                            borderSide: BorderSide.none,
+                      child: adaptiveConstrainedContent(
+                        maxWidth: 760,
+                        child: TextField(
+                          controller: _ctrl,
+                          style: const TextStyle(color: Colors.white),
+                          decoration: const InputDecoration(
+                            hintText: 'Message général',
+                            hintStyle: TextStyle(color: Colors.white54),
+                            filled: true,
+                            fillColor: Color(0xFF122530),
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                            ),
                           ),
                         ),
                       ),

@@ -106,7 +106,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       if (!mounted) return;
       setState(() {
         _resolving = false;
-        _resolvedPlace = place ??
+        _resolvedPlace =
+            place ??
             Place(
               displayName:
                   '${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}',
@@ -150,14 +151,20 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         return;
       }
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       final p = LatLng(pos.latitude, pos.longitude);
       _mapCtrl.move(p, 16);
       _onMapSettled(p);
     } catch (_) {
       if (!silent && mounted) {
-        showAdaptiveSnack(context, 'Impossible de récupérer votre position', isError: true);
+        showAdaptiveSnack(
+          context,
+          'Impossible de récupérer votre position',
+          isError: true,
+        );
       }
     }
   }
@@ -204,7 +211,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF122530),
-        title: const Text('Nom du favori', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Nom du favori',
+          style: TextStyle(color: Colors.white),
+        ),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -232,7 +242,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   Future<void> _deleteFavorite(SavedAddress fav) async {
     final ok = await _saved.delete(fav.id);
     if (!ok || !mounted) return;
-    setState(() => _favorites = _favorites.where((f) => f.id != fav.id).toList());
+    setState(
+      () => _favorites = _favorites.where((f) => f.id != fav.id).toList(),
+    );
   }
 
   @override
@@ -335,11 +347,13 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                 recents: _recents,
                 favorites: _favorites,
                 onTapRecent: _selectPlace,
-                onTapFavorite: (f) => _selectPlace(Place(
-                  displayName: f.address,
-                  shortName: f.label,
-                  location: f.location,
-                )),
+                onTapFavorite: (f) => _selectPlace(
+                  Place(
+                    displayName: f.address,
+                    shortName: f.label,
+                    location: f.location,
+                  ),
+                ),
                 onDeleteFavorite: _deleteFavorite,
                 onSaveFavorite: _saveAsFavorite,
                 onUseMyPosition: () => _useMyPosition(),
@@ -378,8 +392,11 @@ class _Crosshair extends StatelessWidget {
               ],
             ),
             child: const Center(
-              child: Icon(Icons.location_on,
-                  color: Color(0xFF2E90FA), size: 22),
+              child: Icon(
+                Icons.location_on,
+                color: Color(0xFF2E90FA),
+                size: 22,
+              ),
             ),
           ),
           // tige sous le marker
@@ -458,8 +475,10 @@ class _SearchField extends StatelessWidget {
                 )
               : null,
           border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
         ),
       ),
     );
@@ -481,7 +500,9 @@ class _SearchResults extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(top: 8),
-      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.45),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.45,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFF122530).withValues(alpha: 0.97),
         borderRadius: BorderRadius.circular(20),
@@ -495,7 +516,9 @@ class _SearchResults extends StatelessWidget {
                   width: 22,
                   height: 22,
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Color(0xFF2E90FA)),
+                    strokeWidth: 2,
+                    color: Color(0xFF2E90FA),
+                  ),
                 ),
               ),
             )
@@ -503,14 +526,18 @@ class _SearchResults extends StatelessWidget {
               shrinkWrap: true,
               padding: const EdgeInsets.symmetric(vertical: 4),
               itemCount: results.length,
-              separatorBuilder: (_, __) =>
-                  Divider(height: 1, color: Colors.white.withValues(alpha: 0.05)),
+              separatorBuilder: (_, __) => Divider(
+                height: 1,
+                color: Colors.white.withValues(alpha: 0.05),
+              ),
               itemBuilder: (_, i) {
                 final p = results[i];
                 return ListTile(
                   dense: true,
-                  leading: const Icon(Icons.place_outlined,
-                      color: Color(0xFF2E90FA)),
+                  leading: const Icon(
+                    Icons.place_outlined,
+                    color: Color(0xFF2E90FA),
+                  ),
                   title: Text(
                     p.shortName,
                     style: const TextStyle(
@@ -601,8 +628,11 @@ class _BottomPanel extends StatelessWidget {
                       color: const Color(0xFF2E90FA).withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.place,
-                        color: Color(0xFF2E90FA), size: 20),
+                    child: const Icon(
+                      Icons.place,
+                      color: Color(0xFF2E90FA),
+                      size: 20,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -611,7 +641,9 @@ class _BottomPanel extends StatelessWidget {
                       children: [
                         Text(
                           resolvedPlace?.shortName ??
-                              (resolving ? 'Résolution…' : 'Choisissez un point'),
+                              (resolving
+                                  ? 'Résolution…'
+                                  : 'Choisissez un point'),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 15,
@@ -634,8 +666,10 @@ class _BottomPanel extends StatelessWidget {
                   IconButton(
                     tooltip: 'Ajouter aux favoris',
                     onPressed: resolvedPlace == null ? null : onSaveFavorite,
-                    icon: const Icon(Icons.bookmark_add_outlined,
-                        color: Color(0xFF0FB271)),
+                    icon: const Icon(
+                      Icons.bookmark_add_outlined,
+                      color: Color(0xFF0FB271),
+                    ),
                   ),
                 ],
               ),
@@ -695,8 +729,11 @@ class _BottomPanel extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: onUseMyPosition,
-                      icon: const Icon(Icons.my_location,
-                          color: Color(0xFF2E90FA), size: 18),
+                      icon: const Icon(
+                        Icons.my_location,
+                        color: Color(0xFF2E90FA),
+                        size: 18,
+                      ),
                       label: const Text(
                         'Ma position',
                         style: TextStyle(color: Color(0xFF2E90FA)),
@@ -705,7 +742,8 @@ class _BottomPanel extends StatelessWidget {
                         side: const BorderSide(color: Color(0xFF2E90FA)),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
                   ),
@@ -715,14 +753,20 @@ class _BottomPanel extends StatelessWidget {
                     child: ElevatedButton.icon(
                       onPressed: resolvedPlace == null ? null : onConfirm,
                       icon: const Icon(Icons.check_circle, size: 20),
-                      label: const Text('Confirmer',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      label: const Text(
+                        'Confirmer',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0FB271),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
                   ),
@@ -779,8 +823,7 @@ class _FavoriteChip extends StatelessWidget {
     return Material(
       color: const Color(0xFF122530),
       shape: StadiumBorder(
-        side: BorderSide(
-            color: const Color(0xFF0FB271).withValues(alpha: 0.4)),
+        side: BorderSide(color: const Color(0xFF0FB271).withValues(alpha: 0.4)),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -838,10 +881,7 @@ class _RecentChip extends StatelessWidget {
                   child: Text(
                     place.shortName,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13,
-                    ),
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                 ),
               ],

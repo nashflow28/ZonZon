@@ -67,7 +67,8 @@ class DirectMessagesService {
       '/direct-messages/$userId',
       body: {'content': content, if (orderId != null) 'orderId': orderId},
     );
-    if (res.statusCode != 200 && res.statusCode != 201)
+    if (res.statusCode != 200 && res.statusCode != 201) {
       throw Exception('Erreur ${res.statusCode}');
+    }
   }
 }

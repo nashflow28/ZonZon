@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:socket_io_client/socket_io_client.dart' as io;
 
 import '../config/env.dart';
 import '../controllers/order_socket_controller.dart';
@@ -20,7 +20,7 @@ class ChatService {
   final ApiClient _api = ApiClient();
   final AuthService _auth = AuthService();
 
-  IO.Socket? _socket;
+  io.Socket? _socket;
   String? _myId;
 
   final List<ChatMessage> _messages = [];
@@ -66,7 +66,7 @@ class ChatService {
   @visibleForTesting
   static Map<String, dynamic> buildSocketOptions(String token) {
     final normalizedToken = token.trim();
-    return IO.OptionBuilder()
+    return io.OptionBuilder()
         .setTransports(['websocket'])
         .disableAutoConnect()
         .enableReconnection()
@@ -167,7 +167,7 @@ class ChatService {
       return;
     }
 
-    _socket = IO.io(apiUrl, buildSocketOptions(token!));
+    _socket = io.io(apiUrl, buildSocketOptions(token!));
     _emitConnectionState(
       SocketLifecycleState.connecting,
       'Connexion chat en cours…',

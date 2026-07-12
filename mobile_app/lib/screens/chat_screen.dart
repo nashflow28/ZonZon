@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/message.dart';
@@ -214,48 +215,57 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ],
         ),
       ),
-      body: Column(
-        children: [
-          if (closed)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              color: const Color(0xFFFF9E1B).withValues(alpha: 0.15),
-              child: Text(
-                'Conversation fermée — la course est ${_orderStatus == 'COMPLETED'
-                    ? 'terminée'
-                    : _orderStatus == 'FAILED'
-                    ? 'en échec'
-                    : 'annulée'}.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFFFF9E1B), fontSize: 13),
-              ),
-            ),
-          Expanded(
-            child: !_ready
-                ? Center(child: adaptiveLoader())
-                : _MessagesList(
-                    messages: _messages,
-                    myId: _chat.myId,
-                    recipients: _chat.recipients,
-                    otherTyping: _otherTyping,
-                    scrollCtrl: _scrollCtrl,
-                    conversationTitle: widget.otherPartyName,
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Column(
+          children: [
+            if (closed)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 8,
+                  horizontal: 16,
+                ),
+                color: const Color(0xFFFF9E1B).withValues(alpha: 0.15),
+                child: Text(
+                  'Conversation fermée — la course est ${_orderStatus == 'COMPLETED'
+                      ? 'terminée'
+                      : _orderStatus == 'FAILED'
+                      ? 'en échec'
+                      : 'annulée'}.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Color(0xFFFF9E1B),
+                    fontSize: 13,
                   ),
-          ),
-          if (!closed) ...[
-            _QuickReplies(
-              replies: _quickRepliesForRole(),
-              onTap: _sendQuickReply,
+                ),
+              ),
+            Expanded(
+              child: !_ready
+                  ? Center(child: adaptiveLoader())
+                  : _MessagesList(
+                      messages: _messages,
+                      myId: _chat.myId,
+                      recipients: _chat.recipients,
+                      otherTyping: _otherTyping,
+                      scrollCtrl: _scrollCtrl,
+                      conversationTitle: widget.otherPartyName,
+                    ),
             ),
-            _Composer(
-              controller: _input,
-              focusNode: _focusNode,
-              onSend: _send,
-              onChanged: (_) => _chat.notifyTyping(),
-            ),
+            if (!closed) ...[
+              _QuickReplies(
+                replies: _quickRepliesForRole(),
+                onTap: _sendQuickReply,
+              ),
+              _Composer(
+                controller: _input,
+                focusNode: _focusNode,
+                onSend: _send,
+                onChanged: (_) => _chat.notifyTyping(),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -369,7 +379,10 @@ class _Bubble extends StatelessWidget {
           children: [
             ConstrainedBox(
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.78,
+                maxWidth: math.min(
+                  MediaQuery.of(context).size.width * 0.78,
+                  520,
+                ),
               ),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -628,79 +641,82 @@ class _Composer extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
-        decoration: const BoxDecoration(
-          color: Color(0xFF0C1A22),
-          border: Border(top: BorderSide(color: Color(0xFF122530), width: 1)),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF122530),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.06),
+      child: adaptiveConstrainedContent(
+        maxWidth: 760,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 10),
+          decoration: const BoxDecoration(
+            color: Color(0xFF0C1A22),
+            border: Border(top: BorderSide(color: Color(0xFF122530), width: 1)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF122530),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.06),
+                    ),
                   ),
-                ),
-                child: TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  onChanged: onChanged,
-                  onSubmitted: (_) => onSend(),
-                  textInputAction: TextInputAction.send,
-                  textCapitalization: TextCapitalization.sentences,
-                  minLines: 1,
-                  maxLines: 4,
-                  style: const TextStyle(color: Colors.white, fontSize: 15.5),
-                  decoration: const InputDecoration(
-                    hintText: 'Écrire un message…',
-                    hintStyle: TextStyle(color: Colors.white60),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(
-                      horizontal: 18,
-                      vertical: 12,
+                  child: TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    onChanged: onChanged,
+                    onSubmitted: (_) => onSend(),
+                    textInputAction: TextInputAction.send,
+                    textCapitalization: TextCapitalization.sentences,
+                    minLines: 1,
+                    maxLines: 4,
+                    style: const TextStyle(color: Colors.white, fontSize: 15.5),
+                    decoration: const InputDecoration(
+                      hintText: 'Écrire un message…',
+                      hintStyle: TextStyle(color: Colors.white60),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, _) {
-                final canSend = value.text.trim().isNotEmpty;
-                return AnimatedScale(
-                  scale: canSend ? 1 : 0.85,
-                  duration: const Duration(milliseconds: 150),
-                  child: AnimatedOpacity(
+              const SizedBox(width: 8),
+              ValueListenableBuilder<TextEditingValue>(
+                valueListenable: controller,
+                builder: (context, value, _) {
+                  final canSend = value.text.trim().isNotEmpty;
+                  return AnimatedScale(
+                    scale: canSend ? 1 : 0.85,
                     duration: const Duration(milliseconds: 150),
-                    opacity: canSend ? 1 : 0.45,
-                    child: Material(
-                      color: const Color(0xFF2E90FA),
-                      shape: const CircleBorder(),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: canSend ? onSend : null,
-                        child: const SizedBox(
-                          width: 46,
-                          height: 46,
-                          child: Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 22,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 150),
+                      opacity: canSend ? 1 : 0.45,
+                      child: Material(
+                        color: const Color(0xFF2E90FA),
+                        shape: const CircleBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: InkWell(
+                          onTap: canSend ? onSend : null,
+                          child: const SizedBox(
+                            width: 46,
+                            height: 46,
+                            child: Icon(
+                              Icons.send_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-          ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

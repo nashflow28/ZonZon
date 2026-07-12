@@ -292,10 +292,12 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
 
   Future<void> _saveVehicle() async {
     final body = <String, dynamic>{'type': _vehicleType};
-    if (_plateCtrl.text.trim().isNotEmpty)
+    if (_plateCtrl.text.trim().isNotEmpty) {
       body['licensePlate'] = _plateCtrl.text.trim();
-    if (_descCtrl.text.trim().isNotEmpty)
+    }
+    if (_descCtrl.text.trim().isNotEmpty) {
       body['description'] = _descCtrl.text.trim();
+    }
     // Toujours envoyé explicitement (y compris `null`) pour permettre le
     // retrait de la zone habituelle quand "Aucune" est sélectionnée.
     body['usualZoneId'] = _selectedZoneId;
@@ -439,57 +441,60 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: _NotificationsBellButton(
-              unreadCount: _unreadNotificationsCount,
-              onTap: _openNotifications,
-            ),
-          ),
-          _buildPhotoSection(),
-          const SizedBox(height: 24),
-          _buildAvailabilitySection(),
-          const SizedBox(height: 16),
-          _buildVisibilitySection(),
-          const SizedBox(height: 16),
-          _buildStatsRow(),
-          const SizedBox(height: 16),
-          _buildSection(
-            'Affiliations commerçants',
-            _buildAffiliationsSection(),
-          ),
-          const SizedBox(height: 16),
-          _buildHistoryTile(),
-          const SizedBox(height: 16),
-          _buildSection('Informations personnelles', _buildProfileFields()),
-          const SizedBox(height: 16),
-          _buildSection('Pièce d\'identité', _buildIdCardSection()),
-          const SizedBox(height: 16),
-          _buildSection('Mon véhicule', _buildVehicleFields()),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _logout,
-              icon: const Icon(Icons.logout, color: Colors.redAccent),
-              label: const Text(
-                'Se déconnecter',
-                style: TextStyle(color: Colors.redAccent),
+      child: adaptiveConstrainedContent(
+        maxWidth: 760,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.centerRight,
+              child: _NotificationsBellButton(
+                unreadCount: _unreadNotificationsCount,
+                onTap: _openNotifications,
               ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.redAccent),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            ),
+            _buildPhotoSection(),
+            const SizedBox(height: 24),
+            _buildAvailabilitySection(),
+            const SizedBox(height: 16),
+            _buildVisibilitySection(),
+            const SizedBox(height: 16),
+            _buildStatsRow(),
+            const SizedBox(height: 16),
+            _buildSection(
+              'Affiliations commerçants',
+              _buildAffiliationsSection(),
+            ),
+            const SizedBox(height: 16),
+            _buildHistoryTile(),
+            const SizedBox(height: 16),
+            _buildSection('Informations personnelles', _buildProfileFields()),
+            const SizedBox(height: 16),
+            _buildSection('Pièce d\'identité', _buildIdCardSection()),
+            const SizedBox(height: 16),
+            _buildSection('Mon véhicule', _buildVehicleFields()),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _logout,
+                icon: const Icon(Icons.logout, color: Colors.redAccent),
+                label: const Text(
+                  'Se déconnecter',
+                  style: TextStyle(color: Colors.redAccent),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.redAccent),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 32),
-        ],
+            const SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }
@@ -1124,7 +1129,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
     return Column(
       children: [
         DropdownButtonFormField<String>(
-          value: _vehicleType,
+          initialValue: _vehicleType,
           dropdownColor: const Color(0xFF0C1A22),
           decoration: _inputDecoration('Type de véhicule', Icons.two_wheeler),
           style: const TextStyle(color: Colors.white),

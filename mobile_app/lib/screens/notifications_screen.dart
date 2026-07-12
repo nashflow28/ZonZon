@@ -55,17 +55,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       // Optimiste : on marque tout de suite localement, puis on appelle l'API.
       setState(() {
         _items = _items
-            .map((it) => it.id == n.id
-                ? AppNotification(
-                    id: it.id,
-                    deliveryId: it.deliveryId,
-                    type: it.type,
-                    title: it.title,
-                    body: it.body,
-                    readAt: DateTime.now(),
-                    createdAt: it.createdAt,
-                  )
-                : it)
+            .map(
+              (it) => it.id == n.id
+                  ? AppNotification(
+                      id: it.id,
+                      deliveryId: it.deliveryId,
+                      type: it.type,
+                      title: it.title,
+                      body: it.body,
+                      readAt: DateTime.now(),
+                      createdAt: it.createdAt,
+                    )
+                  : it,
+            )
             .toList();
       });
       try {
@@ -89,18 +91,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final now = DateTime.now();
       setState(() {
         _items = _items
-            .map((it) => AppNotification(
-                  id: it.id,
-                  deliveryId: it.deliveryId,
-                  type: it.type,
-                  title: it.title,
-                  body: it.body,
-                  readAt: it.readAt ?? now,
-                  createdAt: it.createdAt,
-                ))
+            .map(
+              (it) => AppNotification(
+                id: it.id,
+                deliveryId: it.deliveryId,
+                type: it.type,
+                title: it.title,
+                body: it.body,
+                readAt: it.readAt ?? now,
+                createdAt: it.createdAt,
+              ),
+            )
             .toList();
       });
-      showAdaptiveSnack(context, 'Toutes les notifications sont marquées comme lues');
+      showAdaptiveSnack(
+        context,
+        'Toutes les notifications sont marquées comme lues',
+      );
     } catch (e) {
       if (!mounted) return;
       showAdaptiveSnack(
@@ -170,7 +177,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             padding: const EdgeInsets.fromLTRB(24, 100, 24, 24),
             child: Column(
               children: [
-                const Icon(Icons.error_outline, color: Color(0xFFF0453D), size: 48),
+                const Icon(
+                  Icons.error_outline,
+                  color: Color(0xFFF0453D),
+                  size: 48,
+                ),
                 const SizedBox(height: 16),
                 const Text(
                   'Impossible de charger les notifications.',
@@ -217,7 +228,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               padding: const EdgeInsets.fromLTRB(24, 100, 24, 24),
               child: Column(
                 children: [
-                  const Icon(Icons.notifications_none, color: Colors.white24, size: 56),
+                  const Icon(
+                    Icons.notifications_none,
+                    color: Colors.white24,
+                    size: 56,
+                  ),
                   const SizedBox(height: 16),
                   const Text(
                     'Aucune notification pour le moment.',
@@ -242,63 +257,66 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         itemCount: _items.length,
         itemBuilder: (ctx, i) {
           final n = _items[i];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Material(
-              color: const Color(0xFF122530),
-              borderRadius: BorderRadius.circular(14),
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: () => _onTapNotification(n),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Icon(
-                          Icons.circle,
-                          size: 8,
-                          color: n.isUnread
-                              ? const Color(0xFF2E90FA)
-                              : Colors.transparent,
+          return adaptiveConstrainedContent(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Material(
+                color: const Color(0xFF122530),
+                borderRadius: BorderRadius.circular(14),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: () => _onTapNotification(n),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Icon(
+                            Icons.circle,
+                            size: 8,
+                            color: n.isUnread
+                                ? const Color(0xFF2E90FA)
+                                : Colors.transparent,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              n.title,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight:
-                                    n.isUnread ? FontWeight.w700 : FontWeight.w500,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                n.title,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: n.isUnread
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              n.body,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13,
+                              const SizedBox(height: 4),
+                              Text(
+                                n.body,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              _formatDate(n.createdAt),
-                              style: const TextStyle(
-                                color: Colors.white38,
-                                fontSize: 11,
+                              const SizedBox(height: 6),
+                              Text(
+                                _formatDate(n.createdAt),
+                                style: const TextStyle(
+                                  color: Colors.white38,
+                                  fontSize: 11,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

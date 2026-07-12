@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -668,7 +669,9 @@ class _DriverScreenState extends State<DriverScreen> {
     // Première position pour amorcer le tracking et avoir une référence
     try {
       final first = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
       );
       _emitPosition(first);
     } catch (_) {
@@ -1396,33 +1399,63 @@ class _DriverScreenState extends State<DriverScreen> {
             ),
           ],
         ),
-        bottomNavigationBar: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          currentIndex: _currentTab,
-          onTap: (i) => setState(() {
-            if (i == 1 && _currentTab != 1) _historyVersion++;
-            if (i == 2 && _currentTab != 2) _profileVersion++;
-            _currentTab = i;
-          }),
-          backgroundColor: const Color(0xFF122530),
-          selectedItemColor: const Color(0xFF0FB271),
-          unselectedItemColor: Colors.white60,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.radar), label: 'Radar'),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long_outlined),
-              activeIcon: Icon(Icons.receipt_long),
-              label: 'Mes courses',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profil',
-            ),
-          ],
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: isCupertinoPlatform
+              ? CupertinoTabBar(
+                  currentIndex: _currentTab,
+                  onTap: _onTabSelected,
+                  backgroundColor: const Color(0xF2122530),
+                  activeColor: const Color(0xFF0FB271),
+                  inactiveColor: CupertinoColors.inactiveGray,
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(CupertinoIcons.scope),
+                      label: 'Radar',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(CupertinoIcons.doc_text),
+                      label: 'Mes courses',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(CupertinoIcons.person),
+                      label: 'Profil',
+                    ),
+                  ],
+                )
+              : NavigationBar(
+                  selectedIndex: _currentTab,
+                  onDestinationSelected: _onTabSelected,
+                  height: 72,
+                  labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.radar),
+                      label: 'Radar',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.receipt_long_outlined),
+                      selectedIcon: Icon(Icons.receipt_long),
+                      label: 'Mes courses',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.person_outline),
+                      selectedIcon: Icon(Icons.person),
+                      label: 'Profil',
+                    ),
+                  ],
+                ),
         ),
       ),
     );
+  }
+
+  void _onTabSelected(int index) {
+    setState(() {
+      if (index == 1 && _currentTab != 1) _historyVersion++;
+      if (index == 2 && _currentTab != 2) _profileVersion++;
+      _currentTab = index;
+    });
   }
 
   Widget _buildRadar() {

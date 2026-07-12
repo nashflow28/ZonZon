@@ -21,16 +21,18 @@ bool get _isCupertino {
   }
 }
 
+bool get isCupertinoPlatform => _isCupertino;
+
 /// Push une nouvelle route avec une transition adaptée à la plateforme.
 Future<T?> pushAdaptive<T>(BuildContext context, Widget page) {
   if (_isCupertino) {
-    return Navigator.of(context).push<T>(
-      CupertinoPageRoute<T>(builder: (_) => page),
-    );
+    return Navigator.of(
+      context,
+    ).push<T>(CupertinoPageRoute<T>(builder: (_) => page));
   }
-  return Navigator.of(context).push<T>(
-    MaterialPageRoute<T>(builder: (_) => page),
-  );
+  return Navigator.of(
+    context,
+  ).push<T>(MaterialPageRoute<T>(builder: (_) => page));
 }
 
 /// Affiche un dialog de confirmation natif (Cupertino sur iOS, Material ailleurs).
@@ -127,10 +129,7 @@ void showAdaptiveSnack(
   final overlay = Overlay.maybeOf(context);
   if (overlay == null) return;
   final entry = OverlayEntry(
-    builder: (_) => _IosTopToast(
-      message: message,
-      isError: isError,
-    ),
+    builder: (_) => _IosTopToast(message: message, isError: isError),
   );
   overlay.insert(entry);
   Timer(const Duration(seconds: 2), () {
@@ -149,9 +148,10 @@ class _IosTopToast extends StatefulWidget {
 
 class _IosTopToastState extends State<_IosTopToast>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl =
-      AnimationController(vsync: this, duration: const Duration(milliseconds: 220))
-        ..forward();
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+  )..forward();
 
   @override
   void dispose() {
@@ -173,13 +173,14 @@ class _IosTopToastState extends State<_IosTopToast>
             position: Tween<Offset>(
               begin: const Offset(0, -0.4),
               end: Offset.zero,
-            ).animate(
-              CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
-            ),
+            ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut)),
             child: Material(
               color: Colors.transparent,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: widget.isError
                       ? const Color(0xFFB00020).withValues(alpha: 0.95)
@@ -210,8 +211,30 @@ class _IosTopToastState extends State<_IosTopToast>
 IconData adaptiveIcon({
   required IconData material,
   required IconData cupertino,
-}) =>
-    _isCupertino ? cupertino : material;
+}) => _isCupertino ? cupertino : material;
+
+/// Centre le contenu et limite sa largeur sur tablette / desktop tout en
+/// laissant les écrans compacts occuper la largeur disponible.
+Widget adaptiveConstrainedContent({
+  required Widget child,
+  double maxWidth = 720,
+  Alignment alignment = Alignment.topCenter,
+}) {
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final effectiveMaxWidth = constraints.maxWidth < maxWidth
+          ? constraints.maxWidth
+          : maxWidth;
+      return Align(
+        alignment: alignment,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
+          child: child,
+        ),
+      );
+    },
+  );
+}
 
 // === Haptics ===
 void hapticLight() {

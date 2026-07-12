@@ -1,6 +1,8 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../utils/platform_adapter.dart';
@@ -28,14 +30,18 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    if (_phoneController.text.trim().isEmpty || _passwordController.text.isEmpty) {
+    if (_phoneController.text.trim().isEmpty ||
+        _passwordController.text.isEmpty) {
       showAdaptiveSnack(context, 'Veuillez remplir tous les champs.');
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      final result = await AuthService().login(_fullPhone, _passwordController.text);
+      final result = await AuthService().login(
+        _fullPhone,
+        _passwordController.text,
+      );
       if (!mounted) return;
       context.go(AppRoutes.homeForRole(result.user.role));
     } catch (e) {
@@ -46,13 +52,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Construit le message affiché à l'utilisateur à partir de l'erreur
-  /// remontée par [AuthService.login]. Le service propage déjà le message
-  /// backend (champ `message` du corps de réponse) via `Exception(...)`,
-  /// mais `Exception.toString()` préfixe le texte par "Exception: ". On
-  /// nettoie ce préfixe pour afficher le message backend tel quel — en
-  /// particulier "Compte suspendu. Contactez le support." (401) — et on
-  /// garde un message générique de secours si l'erreur n'est pas exploitable.
   String _loginErrorMessage(Object error) {
     var message = error.toString();
     const prefix = 'Exception: ';
@@ -69,133 +68,190 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF0C1A22),
-      body: Stack(
-        children: [
-          Positioned(
-            top: -120,
-            right: -80,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF2E90FA).withValues(alpha: 0.35),
-                    Colors.transparent,
-                  ],
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -120,
+              right: -80,
+              child: Container(
+                width: 320,
+                height: 320,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF2E90FA).withValues(alpha: 0.35),
+                      Colors.transparent,
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-          SafeArea(
-            child: Center(
+            SafeArea(
               child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.all(24),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Container(
-                      padding: const EdgeInsets.all(28),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF122530).withValues(alpha: 0.7),
-                        borderRadius: BorderRadius.circular(28),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Icon(Icons.delivery_dining, size: 70, color: Color(0xFF2E90FA)),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'ZonZon',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 1.5),
+                child: adaptiveConstrainedContent(
+                  maxWidth: 520,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(28),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(28),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF122530).withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
                           ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Connectez-vous pour continuer',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.white60, fontSize: 14),
-                          ),
-                          const SizedBox(height: 28),
-                          PhoneField(
-                            controller: _phoneController,
-                            onFullNumberChanged: (full) => _fullPhone = full,
-                          ),
-                          const SizedBox(height: 14),
-                          _buildInput(
-                            controller: _passwordController,
-                            icon: Icons.lock_outline,
-                            hint: 'Mot de passe',
-                            obscure: _obscure,
-                            suffix: IconButton(
-                              icon: Icon(
-                                _obscure ? Icons.visibility_off : Icons.visibility,
-                                color: Colors.white60,
+                        ),
+                        child: AutofillGroup(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Icon(
+                                Icons.delivery_dining,
+                                size: 70,
+                                color: Color(0xFF2E90FA),
                               ),
-                              onPressed: () => setState(() => _obscure = !_obscure),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Container(
-                            height: 58,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              // Direction A : CTA principal en vert de marque.
-                              gradient: const LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Color(0xFF14C784), Color(0xFF0FB271)],
+                              const SizedBox(height: 12),
+                              const Text(
+                                'ZonZon',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.5,
+                                ),
                               ),
-                              boxShadow: [
-                                BoxShadow(color: const Color(0xFF0FB271).withValues(alpha: 0.45), blurRadius: 22, offset: const Offset(0, 8)),
-                              ],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: _isLoading ? null : _submit,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Connectez-vous pour continuer',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.white60,
+                                  fontSize: 14,
+                                ),
                               ),
-                              child: _isLoading
-                                  ? adaptiveLoader(color: const Color(0xFF06140F))
-                                  : const Text(
-                                      'Se connecter',
-                                      style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Color(0xFF06140F), letterSpacing: 0.3),
-                                    ),
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          TextButton(
-                            onPressed: _isLoading
-                                ? null
-                                : () => context.push(AppRoutes.register),
-                            child: RichText(
-                              text: const TextSpan(
-                                style: TextStyle(color: Colors.white60, fontSize: 14),
-                                children: [
-                                  TextSpan(text: 'Pas encore de compte ? '),
-                                  TextSpan(
-                                    text: 'Créer un compte',
-                                    style: TextStyle(color: Color(0xFF2E90FA), fontWeight: FontWeight.bold),
-                                  ),
+                              const SizedBox(height: 28),
+                              PhoneField(
+                                controller: _phoneController,
+                                onFullNumberChanged: (full) =>
+                                    _fullPhone = full,
+                                autofillHints: const [
+                                  AutofillHints.telephoneNumber,
                                 ],
+                                onSubmitted: (_) =>
+                                    FocusScope.of(context).nextFocus(),
                               ),
-                            ),
+                              const SizedBox(height: 14),
+                              _buildInput(
+                                controller: _passwordController,
+                                icon: Icons.lock_outline,
+                                hint: 'Mot de passe',
+                                obscure: _obscure,
+                                textInputAction: TextInputAction.done,
+                                autofillHints: const [AutofillHints.password],
+                                onSubmitted: (_) => _submit(),
+                                suffix: IconButton(
+                                  icon: Icon(
+                                    _obscure
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: Colors.white60,
+                                  ),
+                                  onPressed: () =>
+                                      setState(() => _obscure = !_obscure),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Container(
+                                height: 58,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(18),
+                                  gradient: const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Color(0xFF14C784),
+                                      Color(0xFF0FB271),
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(
+                                        0xFF0FB271,
+                                      ).withValues(alpha: 0.45),
+                                      blurRadius: 22,
+                                      offset: const Offset(0, 8),
+                                    ),
+                                  ],
+                                ),
+                                child: ElevatedButton(
+                                  onPressed: _isLoading ? null : _submit,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.transparent,
+                                    shadowColor: Colors.transparent,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                    ),
+                                  ),
+                                  child: _isLoading
+                                      ? adaptiveLoader(
+                                          color: const Color(0xFF06140F),
+                                        )
+                                      : const Text(
+                                          'Se connecter',
+                                          style: TextStyle(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w900,
+                                            color: Color(0xFF06140F),
+                                            letterSpacing: 0.3,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                              TextButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () => context.push(AppRoutes.register),
+                                child: RichText(
+                                  text: const TextSpan(
+                                    style: TextStyle(
+                                      color: Colors.white60,
+                                      fontSize: 14,
+                                    ),
+                                    children: [
+                                      TextSpan(text: 'Pas encore de compte ? '),
+                                      TextSpan(
+                                        text: 'Créer un compte',
+                                        style: TextStyle(
+                                          color: Color(0xFF2E90FA),
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -207,6 +263,9 @@ class _LoginScreenState extends State<LoginScreen> {
     TextInputType? keyboardType,
     bool obscure = false,
     Widget? suffix,
+    TextInputAction? textInputAction,
+    Iterable<String>? autofillHints,
+    ValueChanged<String>? onSubmitted,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -218,6 +277,9 @@ class _LoginScreenState extends State<LoginScreen> {
         controller: controller,
         obscureText: obscure,
         keyboardType: keyboardType,
+        textInputAction: textInputAction,
+        autofillHints: autofillHints,
+        onSubmitted: onSubmitted,
         style: const TextStyle(color: Colors.white, fontSize: 16),
         decoration: InputDecoration(
           hintText: hint,
@@ -225,7 +287,10 @@ class _LoginScreenState extends State<LoginScreen> {
           prefixIcon: Icon(icon, color: const Color(0xFF2E90FA)),
           suffixIcon: suffix,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 18,
+          ),
         ),
       ),
     );

@@ -59,7 +59,9 @@ class _ShopListScreenState extends State<ShopListScreen> {
       if (perm != LocationPermission.denied &&
           perm != LocationPermission.deniedForever) {
         final pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.medium,
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+          ),
         );
         _myLat = pos.latitude;
         _myLng = pos.longitude;
