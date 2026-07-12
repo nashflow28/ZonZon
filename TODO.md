@@ -100,7 +100,7 @@
 - [x] **P1 sécurité dépendances** — Multer/Nest, Firebase Admin et Angular mis à niveau ; audits production backend/admin à 0 vulnérabilité. *(2026-07-12)*
 - [~] **P1 — Réparer la qualité automatisée** — test admin réparé et couverture PWA négociation ajoutée ; dette ESLint backend historique encore à traiter séparément sans masquer les règles.
 - [x] **P2 — Renuméroter la migration de propositions** — migration déplacée vers `1780500000000`, après les migrations existantes. *(2026-07-12)*
-- [ ] **OPS — Aligner production et dépôt** — commit/push, déployer backend+migration, adapter/build APK et PWA avant tests terrain.
+- [x] **OPS — Aligner production et dépôt** — commits poussés, backend+migration déployés sur Fly.io, admin et PWA publiés sur Cloudflare Pages, APK release généré. *(2026-07-12)*
 
 ### Négociation du prix client/livreur (2026-07-12)
 

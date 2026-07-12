@@ -263,6 +263,14 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 69 (2026-07-12) — Publication post-négociation
+
+- **Git** : commit fonctionnel `f81cfe6` (`feat: finalize negotiated delivery flows`) poussé sur `origin/main`.
+- **Backend** : déployé sur Fly.io (`https://zonzon-backend.fly.dev`) avec migration des propositions. Image Docker alignée sur Node 22, requis par Firebase Admin 14.
+- **Admin** : build production publié sur Cloudflare Pages (`https://zonzon-admin.pages.dev`, déploiement `35b948b1`).
+- **PWA iOS** : projet Cloudflare Pages `zonzon-pwa` créé puis publié (`https://zonzon-pwa.pages.dev`, déploiement `3db69dee`).
+- **Android** : APK release généré dans `mobile_app/build/app/outputs/flutter-apk/app-release.apk` (61 685 890 octets, environ 58,8 Mo).
+
 ### Session 68 (2026-07-12) — Corrections complètes post-audit négociation
 
 - **Sécurité User** : `password` et `fcmToken` sont désormais `select:false`; l'authentification et le fallback FCM les sélectionnent explicitement. Assertions e2e ajoutées sur les réponses d'inscription.
