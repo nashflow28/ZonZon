@@ -1,8 +1,10 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  AvailableDriver,
+  CreateMerchantOrderPayload,
   CreateOrderPayload,
   EstimateResult,
   EtaResult,
@@ -86,6 +88,46 @@ export class OrdersService {
   create(payload: CreateOrderPayload): Observable<Order> {
     return this.http
       .post<Order>(BASE, payload)
+      .pipe(tap((order) => this.upsertCached(order)));
+  }
+
+  /** Crée une livraison Type 1 (rôle COMMERCANT). */
+  createMerchant(payload: CreateMerchantOrderPayload): Observable<Order> {
+    return this.http
+      .post<Order>(`${BASE}/merchant`, payload)
+      .pipe(tap((order) => this.upsertCached(order)));
+  }
+
+  /**
+   * Livreurs disponibles pour attribution manuelle (rôle COMMERCANT/CLIENT/ADMIN).
+   * Affiliés en tête (commerçant), puis triés par distance si des coordonnées
+   * sont fournies.
+   */
+  findAvailableDrivers(lat?: number, lng?: number): Observable<AvailableDriver[]> {
+    let params = new HttpParams();
+    if (lat != null) params = params.set('lat', lat);
+    if (lng != null) params = params.set('lng', lng);
+    return this.http.get<AvailableDriver[]>(`${BASE}/available-drivers`, { params });
+  }
+
+  /** (Ré)assigne un livreur à une course encore PENDING (rôle COMMERCANT/ADMIN). */
+  assign(orderId: string, livreurId: string): Observable<Order> {
+    return this.http
+      .patch<Order>(`${BASE}/${orderId}/assign`, { livreurId })
+      .pipe(tap((order) => this.upsertCached(order)));
+  }
+
+  /** Ajustement manuel du prix (rôle COMMERCANT créateur/ADMIN, si non terminale). */
+  updatePrice(orderId: string, priceFcfa: number, reason?: string): Observable<Order> {
+    return this.http
+      .patch<Order>(`${BASE}/${orderId}/price`, { priceFcfa, reason })
+      .pipe(tap((order) => this.upsertCached(order)));
+  }
+
+  /** Changement du statut de paiement (client/livreur/commerçant créateur/admin). */
+  updatePaymentStatus(orderId: string, paymentStatus: PaymentStatus): Observable<Order> {
+    return this.http
+      .patch<Order>(`${BASE}/${orderId}/payment-status`, { paymentStatus })
       .pipe(tap((order) => this.upsertCached(order)));
   }
 

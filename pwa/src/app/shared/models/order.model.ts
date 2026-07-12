@@ -87,6 +87,35 @@ export interface CreateOrderPayload {
   destinationZoneId?: string;
 }
 
+/** Payload `POST /orders/merchant` (Type 1, création par le commerçant). */
+export interface CreateMerchantOrderPayload {
+  pickupAddress: string;
+  pickupLat?: number;
+  pickupLng?: number;
+  deliveryAddress: string;
+  deliveryLat?: number;
+  deliveryLng?: number;
+  description: string;
+  clientId?: string;
+  clientPhone?: string;
+  clientName?: string;
+  priceFcfa?: number;
+  priceReason?: string;
+  preferredLivreurId?: string;
+  pickupZoneId?: string;
+  destinationZoneId?: string;
+}
+
+/** Réponse `GET /orders/available-drivers` — affiliés en tête, puis triés par distance. */
+export interface AvailableDriver {
+  id: string;
+  firstName: string;
+  lastName: string;
+  vehicle: { type: string; licensePlate?: string | null } | null;
+  distanceKm: number | null;
+  isAffiliated: boolean;
+}
+
 export interface EtaResult {
   distanceKm: number | null;
   etaMinutes: number | null;

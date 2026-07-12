@@ -1,0 +1,67 @@
+<div class="profile zz-scroll">
+  <div class="avatar-block">
+    <label class="avatar-wrap">
+      @if (photoSrc(); as photo) {
+        <img class="avatar" [src]="photo" alt="" />
+      } @else {
+        <div class="avatar avatar--placeholder">{{ (user()?.firstName ?? '?').charAt(0) }}</div>
+      }
+      <span class="avatar-edit">{{ uploadingPhoto() ? '…' : '✎' }}</span>
+      <input type="file" accept="image/*" hidden (change)="onPhotoSelected($event)" [disabled]="uploadingPhoto()" />
+    </label>
+    <h2 class="name">{{ displayName(user()) }}</h2>
+    <p class="phone">{{ user()?.phone }}</p>
+  </div>
+
+  @if (errorMessage()) {
+    <div class="error-banner">{{ errorMessage() }}</div>
+  }
+
+  @if (!editing()) {
+    <button type="button" class="row-btn" (click)="startEditing()">
+      <span>Modifier mon profil</span>
+      <span class="chevron">›</span>
+    </button>
+  } @else {
+    <div class="edit-card">
+      <div class="field">
+        <label for="firstName">Prénom</label>
+        <input id="firstName" type="text" [(ngModel)]="firstName" name="firstName" />
+      </div>
+      <div class="field">
+        <label for="lastName">Nom</label>
+        <input id="lastName" type="text" [(ngModel)]="lastName" name="lastName" />
+      </div>
+      <div class="edit-actions">
+        <button type="button" class="btn-secondary" (click)="cancelEditing()">Annuler</button>
+        <button type="button" class="btn-primary" [disabled]="saving()" (click)="save()">
+          {{ saving() ? 'Enregistrement…' : 'Enregistrer' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <button type="button" class="row-btn" (click)="openNotifications()">
+    <span>Notifications</span>
+    <span class="row-right">
+      @if (unreadCount() > 0) {
+        <span class="badge">{{ unreadCount() }}</span>
+      }
+      <span class="chevron">›</span>
+    </span>
+  </button>
+
+  <button type="button" class="row-btn row-btn--danger" (click)="requestLogout()">
+    <span>Déconnexion</span>
+  </button>
+
+  @if (showLogoutConfirm()) {
+    <div class="panel">
+      <p>Voulez-vous vraiment vous déconnecter ?</p>
+      <div class="panel-actions">
+        <button type="button" class="btn-secondary" (click)="cancelLogout()">Annuler</button>
+        <button type="button" class="btn-danger" (click)="confirmLogout()">Déconnexion</button>
+      </div>
+    </div>
+  }
+</div>

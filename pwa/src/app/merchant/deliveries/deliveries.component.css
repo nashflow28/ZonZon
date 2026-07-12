@@ -1,0 +1,161 @@
+.deliveries {
+  padding: 4px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hint {
+  text-align: center;
+  color: var(--zz-text-mut);
+  margin-top: 40px;
+}
+
+.error-banner {
+  background: color-mix(in srgb, var(--zz-coral) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  color: var(--zz-coral);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-banner button {
+  border: none;
+  background: transparent;
+  color: var(--zz-coral);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: color-mix(in srgb, var(--zz-go) 12%, var(--zz-card));
+  border: 1px solid color-mix(in srgb, var(--zz-go) 35%, transparent);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.stat-card--wide {
+  grid-column: span 2;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--zz-go);
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--zz-text-mut);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 40vh;
+  text-align: center;
+  color: var(--zz-text-mut);
+}
+
+.empty h3 {
+  margin: 0;
+  color: var(--zz-text-hi);
+  font-size: 18px;
+}
+
+.empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.btn-primary {
+  border: none;
+  border-radius: 14px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  background: var(--zz-go);
+  color: #06231a;
+  cursor: pointer;
+}
+
+.section-title {
+  margin: 10px 0 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--zz-text-mut);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  background: var(--zz-card);
+  border: 1px solid var(--zz-line);
+  border-radius: 16px;
+  padding: 14px 16px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.card--muted {
+  opacity: 0.75;
+}
+
+.card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--zz-text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--zz-text-mut);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--zz-text-hi);
+}

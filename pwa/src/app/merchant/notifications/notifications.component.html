@@ -1,0 +1,35 @@
+<div class="notifications zz-scroll">
+  @if (loading()) {
+    <p class="hint">Chargement…</p>
+  } @else if (errorMessage()) {
+    <div class="error-banner">
+      {{ errorMessage() }}
+      <button type="button" (click)="load()">Réessayer</button>
+    </div>
+  } @else if (notifications().length === 0) {
+    <div class="empty">
+      <h3>Aucune notification</h3>
+      <p>Vous serez averti ici de tout ce qui concerne vos livraisons.</p>
+    </div>
+  } @else {
+    <button type="button" class="mark-all" (click)="markAllRead()">Tout marquer comme lu</button>
+
+    <div class="list">
+      @for (n of notifications(); track n.id) {
+        <button type="button" class="card" [class.card--unread]="!n.readAt" (click)="open(n)">
+          @if (!n.readAt) {
+            <span class="dot"></span>
+          }
+          <div class="card-body">
+            <span class="card-title">{{ n.title }}</span>
+            <span class="card-sub">{{ n.body }}</span>
+          </div>
+        </button>
+      }
+    </div>
+
+    @if (hasMore()) {
+      <button type="button" class="load-more" (click)="loadMore()">Charger plus</button>
+    }
+  }
+</div>

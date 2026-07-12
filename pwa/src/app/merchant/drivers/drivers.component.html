@@ -1,0 +1,87 @@
+<div class="drivers zz-scroll">
+  @if (loading()) {
+    <p class="hint">Chargement…</p>
+  } @else if (errorMessage()) {
+    <div class="error-banner">
+      {{ errorMessage() }}
+      <button type="button" (click)="load()">Réessayer</button>
+    </div>
+  } @else {
+    @if (!showInvite()) {
+      <button type="button" class="btn-primary" (click)="openInvite()">Inviter un livreur</button>
+    } @else {
+      <div class="invite-card">
+        @if (inviteError()) {
+          <div class="error-banner">{{ inviteError() }}</div>
+        }
+        @if (inviteSuccess()) {
+          <div class="success-banner">{{ inviteSuccess() }}</div>
+        }
+        <div class="field">
+          <label for="invitePhone">Téléphone du livreur</label>
+          <input
+            id="invitePhone"
+            type="tel"
+            inputmode="tel"
+            placeholder="Ex : +22890123456"
+            [(ngModel)]="invitePhone"
+            name="invitePhone"
+            autocomplete="off"
+          />
+          @if (invitePhone.trim().length > 0 && !invitePhoneValid) {
+            <p class="field-error">Numéro invalide (8 à 15 chiffres, indicatif optionnel).</p>
+          }
+        </div>
+        <div class="edit-actions">
+          <button type="button" class="btn-secondary" (click)="closeInvite()">Fermer</button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="!invitePhoneValid || inviting()"
+            (click)="sendInvite()"
+          >
+            {{ inviting() ? 'Envoi…' : "Envoyer l'invitation" }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (drivers().length === 0) {
+      <div class="empty">
+        <h3>Aucun livreur affilié</h3>
+        <p>Invitez un livreur par son numéro de téléphone pour le retrouver ici.</p>
+      </div>
+    } @else {
+      <div class="list">
+        @for (driver of drivers(); track driver.id) {
+          <div class="card">
+            <div class="card-row">
+              <span class="card-title">{{ driver.firstName }} {{ driver.lastName }}</span>
+              <span [class]="statusPillClass(driver.status)">{{ statusLabel(driver.status) }}</span>
+            </div>
+            <p class="card-sub">{{ driver.phone }}</p>
+            @if (driver.vehicle) {
+              <p class="card-sub">{{ vehicleTypeLabel(driver.vehicle.type) }}</p>
+            }
+
+            @if (confirmRemoveId() === driver.id) {
+              <div class="edit-actions">
+                <button type="button" class="btn-secondary" (click)="cancelRemove()">Annuler</button>
+                <button
+                  type="button"
+                  class="btn-danger"
+                  [disabled]="removingDriverId() === driver.id"
+                  (click)="confirmRemove(driver.id)"
+                >
+                  {{ removingDriverId() === driver.id ? '…' : 'Confirmer le retrait' }}
+                </button>
+              </div>
+            } @else if (driver.status === 'ACTIVE' || driver.status === 'PENDING') {
+              <button type="button" class="link-danger" (click)="requestRemove(driver.id)">Retirer</button>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

@@ -122,25 +122,43 @@ export const routes: Routes = [
         path: 'deliveries',
         data: { title: 'Livraisons' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./merchant/deliveries/deliveries.component').then(
+            (m) => m.MerchantDeliveriesComponent
+          ),
+      },
+      {
+        path: 'deliveries/:id',
+        data: { title: 'Suivi' },
+        loadComponent: () =>
+          import('./merchant/delivery-detail/delivery-detail.component').then(
+            (m) => m.MerchantDeliveryDetailComponent
+          ),
       },
       {
         path: 'create',
         data: { title: 'Créer' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./merchant/create/create.component').then((m) => m.MerchantCreateComponent),
       },
       {
         path: 'drivers',
         data: { title: 'Livreurs' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./merchant/drivers/drivers.component').then((m) => m.MerchantDriversComponent),
       },
       {
         path: 'profile',
         data: { title: 'Profil' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./merchant/profile/profile.component').then((m) => m.MerchantProfileComponent),
+      },
+      {
+        path: 'notifications',
+        data: { title: 'Notifications' },
+        loadComponent: () =>
+          import('./merchant/notifications/notifications.component').then(
+            (m) => m.MerchantNotificationsComponent
+          ),
       },
     ],
   },

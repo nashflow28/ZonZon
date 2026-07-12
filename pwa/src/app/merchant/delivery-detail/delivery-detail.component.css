@@ -1,0 +1,215 @@
+.detail {
+  padding: 4px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hint {
+  text-align: center;
+  color: var(--zz-text-mut);
+  margin-top: 40px;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 60vh;
+  text-align: center;
+  color: var(--zz-text-mut);
+}
+
+.empty h3 {
+  margin: 0;
+  color: var(--zz-text-hi);
+  font-size: 18px;
+}
+
+.empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.status-long {
+  margin: 0;
+  font-size: 14px;
+  color: var(--zz-text-mut);
+  text-align: center;
+}
+
+.map-wrap {
+  height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.badges-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--zz-card);
+  border: 1px solid var(--zz-line);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.info-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--zz-text-mut);
+  flex: 0 0 auto;
+}
+
+.info-value {
+  font-size: 13px;
+  color: var(--zz-text-hi);
+  text-align: right;
+}
+
+.error-banner {
+  background: color-mix(in srgb, var(--zz-coral) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  color: var(--zz-coral);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.actions-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.action-btn {
+  flex: 1;
+  min-width: 100px;
+  border: 1px solid var(--zz-line);
+  background: var(--zz-card);
+  color: var(--zz-text-hi);
+  font-weight: 700;
+  font-size: 13px;
+  border-radius: 14px;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--zz-card);
+  border: 1px solid var(--zz-line);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+.panel h4 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--zz-text-hi);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--zz-text-mut);
+}
+
+.field input,
+.field select {
+  appearance: none;
+  background: var(--zz-bg);
+  border: 1px solid var(--zz-line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--zz-text-hi);
+  outline: none;
+  font-family: inherit;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--zz-go);
+}
+
+.panel-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-secondary,
+.btn-danger,
+.btn-primary {
+  flex: 1;
+  border: none;
+  border-radius: 14px;
+  padding: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--zz-line);
+  color: var(--zz-text-mut);
+}
+
+.btn-secondary:disabled,
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-primary {
+  background: var(--zz-go);
+  color: #06231a;
+}
+
+.chat-panel {
+  height: 400px;
+  padding: 8px 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-panel app-order-chat {
+  flex: 1;
+  min-height: 0;
+}
+
+.link-danger {
+  align-self: flex-end;
+  border: none;
+  background: transparent;
+  color: var(--zz-coral);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}

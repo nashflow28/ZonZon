@@ -1,0 +1,185 @@
+<div class="detail zz-scroll">
+  @if (loading()) {
+    <p class="hint">Chargement…</p>
+  } @else if (notFound()) {
+    <div class="empty">
+      <h3>Livraison introuvable</h3>
+      <p>Cette livraison n'existe pas ou n'est plus accessible.</p>
+      <button type="button" class="btn-primary" (click)="backToDeliveries()">Retour aux livraisons</button>
+    </div>
+  } @else if (order(); as o) {
+    <app-status-timeline [status]="o.status" />
+
+    <p class="status-long">{{ statusLongLabel(o.status) }}</p>
+
+    <div class="map-wrap">
+      <app-order-map [pickup]="pickupPoint()" [delivery]="deliveryPoint()" [driverPosition]="driverPosition()" />
+    </div>
+
+    <div class="badges-row">
+      <span [class]="orderStatusPillClass(o.status)">{{ statusLongLabel(o.status) }}</span>
+      <span [class]="paymentStatusPillClass(o.paymentStatus)">{{ paymentLabel(o.paymentStatus) }}</span>
+    </div>
+
+    <div class="info-card">
+      <div class="info-row">
+        <span class="info-label">Retrait</span>
+        <span class="info-value">{{ o.pickupAddress }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Livraison</span>
+        <span class="info-value">{{ o.deliveryAddress }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Colis</span>
+        <span class="info-value">{{ o.description }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Prix</span>
+        <span class="info-value">{{ o.priceFcfa ?? o.estimatedPrice ?? '—' }} FCFA</span>
+      </div>
+      @if (o.client) {
+        <div class="info-row">
+          <span class="info-label">Client</span>
+          <span class="info-value">{{ o.client.firstName }} {{ o.client.lastName }}</span>
+        </div>
+      }
+      @if (o.client?.phone) {
+        <div class="info-row">
+          <span class="info-label">Téléphone</span>
+          <span class="info-value">{{ o.client?.phone }}</span>
+        </div>
+      }
+      @if (o.livreur) {
+        <div class="info-row">
+          <span class="info-label">Livreur</span>
+          <span class="info-value">{{ o.livreur.firstName }} {{ o.livreur.lastName }}</span>
+        </div>
+      }
+    </div>
+
+    @if (actionError()) {
+      <div class="error-banner">{{ actionError() }}</div>
+    }
+
+    <div class="actions-row">
+      <button type="button" class="action-btn" (click)="toggleChat()">
+        {{ showChat() ? 'Fermer le chat' : 'Discuter' }}
+      </button>
+      <button type="button" class="action-btn" (click)="togglePaymentPanel()">Paiement</button>
+      @if (!isTerminal()) {
+        <button type="button" class="action-btn" (click)="togglePricePanel()">Ajuster le prix</button>
+      }
+      @if (canAssign()) {
+        <button type="button" class="action-btn" (click)="toggleAssignPanel()">Réassigner</button>
+      }
+    </div>
+
+    @if (showChat()) {
+      <div class="panel chat-panel">
+        @if (conversationJoined()) {
+          <button type="button" class="link-danger" (click)="leaveConversation()">Quitter la conversation</button>
+        }
+        <app-order-chat [orderId]="o.id" [orderStatus]="o.status" />
+      </div>
+    }
+
+    @if (showPaymentPanel()) {
+      <div class="panel">
+        <h4>Statut de paiement</h4>
+        @if (o.paymentStatus !== 'RECEIVED_BY_MERCHANT') {
+          <button
+            type="button"
+            class="btn-secondary"
+            [disabled]="updatingPayment()"
+            (click)="markReceivedByMerchant()"
+          >
+            Marquer « Reçu (commerçant) »
+          </button>
+        }
+        <div class="field">
+          <label for="paymentStatus">Autre statut</label>
+          <select id="paymentStatus" [(ngModel)]="selectedPaymentStatus" name="paymentStatus">
+            @for (status of paymentOptions; track status) {
+              <option [ngValue]="status">{{ paymentLabel(status) }}</option>
+            }
+          </select>
+        </div>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" (click)="togglePaymentPanel()">Fermer</button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="updatingPayment() || selectedPaymentStatus === o.paymentStatus"
+            (click)="applyPaymentStatus()"
+          >
+            {{ updatingPayment() ? 'Mise à jour…' : 'Enregistrer' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (showPricePanel()) {
+      <div class="panel">
+        <h4>Ajuster le prix</h4>
+        <div class="field">
+          <label for="priceValue">Prix (FCFA)</label>
+          <input
+            id="priceValue"
+            type="number"
+            min="0"
+            step="1"
+            [ngModel]="priceValue"
+            (ngModelChange)="priceValue = $event"
+            name="priceValue"
+          />
+        </div>
+        <div class="field">
+          <label for="priceReasonInput">Raison (optionnel)</label>
+          <input
+            id="priceReasonInput"
+            type="text"
+            placeholder="Ex : Colis volumineux"
+            [(ngModel)]="priceReason"
+            name="priceReasonInput"
+            autocomplete="off"
+          />
+        </div>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" (click)="togglePricePanel()">Fermer</button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="savingPrice() || priceValue == null || priceValue < 0"
+            (click)="savePrice()"
+          >
+            {{ savingPrice() ? 'Enregistrement…' : 'Enregistrer' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (showAssignPanel()) {
+      <div class="panel">
+        <h4>Réassigner un livreur</h4>
+        <app-driver-picker
+          [drivers]="assignDrivers()"
+          [loading]="assignDriversLoading()"
+          [selectedId]="selectedAssignDriverId()"
+          (select)="selectAssignDriver($event)"
+        />
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" (click)="toggleAssignPanel()">Fermer</button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="!selectedAssignDriverId() || assigning()"
+            (click)="confirmAssign()"
+          >
+            {{ assigning() ? 'Attribution…' : 'Assigner' }}
+          </button>
+        </div>
+      </div>
+    }
+  }
+</div>

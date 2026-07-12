@@ -51,6 +51,8 @@ const PAYMENT_STATUS_VARIANTS: Record<string, ZzStatusVariant> = {
   PAID: 'go',
   RECEIVED_BY_MERCHANT: 'go',
   RECEIVED_BY_LIVREUR: 'go',
+  CASH_ON_DELIVERY: 'go',
+  REFUNDED: 'mut',
 };
 
 export function paymentStatusVariant(status: string | undefined | null): ZzStatusVariant {

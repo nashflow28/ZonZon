@@ -1,0 +1,129 @@
+.notifications {
+  padding: 4px 20px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hint {
+  text-align: center;
+  color: var(--zz-text-mut);
+  margin-top: 40px;
+}
+
+.error-banner {
+  background: color-mix(in srgb, var(--zz-coral) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  color: var(--zz-coral);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.error-banner button {
+  border: none;
+  background: transparent;
+  color: var(--zz-coral);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 50vh;
+  text-align: center;
+  color: var(--zz-text-mut);
+}
+
+.empty h3 {
+  margin: 0;
+  color: var(--zz-text-hi);
+  font-size: 18px;
+}
+
+.empty p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.mark-all {
+  align-self: flex-end;
+  border: none;
+  background: transparent;
+  color: var(--zz-sky);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  background: var(--zz-card);
+  border: 1px solid var(--zz-line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.card--unread {
+  border-color: color-mix(in srgb, var(--zz-sky) 40%, transparent);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--zz-sky);
+  margin-top: 6px;
+  flex: 0 0 auto;
+}
+
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--zz-text-hi);
+}
+
+.card-sub {
+  font-size: 13px;
+  color: var(--zz-text-mut);
+}
+
+.load-more {
+  align-self: center;
+  border: 1px solid var(--zz-line);
+  background: var(--zz-card);
+  color: var(--zz-text-hi);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 999px;
+  cursor: pointer;
+}
