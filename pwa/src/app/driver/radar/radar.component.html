@@ -1,0 +1,84 @@
+<div class="radar zz-scroll">
+  @if (!isApproved()) {
+    <div class="banner" [class.banner--danger]="approvalStatus() === 'REJECTED'">
+      <h3>{{ approvalTitle() }}</h3>
+      <p>{{ approvalMessage() }}</p>
+    </div>
+  } @else {
+    <div class="toggles">
+      <button
+        type="button"
+        class="toggle-row"
+        [disabled]="togglingAvailability()"
+        (click)="toggleAvailability()"
+      >
+        <span class="toggle-label">
+          <strong>{{ isAvailable() ? 'Disponible' : 'Indisponible' }}</strong>
+          <small>Recevez de nouvelles courses dès que vous êtes disponible</small>
+        </span>
+        <span class="switch" [class.switch--on]="isAvailable()"><span class="knob"></span></span>
+      </button>
+
+      <button
+        type="button"
+        class="toggle-row"
+        [disabled]="togglingVisibility()"
+        (click)="toggleVisibility()"
+      >
+        <span class="toggle-label">
+          <strong>{{ isPublic() ? 'Public' : 'Privé' }}</strong>
+          <small>Privé = seulement les courses assignées par un commerçant</small>
+        </span>
+        <span class="switch" [class.switch--on]="isPublic()"><span class="knob"></span></span>
+      </button>
+    </div>
+
+    @if (errorMessage()) {
+      <div class="error-banner">{{ errorMessage() }}</div>
+    }
+
+    @if (!isAvailable()) {
+      <div class="empty">
+        <h3>Vous êtes indisponible</h3>
+        <p>Passez disponible pour recevoir des courses.</p>
+      </div>
+    } @else if (loading()) {
+      <p class="hint">Chargement des courses…</p>
+    } @else if (orders().length === 0) {
+      <div class="empty">
+        <h3>Aucune course disponible</h3>
+        <p>Restez sur cet écran : les nouvelles courses apparaissent automatiquement.</p>
+      </div>
+    } @else {
+      @if (acceptError()) {
+        <div class="error-banner">{{ acceptError() }}</div>
+      }
+      <div class="list">
+        @for (order of orders(); track order.id) {
+          <div class="card">
+            <div class="card-row">
+              <span class="card-title">{{ order.pickupAddress }}</span>
+            </div>
+            <p class="card-arrow">↓</p>
+            <div class="card-row">
+              <span class="card-title">{{ order.deliveryAddress }}</span>
+            </div>
+            <p class="card-desc">{{ order.description }}</p>
+            <div class="card-row">
+              <span class="card-sub">{{ formatDistance(order.distanceKm) }}</span>
+              <span class="card-price">{{ order.priceFcfa ?? '—' }} FCFA</span>
+            </div>
+            <button
+              type="button"
+              class="btn-primary"
+              [disabled]="acceptingId() === order.id"
+              (click)="accept(order)"
+            >
+              {{ acceptingId() === order.id ? 'Acceptation…' : 'Accepter' }}
+            </button>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

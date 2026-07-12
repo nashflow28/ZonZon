@@ -89,6 +89,18 @@ export class OrdersService {
       .pipe(tap((order) => this.upsertCached(order)));
   }
 
+  /** Courses PENDING visibles par le livreur courant (radar). Rôle LIVREUR. */
+  findAvailable(): Observable<Order[]> {
+    return this.http.get<Order[]>(`${BASE}/available`);
+  }
+
+  /** Accepte une course (rôle LIVREUR). 409 si déjà prise / course active en cours. */
+  accept(orderId: string): Observable<Order> {
+    return this.http
+      .post<Order>(`${BASE}/${orderId}/accept`, {})
+      .pipe(tap((order) => this.upsertCached(order)));
+  }
+
   eta(orderId: string): Observable<EtaResult> {
     return this.http.get<EtaResult>(`${BASE}/${orderId}/eta`);
   }

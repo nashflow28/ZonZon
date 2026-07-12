@@ -1,0 +1,234 @@
+<div class="profile zz-scroll">
+  <div class="avatar-block">
+    <label class="avatar-wrap">
+      @if (photoSrc(); as photo) {
+        <img class="avatar" [src]="photo" alt="" />
+      } @else {
+        <div class="avatar avatar--placeholder">{{ (user()?.firstName ?? '?').charAt(0) }}</div>
+      }
+      <span class="avatar-edit">{{ uploadingPhoto() ? '…' : '✎' }}</span>
+      <input
+        type="file"
+        accept="image/*"
+        hidden
+        (change)="onPhotoSelected($event)"
+        [disabled]="uploadingPhoto()"
+      />
+    </label>
+    <h2 class="name">{{ displayName(user()) }}</h2>
+    <p class="phone">{{ user()?.phone }}</p>
+  </div>
+
+  <div class="approval-banner" [class.approval-banner--ok]="isApproved()" [class.approval-banner--danger]="approvalStatus() === 'REJECTED'">
+    {{ approvalMessage() }}
+  </div>
+
+  @if (errorMessage()) {
+    <div class="error-banner">{{ errorMessage() }}</div>
+  }
+
+  @if (!editing()) {
+    <button type="button" class="row-btn" (click)="startEditing()">
+      <span>Modifier mon profil</span>
+      <span class="chevron">›</span>
+    </button>
+  } @else {
+    <div class="edit-card">
+      <div class="field">
+        <label for="firstName">Prénom</label>
+        <input id="firstName" type="text" [(ngModel)]="firstName" name="firstName" />
+      </div>
+      <div class="field">
+        <label for="lastName">Nom</label>
+        <input id="lastName" type="text" [(ngModel)]="lastName" name="lastName" />
+      </div>
+      <div class="edit-actions">
+        <button type="button" class="btn-secondary" (click)="cancelEditing()">Annuler</button>
+        <button type="button" class="btn-primary" [disabled]="saving()" (click)="save()">
+          {{ saving() ? 'Enregistrement…' : 'Enregistrer' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <section class="section">
+    <h3 class="section-title">Disponibilité</h3>
+    <div class="toggles">
+      <button
+        type="button"
+        class="toggle-row"
+        [disabled]="togglingAvailability() || !isApproved()"
+        (click)="toggleAvailability()"
+      >
+        <span class="toggle-label">
+          <strong>{{ isAvailable() ? 'Disponible' : 'Indisponible' }}</strong>
+          <small>Recevez de nouvelles courses dans le Radar</small>
+        </span>
+        <span class="switch" [class.switch--on]="isAvailable()"><span class="knob"></span></span>
+      </button>
+      <button type="button" class="toggle-row" [disabled]="togglingVisibility()" (click)="toggleVisibility()">
+        <span class="toggle-label">
+          <strong>{{ isPublic() ? 'Public' : 'Privé' }}</strong>
+          <small>Privé = seulement les courses assignées par un commerçant</small>
+        </span>
+        <span class="switch" [class.switch--on]="isPublic()"><span class="knob"></span></span>
+      </button>
+    </div>
+  </section>
+
+  <section class="section">
+    <h3 class="section-title">Gains estimés</h3>
+    <div class="earnings-card">
+      <span class="earnings-label">Courses terminées</span>
+      <span class="earnings-value">{{ totalEarnings() }} FCFA</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <h3 class="section-title">Véhicule</h3>
+    @if (vehicleLoading()) {
+      <p class="hint">Chargement…</p>
+    } @else {
+      <div class="edit-card">
+        @if (vehicleError()) {
+          <div class="error-banner">{{ vehicleError() }}</div>
+        }
+        <div class="field">
+          <label for="vehicleType">Type</label>
+          <select id="vehicleType" [(ngModel)]="vehicleType" name="vehicleType">
+            <option value="MOTO">Moto</option>
+            <option value="VOITURE">Voiture</option>
+            <option value="TRICYCLE">Tricycle</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="licensePlate">Plaque d'immatriculation</label>
+          <input id="licensePlate" type="text" [(ngModel)]="licensePlate" name="licensePlate" />
+        </div>
+        <div class="field">
+          <label for="vehicleDescription">Description</label>
+          <input id="vehicleDescription" type="text" [(ngModel)]="vehicleDescription" name="vehicleDescription" />
+        </div>
+        <div class="field">
+          <label for="usualZone">Zone habituelle</label>
+          <select
+            id="usualZone"
+            [ngModel]="usualZoneId"
+            (ngModelChange)="usualZoneId = $event"
+            name="usualZone"
+          >
+            <option [ngValue]="null">Aucune</option>
+            @for (zone of zones(); track zone.id) {
+              <option [ngValue]="zone.id">{{ zone.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="edit-actions">
+          <button type="button" class="btn-primary" [disabled]="vehicleSaving()" (click)="saveVehicle()">
+            {{ vehicleSaving() ? 'Enregistrement…' : 'Enregistrer le véhicule' }}
+          </button>
+        </div>
+        @if (vehicleSaved()) {
+          <p class="saved-hint">Véhicule enregistré.</p>
+        }
+      </div>
+    }
+  </section>
+
+  <section class="section">
+    <h3 class="section-title">Pièce d'identité</h3>
+    <div class="id-card-block">
+      @if (loadingIdCardPreview()) {
+        <p class="hint">Chargement…</p>
+      } @else if (idCardPreviewUrl(); as preview) {
+        <img class="id-card-preview" [src]="preview" alt="Pièce d'identité" />
+      } @else {
+        <p class="hint">Aucune pièce d'identité téléversée.</p>
+      }
+      @if (idCardError()) {
+        <div class="error-banner">{{ idCardError() }}</div>
+      }
+      <label class="row-btn upload-btn">
+        <span>{{ uploadingIdCard() ? 'Envoi…' : 'Téléverser une pièce d\'identité' }}</span>
+        <input
+          type="file"
+          accept="image/*"
+          hidden
+          (change)="onIdCardSelected($event)"
+          [disabled]="uploadingIdCard()"
+        />
+      </label>
+    </div>
+  </section>
+
+  <section class="section">
+    <h3 class="section-title">Invitations d'affiliation</h3>
+    @if (affiliationsLoading()) {
+      <p class="hint">Chargement…</p>
+    } @else if (affiliationsError()) {
+      <div class="error-banner">{{ affiliationsError() }}</div>
+    } @else if (affiliations().length === 0) {
+      <p class="hint">Aucune invitation de commerçant pour l'instant.</p>
+    } @else {
+      <div class="list">
+        @for (a of affiliations(); track a.merchantId) {
+          <div class="affiliation-card">
+            <div class="card-row">
+              <span class="card-title">{{ merchantName(a) }}</span>
+              <span class="zz-pill" [class.zz-pill--go]="a.status === 'ACTIVE'" [class.zz-pill--mut]="a.status === 'PENDING'" [class.zz-pill--coral]="a.status === 'REJECTED' || a.status === 'REMOVED'">
+                {{ affiliationStatusLabel(a.status) }}
+              </span>
+            </div>
+            @if (a.merchant?.phone) {
+              <p class="card-sub">{{ a.merchant?.phone }}</p>
+            }
+            @if (a.status === 'PENDING') {
+              <div class="edit-actions">
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  [disabled]="respondingMerchantId() === a.merchantId"
+                  (click)="respondAffiliation(a, 'reject')"
+                >
+                  Refuser
+                </button>
+                <button
+                  type="button"
+                  class="btn-primary"
+                  [disabled]="respondingMerchantId() === a.merchantId"
+                  (click)="respondAffiliation(a, 'accept')"
+                >
+                  {{ respondingMerchantId() === a.merchantId ? '…' : 'Accepter' }}
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </section>
+
+  <button type="button" class="row-btn" (click)="openNotifications()">
+    <span>Notifications</span>
+    <span class="row-right">
+      @if (unreadCount() > 0) {
+        <span class="badge">{{ unreadCount() }}</span>
+      }
+      <span class="chevron">›</span>
+    </span>
+  </button>
+
+  <button type="button" class="row-btn row-btn--danger" (click)="requestLogout()">
+    <span>Déconnexion</span>
+  </button>
+
+  @if (showLogoutConfirm()) {
+    <div class="panel">
+      <p>Voulez-vous vraiment vous déconnecter ?</p>
+      <div class="panel-actions">
+        <button type="button" class="btn-secondary" (click)="cancelLogout()">Annuler</button>
+        <button type="button" class="btn-danger" (click)="confirmLogout()">Déconnexion</button>
+      </div>
+    </div>
+  }
+</div>

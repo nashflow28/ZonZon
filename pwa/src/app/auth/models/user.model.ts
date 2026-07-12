@@ -21,8 +21,10 @@ export interface User {
   profilePhotoUrl?: string;
   status?: UserStatus;
   driverApprovalStatus?: DriverApprovalStatus;
+  driverRejectionReason?: string | null;
   isAvailable?: boolean;
   isPublic?: boolean;
+  idCardPhotoUrl?: string | null;
 }
 
 export interface LoginResponse {

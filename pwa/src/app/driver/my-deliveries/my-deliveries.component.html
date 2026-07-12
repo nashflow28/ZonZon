@@ -1,0 +1,60 @@
+<div class="deliveries zz-scroll">
+  @if (loading()) {
+    <p class="hint">Chargement…</p>
+  } @else if (errorMessage()) {
+    <div class="error-banner">
+      {{ errorMessage() }}
+      <button type="button" (click)="load()">Réessayer</button>
+    </div>
+  } @else {
+    <div class="earnings-card">
+      <span class="earnings-label">Gains estimés (courses terminées)</span>
+      <span class="earnings-value">{{ totalEarnings() }} FCFA</span>
+    </div>
+
+    @if (active().length === 0 && past().length === 0) {
+      <div class="empty">
+        <h3>Aucune course</h3>
+        <p>Acceptez une course depuis le Radar pour la voir apparaître ici.</p>
+      </div>
+    } @else {
+      @if (active().length > 0) {
+        <h2 class="section-title">En cours</h2>
+        <div class="list">
+          @for (order of active(); track order.id) {
+            <button type="button" class="card" (click)="open(order)">
+              <div class="card-row">
+                <span class="card-title">{{ order.deliveryAddress }}</span>
+                <span [class]="orderStatusPillClass(order.status)">{{ statusLabel(order.status) }}</span>
+              </div>
+              <p class="card-sub">Depuis {{ order.pickupAddress }}</p>
+              <div class="card-row">
+                <span class="card-price">{{ order.priceFcfa ?? '—' }} FCFA</span>
+                <span [class]="paymentStatusPillClass(order.paymentStatus)">{{ paymentLabel(order.paymentStatus) }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      }
+
+      @if (past().length > 0) {
+        <h2 class="section-title">Terminées</h2>
+        <div class="list">
+          @for (order of past(); track order.id) {
+            <button type="button" class="card card--muted" (click)="open(order)">
+              <div class="card-row">
+                <span class="card-title">{{ order.deliveryAddress }}</span>
+                <span [class]="orderStatusPillClass(order.status)">{{ statusLabel(order.status) }}</span>
+              </div>
+              <p class="card-sub">Depuis {{ order.pickupAddress }}</p>
+              <div class="card-row">
+                <span class="card-price">{{ order.priceFcfa ?? '—' }} FCFA</span>
+                <span [class]="paymentStatusPillClass(order.paymentStatus)">{{ paymentLabel(order.paymentStatus) }}</span>
+              </div>
+            </button>
+          }
+        </div>
+      }
+    }
+  }
+</div>

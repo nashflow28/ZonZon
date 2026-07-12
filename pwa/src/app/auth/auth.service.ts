@@ -107,18 +107,33 @@ export class AuthService {
       );
   }
 
-  /** Upload de la photo de profil (multipart). */
-  uploadPhoto(file: File): Observable<User> {
+  /**
+   * Upload de la photo de profil (multipart). Le backend ne renvoie QUE
+   * `{ profilePhotoUrl }` (pas l'utilisateur complet) — on fusionne dans
+   * l'utilisateur courant plutôt que de le remplacer intégralement.
+   */
+  uploadPhoto(file: File): Observable<{ profilePhotoUrl: string }> {
     const form = new FormData();
     form.append('file', file);
     return this.http
-      .post<User>(`${environment.apiUrl}${environment.apiPrefix}/users/me/photo`, form)
-      .pipe(
-        tap((user) => {
-          localStorage.setItem(USER_KEY, JSON.stringify(user));
-          this.currentUser.set(user);
-        })
-      );
+      .post<{ profilePhotoUrl: string }>(
+        `${environment.apiUrl}${environment.apiPrefix}/users/me/photo`,
+        form
+      )
+      .pipe(tap((res) => this.patchCurrentUser({ profilePhotoUrl: res.profilePhotoUrl })));
+  }
+
+  /**
+   * Fusionne un correctif partiel dans l'utilisateur courant — utile après
+   * un PATCH qui ne renvoie qu'un sous-ensemble de champs (ex.
+   * `{isAvailable}` ou `{isPublic}`) au lieu de l'objet `User` complet.
+   */
+  patchCurrentUser(partial: Partial<User>): void {
+    const current = this.currentUser();
+    if (!current) return;
+    const merged: User = { ...current, ...partial };
+    localStorage.setItem(USER_KEY, JSON.stringify(merged));
+    this.currentUser.set(merged);
   }
 
   private persistSession(res: LoginResponse): void {

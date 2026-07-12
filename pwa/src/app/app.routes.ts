@@ -77,19 +77,37 @@ export const routes: Routes = [
         path: 'radar',
         data: { title: 'Radar' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./driver/radar/radar.component').then((m) => m.DriverRadarComponent),
       },
       {
         path: 'my-deliveries',
         data: { title: 'Mes courses' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./driver/my-deliveries/my-deliveries.component').then(
+            (m) => m.DriverMyDeliveriesComponent
+          ),
+      },
+      {
+        path: 'my-deliveries/:id',
+        data: { title: 'Course' },
+        loadComponent: () =>
+          import('./driver/delivery-detail/delivery-detail.component').then(
+            (m) => m.DriverDeliveryDetailComponent
+          ),
       },
       {
         path: 'profile',
         data: { title: 'Profil' },
         loadComponent: () =>
-          import('./shared/placeholder/placeholder.component').then((m) => m.PlaceholderComponent),
+          import('./driver/profile/profile.component').then((m) => m.DriverProfileComponent),
+      },
+      {
+        path: 'notifications',
+        data: { title: 'Notifications' },
+        loadComponent: () =>
+          import('./driver/notifications/notifications.component').then(
+            (m) => m.DriverNotificationsComponent
+          ),
       },
     ],
   },

@@ -1,0 +1,130 @@
+<div class="detail zz-scroll">
+  @if (loading()) {
+    <p class="hint">Chargement…</p>
+  } @else if (notFound()) {
+    <div class="empty">
+      <h3>Course introuvable</h3>
+      <p>Cette course n'existe pas ou n'est plus accessible.</p>
+      <button type="button" class="btn-primary" (click)="backToDeliveries()">Retour à mes courses</button>
+    </div>
+  } @else if (order(); as o) {
+    <app-status-timeline [status]="o.status" />
+
+    <p class="status-long">{{ statusLongLabel(o.status) }}</p>
+
+    <div class="map-wrap">
+      <app-order-map [pickup]="pickupPoint()" [delivery]="deliveryPoint()" [driverPosition]="myPosition()" />
+    </div>
+
+    @if (geoError()) {
+      <div class="warning-banner">{{ geoError() }}</div>
+    }
+
+    <div class="badges-row">
+      <span [class]="paymentStatusPillClass(o.paymentStatus)">{{ paymentLabel(o.paymentStatus) }}</span>
+    </div>
+
+    <div class="info-card">
+      <div class="info-row">
+        <span class="info-label">Retrait</span>
+        <span class="info-value">{{ o.pickupAddress }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Livraison</span>
+        <span class="info-value">{{ o.deliveryAddress }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Colis</span>
+        <span class="info-value">{{ o.description }}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Prix</span>
+        <span class="info-value">{{ o.priceFcfa ?? '—' }} FCFA</span>
+      </div>
+      @if (o.client) {
+        <div class="info-row">
+          <span class="info-label">Client</span>
+          <span class="info-value">{{ o.client.firstName }} {{ o.client.lastName }}</span>
+        </div>
+      }
+      @if (o.merchant) {
+        <div class="info-row">
+          <span class="info-label">Commerçant</span>
+          <span class="info-value">{{ o.merchant.firstName }} {{ o.merchant.lastName }}</span>
+        </div>
+      }
+    </div>
+
+    @if (actionError()) {
+      <div class="error-banner">{{ actionError() }}</div>
+    }
+
+    @if (!isTerminal()) {
+      @if (nextAction(); as action) {
+        <button type="button" class="btn-primary btn-advance" [disabled]="advancing()" (click)="advance()">
+          {{ advancing() ? 'Mise à jour…' : action.label }}
+        </button>
+      }
+
+      <div class="actions-row">
+        <button type="button" class="action-btn" (click)="toggleChat()">
+          {{ showChat() ? 'Fermer le chat' : 'Discuter' }}
+        </button>
+        <button type="button" class="action-btn action-btn--warning" (click)="openFailPanel()">
+          Signaler un échec
+        </button>
+        <button type="button" class="action-btn action-btn--danger" (click)="openCancelPanel()">
+          Annuler
+        </button>
+      </div>
+    } @else {
+      <div class="actions-row">
+        <button type="button" class="action-btn" (click)="toggleChat()">
+          {{ showChat() ? 'Fermer le chat' : 'Discuter' }}
+        </button>
+      </div>
+    }
+
+    @if (showChat()) {
+      <div class="panel chat-panel">
+        <app-order-chat [orderId]="o.id" [orderStatus]="o.status" />
+      </div>
+    }
+
+    @if (showFailPanel()) {
+      <div class="panel">
+        <h4>Signaler un échec de livraison</h4>
+        <textarea
+          rows="3"
+          placeholder="Raison de l'échec (optionnel)"
+          [ngModel]="failReason()"
+          (ngModelChange)="failReason.set($event)"
+        ></textarea>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" (click)="closeFailPanel()">Retour</button>
+          <button type="button" class="btn-danger" [disabled]="failing()" (click)="confirmFail()">
+            {{ failing() ? 'Envoi…' : "Confirmer l'échec" }}
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (showCancelPanel()) {
+      <div class="panel">
+        <h4>Annuler la course</h4>
+        <textarea
+          rows="2"
+          placeholder="Raison (optionnel)"
+          [ngModel]="cancelReason()"
+          (ngModelChange)="cancelReason.set($event)"
+        ></textarea>
+        <div class="panel-actions">
+          <button type="button" class="btn-secondary" (click)="closeCancelPanel()">Retour</button>
+          <button type="button" class="btn-danger" [disabled]="cancelling()" (click)="confirmCancel()">
+            {{ cancelling() ? 'Annulation…' : "Confirmer l'annulation" }}
+          </button>
+        </div>
+      </div>
+    }
+  }
+</div>
