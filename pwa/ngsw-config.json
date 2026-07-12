@@ -26,5 +26,20 @@
         ]
       }
     }
+  ],
+  "dataGroups": [
+    {
+      "name": "api-freshness",
+      "urls": [
+        "https://zonzon-backend.fly.dev/v1/zones",
+        "https://zonzon-backend.fly.dev/v1/shops/categories"
+      ],
+      "cacheConfig": {
+        "strategy": "freshness",
+        "maxSize": 10,
+        "maxAge": "1h",
+        "timeout": "5s"
+      }
+    }
   ]
 }

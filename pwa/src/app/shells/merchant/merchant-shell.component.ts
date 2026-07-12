@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
+import { InstallGuideComponent } from '../../shared/components/install-guide/install-guide.component';
+import { ConnectivityService } from '../../shared/services/connectivity.service';
 import { TabBarComponent, ZzTab } from '../../shared/tab-bar/tab-bar.component';
 
 const TABS: ZzTab[] = [
@@ -13,12 +15,13 @@ const TABS: ZzTab[] = [
 /** Shell de l'espace Commerçant : header large-title + contenu + tab bar iOS. */
 @Component({
   selector: 'app-merchant-shell',
-  imports: [RouterOutlet, TabBarComponent],
+  imports: [RouterOutlet, TabBarComponent, InstallGuideComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './merchant-shell.component.html',
   styleUrl: '../shell.css',
 })
 export class MerchantShellComponent {
+  protected connectivity = inject(ConnectivityService);
   readonly tabs = TABS;
   readonly title = signal('ZonZon');
 

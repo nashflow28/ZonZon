@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { AuthService } from '../../auth/auth.service';
 import { User } from '../../auth/models/user.model';
+import { PushSettingsRowComponent } from '../../shared/components/push-settings-row/push-settings-row.component';
 import { mediaUrl } from '../../shared/media-url';
 import { Zone } from '../../shared/models/order.model';
 import { NotificationsService } from '../../shared/services/notifications.service';
@@ -19,7 +20,7 @@ import { DriverService } from '../driver.service';
  */
 @Component({
   selector: 'app-driver-profile',
-  imports: [FormsModule],
+  imports: [FormsModule, PushSettingsRowComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',

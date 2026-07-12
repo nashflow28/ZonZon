@@ -1,6 +1,8 @@
-<header class="shell-header zz-safe-top">
+<header class="shell-header zz-safe-top" [class.shell-header--offline]="!connectivity.online()">
   <h1>{{ title() }}</h1>
 </header>
+
+<app-install-guide />
 
 <main class="shell-content zz-scroll">
   <router-outlet />

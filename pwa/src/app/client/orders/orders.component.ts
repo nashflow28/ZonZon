@@ -4,10 +4,12 @@ import { orderStatusPillClass, paymentStatusPillClass } from '../../shared/statu
 import { statusLabel, paymentLabel } from '../../shared/status-utils';
 import { Order } from '../../shared/models/order.model';
 import { OrdersService } from '../../shared/services/orders.service';
+import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.directive';
 
 /** Liste des commandes client — actives / passées, cf. GET /orders/mine. */
 @Component({
   selector: 'app-client-orders',
+  imports: [PullToRefreshDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './orders.component.html',
   styleUrl: './orders.component.css',

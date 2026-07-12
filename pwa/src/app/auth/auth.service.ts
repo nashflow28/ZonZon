@@ -3,6 +3,7 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
+import { RealtimeNotificationsBridge } from '../shared/services/realtime-notifications-bridge.service';
 import { SocketService } from '../shared/services/socket.service';
 import { LoginPayload, LoginResponse, RegisterPayload, Role, User } from './models/user.model';
 
@@ -14,6 +15,7 @@ export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
   private socketService = inject(SocketService);
+  private realtimeBridge = inject(RealtimeNotificationsBridge);
 
   /** Signal réactif pour suivre l'utilisateur courant (layout, guards, shells). */
   readonly currentUser = signal<User | null>(this.readUserFromStorage());
@@ -26,6 +28,7 @@ export class AuthService {
     const token = this.getToken();
     if (token && this.currentUser()) {
       this.socketService.connect(token);
+      this.realtimeBridge.start();
     }
   }
 
@@ -57,6 +60,7 @@ export class AuthService {
     localStorage.removeItem(USER_KEY);
     this.currentUser.set(null);
     this.socketService.disconnect();
+    this.realtimeBridge.reset();
     this.router.navigate(['/login']);
   }
 
@@ -66,6 +70,7 @@ export class AuthService {
     localStorage.removeItem(USER_KEY);
     this.currentUser.set(null);
     this.socketService.disconnect();
+    this.realtimeBridge.reset();
   }
 
   getToken(): string | null {
@@ -141,6 +146,7 @@ export class AuthService {
     localStorage.setItem(USER_KEY, JSON.stringify(res.user));
     this.currentUser.set(res.user);
     this.socketService.connect(res.access_token);
+    this.realtimeBridge.start();
   }
 
   private readUserFromStorage(): User | null {

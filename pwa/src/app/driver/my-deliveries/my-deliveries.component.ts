@@ -4,10 +4,12 @@ import { Order } from '../../shared/models/order.model';
 import { OrdersService } from '../../shared/services/orders.service';
 import { orderStatusPillClass, paymentStatusPillClass } from '../../shared/status-colors';
 import { paymentLabel, statusLabel } from '../../shared/status-utils';
+import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.directive';
 
 /** Liste des courses du livreur — actives / terminées, cf. GET /orders/mine. */
 @Component({
   selector: 'app-driver-my-deliveries',
+  imports: [PullToRefreshDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './my-deliveries.component.html',
   styleUrl: './my-deliveries.component.css',

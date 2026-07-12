@@ -12,6 +12,13 @@
   flex: 0 0 auto;
   padding: 8px 20px 12px;
   background: var(--zz-bg);
+  transition: padding-top 0.15s ease;
+}
+
+/* Laisse la place à la bannière "Hors ligne" (position fixed, cf.
+   OfflineBannerComponent) pour ne jamais couvrir le grand titre. */
+.shell-header--offline {
+  padding-top: calc(8px + var(--zz-safe-top) + 32px);
 }
 
 .shell-header h1 {

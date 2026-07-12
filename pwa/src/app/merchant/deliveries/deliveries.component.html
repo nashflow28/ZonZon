@@ -1,4 +1,4 @@
-<div class="deliveries zz-scroll">
+<div class="deliveries zz-scroll" zzPullToRefresh (zzRefresh)="load()">
   @if (loading()) {
     <p class="hint">Chargement…</p>
   } @else if (errorMessage()) {

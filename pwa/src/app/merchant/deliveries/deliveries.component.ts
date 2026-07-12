@@ -4,6 +4,7 @@ import { Order } from '../../shared/models/order.model';
 import { OrdersService } from '../../shared/services/orders.service';
 import { orderStatusPillClass, paymentStatusPillClass } from '../../shared/status-colors';
 import { paymentLabel, statusLabel } from '../../shared/status-utils';
+import { PullToRefreshDirective } from '../../shared/directives/pull-to-refresh.directive';
 
 function isToday(iso: string): boolean {
   const d = new Date(iso);
@@ -22,6 +23,7 @@ function isToday(iso: string): boolean {
  */
 @Component({
   selector: 'app-merchant-deliveries',
+  imports: [PullToRefreshDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './deliveries.component.html',
   styleUrl: './deliveries.component.css',

@@ -67,6 +67,17 @@ button {
   font-family: inherit;
 }
 
+/* Focus visible clavier (Tab) — jamais au clic/tap souris (:focus-visible
+   ignore nativement le clic pointeur). Les <input>/<select>/<textarea>
+   gèrent déjà leur propre indicateur (bordure teinte --zz-go au focus). */
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible {
+  outline: 2px solid var(--zz-go);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 input,
 select,
 textarea {
@@ -137,4 +148,20 @@ textarea {
   background: color-mix(in srgb, var(--zz-text-mut) 16%, transparent);
   border-color: color-mix(in srgb, var(--zz-text-mut) 40%, transparent);
   color: var(--zz-text-mut);
+}
+
+/* ------------------------------------------------------------
+   Respect de `prefers-reduced-motion` : coupe toutes les animations et
+   transitions CSS (switches, toasts, indicateur pull-to-refresh...) sans
+   devoir y penser dans chaque composant.
+   ------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
