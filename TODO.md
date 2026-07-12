@@ -89,6 +89,8 @@
 
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)
 
+- [x] **P0 — Backend indisponible après messagerie directe** — `DirectMessagesService` requiert `UserRepository`, omis de `MessagesModule`; les requêtes client `/orders/mine` expiraient. Repository ajouté, backend redéployé et machine Fly redémarrée; health check `200`. *(2026-07-12)*
+
 ### Sécurité médias privés (2026-07-11)
 - [x] **P0 — Pièces d'identité privées R2 / streaming authentifié** — stockage privé distinct `IDENTITY_STORAGE_*`, clé opaque persistée dans `users.idCardPhotoUrl` (`select: false`), endpoint `GET /users/:id/id-card-photo` réservé au propriétaire ou ADMIN, affichage admin/mobile en blob authentifié. Bucket R2 privé `zonzon-identity-private` et secrets Fly configurés. Aucun média public (avatars/logos/produits) n'a été modifié. *(2026-07-11)*
 

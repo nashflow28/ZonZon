@@ -4,6 +4,7 @@ import { Message } from '../entities/message.entity';
 import { MessageReadReceipt } from '../entities/message-read-receipt.entity';
 import { DirectMessage } from '../entities/direct-message.entity';
 import { MerchantDriver } from '../entities/merchant-driver.entity';
+import { User } from '../entities/user.entity';
 import { DeliveryOrder } from '../entities/delivery-order.entity';
 import { MessagesService } from './messages.service';
 import { MessagesController } from './messages.controller';
@@ -15,7 +16,14 @@ import { ConversationsModule } from '../conversations/conversations.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Message, MessageReadReceipt, DirectMessage, MerchantDriver, DeliveryOrder]),
+    TypeOrmModule.forFeature([
+      Message,
+      MessageReadReceipt,
+      DirectMessage,
+      MerchantDriver,
+      User,
+      DeliveryOrder,
+    ]),
     forwardRef(() => OrdersModule),
     NotificationsModule,
     ConversationsModule,

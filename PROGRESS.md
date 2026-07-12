@@ -258,6 +258,13 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 
 ## Historique des sessions
 
+### Session 55 (2026-07-12) — Régression P0 historique client après déploiement messagerie
+
+- **Incident** : l'écran client « Historique des courses » affichait `TimeoutException after 0:00:15.000000`. La cause n'était pas le client : `/v1/orders/mine` ne répondait plus car le processus Nest ne démarrait pas.
+- **Cause** : `DirectMessagesService` injectait `UserRepository`, mais `User` avait été oublié dans `TypeOrmModule.forFeature()` de `MessagesModule`. Nest levait `UnknownDependenciesException` au boot; après dix redémarrages, Fly gardait la machine arrêtée.
+- **Correctif** : `User` ajouté au module, `npm run build` et `npm test` (**365/365**) réussis, image Fly corrigée déployée. La machine a été redémarrée explicitement après la limite de redémarrages.
+- **Vérification production** : machine Fly `started`, `GET https://zonzon-backend.fly.dev/` renvoie HTTP 200 avec `{status:"ok"}`, logs Nest complets sans erreur DI. Le client peut maintenant réessayer l'historique.
+
 ### Session 54 (2026-07-11) — Lier un message général à une course
 
 - Le composeur de conversation générale affiche une action de lien. Elle ouvre la liste des courses de l'utilisateur, puis attache l'identifiant choisi au message envoyé.
