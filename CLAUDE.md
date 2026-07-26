@@ -66,8 +66,10 @@ ZonZon/
 ```
 
 ### URLs de production
-- **Backend API** : `https://zonzon-backend.fly.dev`
-- **Admin** : `https://zonzon-admin.pages.dev`
+- **Backend API** : `https://api.kore-innov.com` (VPS OVH, Docker + Traefik) ← **production**
+- **Backend secours** : `https://zonzon-backend.fly.dev` (Fly.io, même base TiDB)
+- **Admin** : `https://zonzon-admin.pages.dev` (Cloudflare Pages, projet `zonzon-admin`)
+- **PWA iOS** : `https://zonzon-pwa.pages.dev` (Cloudflare Pages, projet `zonzon-pwa`)
 
 ### Comptes du projet
 Tout est centralisé sur `koreinnovation28@gmail.com` :
@@ -80,40 +82,72 @@ Tout est centralisé sur `koreinnovation28@gmail.com` :
 
 ## Commandes rapides
 
-### Déployer le backend
-```powershell
-cd C:\laragon\www\ZonZon\backend
-flyctl deploy --app zonzon-backend
+### Déployer le backend (production = OVH)
+
+> ⚠️ **`flyctl deploy` ne déploie PAS la production.** Fly.io n'est que le backend de
+> secours depuis la session 76. La production est le VPS OVH derrière `api.kore-innov.com`.
+> Attention : les deux partagent la même base TiDB, donc un déploiement Fly appliquerait
+> quand même les migrations — sans mettre à jour le code servi aux utilisateurs.
+
+```bash
+# 1. Transférer le code (le .env du VPS ne doit jamais être écrasé)
+tar czf - -C backend --exclude=node_modules --exclude=dist --exclude=.git --exclude=.env \
+  --exclude=uploads --exclude=private_uploads --exclude=firebase-adminsdk.json . \
+  | ssh ovh-ubuntu 'sudo tar xzf - -C /opt/zonzon/backend'
+
+# 2. Build + bascule (les migrations s'appliquent seules au démarrage)
+ssh ovh-ubuntu 'cd /opt/zonzon/backend && sudo docker compose up -d --build'
+```
+
+Avant une bascule risquée, créer un point de retour :
+```bash
+ssh ovh-ubuntu 'sudo docker tag zonzon-backend:working zonzon-backend:rollback-$(date +%Y%m%d)'
 ```
 
 ### Builder l'APK
 ```powershell
-cd C:\laragon\www\ZonZon\mobile_app
+cd D:\laragon\www\ZonZon\mobile_app
 flutter build apk --release
-# L'URL de prod est déjà la valeur par défaut dans env.dart
+# L'URL de prod est déjà la valeur par défaut dans env.dart — ne pas passer
+# de --dart-define=API_URL, cela a déjà produit un APK pointant sur le secours.
 ```
 
-### Déployer l'admin
+### Déployer l'admin et la PWA
 ```powershell
-cd C:\laragon\www\ZonZon\admin-dashboard
-npm run build -- --configuration production
-npx wrangler pages deploy dist/admin-dashboard/browser --project-name zonzon-admin
+cd D:\laragon\www\ZonZon\admin-dashboard
+npx ng build --configuration production
+npx wrangler pages deploy dist/admin-dashboard/browser --project-name zonzon-admin --branch main
+
+cd D:\laragon\www\ZonZon\pwa
+npx ng build --configuration production
+npx wrangler pages deploy dist/pwa/browser --project-name zonzon-pwa --branch main
 ```
 
 ### Voir les logs backend
-```powershell
-flyctl logs --app zonzon-backend --no-tail
+```bash
+ssh ovh-ubuntu 'sudo docker logs zonzon-backend-ovh --tail 100'   # production OVH
+flyctl logs --app zonzon-backend --no-tail                        # secours Fly
 ```
 
 ---
 
 ## Points critiques à ne pas oublier
 
-- **WebSocket** : `fly.toml` a `min_machines_running=1` et `auto_stop_machines='off'` — ne pas changer ça
+- **Déploiement backend** : la production est **OVH**, pas Fly. Voir « Déployer le backend » ci-dessus.
+- **Volumes OVH** : `zonzon_uploads` et `zonzon_identity` sont déclarés `external: true` dans
+  `backend/docker-compose.yml` — ne jamais retirer ce flag, Compose créerait des volumes vides
+  et les fichiers téléversés deviendraient invisibles.
+- **Traefik** : le service `zonzon` est déclaré par label dans le compose. Le supprimer fait
+  retomber `api.kore-innov.com` en 503 (`the service "zonzon@docker" does not exist`).
+- **WebSocket** : `fly.toml` a `min_machines_running=1` et `auto_stop_machines='off'` — ne pas changer ça (secours)
 - **SSL DB** : TiDB exige `DB_SSL=true` en prod
-- **Photos** : Le dossier `uploads/` sur Fly.io est éphémère — ne pas stocker de données critiques là
+- **Photos** : sur OVH elles sont dans des volumes Docker persistants ; sur Fly le dossier
+  `uploads/` est éphémère — ne pas y stocker de données critiques
 - **Firebase** : `firebase-adminsdk.json` ne doit JAMAIS être committé (il est dans `.dockerignore`)
-- **env.dart** : `defaultValue` pointe sur `https://zonzon-backend.fly.dev` — pour tests locaux, utiliser `--dart-define=API_URL=http://<IP>:3050`
+- **env.dart** : `defaultValue` pointe sur `https://api.kore-innov.com` — pour tests locaux, utiliser `--dart-define=API_URL=http://<IP>:3050`
+- **Migrations** : elles s'appliquent seules au démarrage du conteneur en production
+  (`migrationsRun: NODE_ENV === 'production'`). Il n'y a aucune commande à lancer — mais une
+  migration qui échoue à mi-parcours empêche l'app de redémarrer (pas de `release_command`).
 
 ---
 
