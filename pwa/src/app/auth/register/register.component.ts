@@ -4,6 +4,7 @@ import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth.service';
 import { RegisterPayload, Role, VehicleType } from '../models/user.model';
+import { PhoneInputComponent } from '../../shared/phone-input/phone-input.component';
 
 interface RoleOption {
   value: Exclude<Role, 'ADMIN'>;
@@ -29,7 +30,7 @@ const VEHICLE_OPTIONS: VehicleOption[] = [
 
 @Component({
   selector: 'app-register',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, PhoneInputComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './register.component.html',
   styleUrl: '../auth-form.css',

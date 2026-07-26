@@ -10,7 +10,7 @@
       <input type="file" accept="image/*" hidden (change)="onPhotoSelected($event)" [disabled]="uploadingPhoto()" />
     </label>
     <h2 class="name">{{ displayName(user()) }}</h2>
-    <p class="phone">{{ user()?.phone }}</p>
+    <p class="phone">{{ displayPhone(user()?.phone) }}</p>
   </div>
 
   @if (errorMessage()) {
@@ -52,6 +52,8 @@
   </button>
 
   <app-push-settings-row />
+
+  <app-change-password />
 
   <button type="button" class="row-btn row-btn--danger" (click)="requestLogout()">
     <span>Déconnexion</span>

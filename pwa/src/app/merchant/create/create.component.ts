@@ -15,6 +15,7 @@ import { OrderMapComponent, MapLatLng } from '../../shared/components/map/map.co
 import { AvailableDriver, EstimateResult } from '../../shared/models/order.model';
 import { OrdersService } from '../../shared/services/orders.service';
 import { DriverPickerComponent } from '../driver-picker/driver-picker.component';
+import { PhoneInputComponent } from '../../shared/phone-input/phone-input.component';
 
 type PointMode = 'pickup' | 'delivery';
 
@@ -28,7 +29,7 @@ const PHONE_PATTERN = /^\+?[0-9]{8,15}$/;
  */
 @Component({
   selector: 'app-merchant-create',
-  imports: [FormsModule, OrderMapComponent, DriverPickerComponent],
+  imports: [FormsModule, OrderMapComponent, DriverPickerComponent, PhoneInputComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './create.component.html',
   styleUrl: './create.component.css',

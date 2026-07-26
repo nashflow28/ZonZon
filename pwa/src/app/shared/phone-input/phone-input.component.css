@@ -1,0 +1,53 @@
+:host {
+  display: block;
+  width: 100%;
+}
+
+.phone-input {
+  display: flex;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.35));
+  border-radius: 12px;
+  background: var(--surface-2, rgba(15, 23, 42, 0.6));
+}
+
+.phone-input:focus-within {
+  border-color: var(--accent, #0ea5e9);
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2);
+}
+
+.phone-input--disabled {
+  opacity: 0.6;
+}
+
+.phone-input__country,
+.phone-input__local {
+  min-height: 46px;
+  border: 0;
+  background: transparent;
+  color: var(--text, #f8fafc);
+  font: inherit;
+}
+
+.phone-input__country {
+  max-width: 11rem;
+  padding: 0 0.55rem;
+  border-right: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.phone-input__country option {
+  color: #0f172a;
+  background: #fff;
+}
+
+.phone-input__local {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0.9rem;
+  outline: none;
+}
+
+.phone-input__local::placeholder {
+  color: rgba(148, 163, 184, 0.75);
+}

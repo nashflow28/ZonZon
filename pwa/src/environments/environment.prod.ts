@@ -1,5 +1,5 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://zonzon-backend.fly.dev',
+  apiUrl: 'https://api.kore-innov.com',
   apiPrefix: '/v1',
 };

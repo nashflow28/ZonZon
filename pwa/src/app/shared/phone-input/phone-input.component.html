@@ -1,0 +1,25 @@
+<div class="phone-input" [class.phone-input--disabled]="disabled">
+  <select
+    class="phone-input__country"
+    [disabled]="disabled"
+    [value]="selectedCountry.dialCode"
+    [attr.aria-label]="'Indicatif téléphonique'"
+    (change)="onCountryChange($any($event.target).value)"
+  >
+    @for (country of countries; track country.code) {
+      <option [value]="country.dialCode">{{ country.flag }} {{ country.dialCode }} — {{ country.name }}</option>
+    }
+  </select>
+  <input
+    class="phone-input__local"
+    [id]="inputId || null"
+    type="tel"
+    inputmode="numeric"
+    autocomplete="tel-national"
+    [disabled]="disabled"
+    [placeholder]="placeholder"
+    [ngModel]="localNumber"
+    (ngModelChange)="onLocalChange($event)"
+    (blur)="onBlur()"
+  />
+</div>

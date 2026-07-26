@@ -7,11 +7,13 @@ import { User } from '../../auth/models/user.model';
 import { PushSettingsRowComponent } from '../../shared/components/push-settings-row/push-settings-row.component';
 import { mediaUrl } from '../../shared/media-url';
 import { NotificationsService } from '../../shared/services/notifications.service';
+import { ChangePasswordComponent } from '../../shared/components/change-password/change-password.component';
+import { formatPhone } from '../../shared/phone-input/phone-display';
 
 /** Profil client : infos, édition, photo, accès notifications, déconnexion. */
 @Component({
   selector: 'app-client-profile',
-  imports: [FormsModule, PushSettingsRowComponent],
+  imports: [FormsModule, PushSettingsRowComponent, ChangePasswordComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',
@@ -126,6 +128,10 @@ export class ClientProfileComponent implements OnInit {
   displayName(u: User | null): string {
     if (!u) return '';
     return `${u.firstName} ${u.lastName}`.trim();
+  }
+
+  displayPhone(phone: string | null | undefined): string {
+    return formatPhone(phone);
   }
 
   private extractMessage(err: HttpErrorResponse): string {

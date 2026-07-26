@@ -21,14 +21,12 @@
 
     <div class="field">
       <label for="phone">Téléphone</label>
-      <input
+      <app-phone-input
         id="phone"
-        type="tel"
-        inputmode="tel"
-        autocomplete="tel"
+        [inputId]="'phone'"
         placeholder="90 00 00 00"
         formControlName="phone"
-      />
+      ></app-phone-input>
     </div>
 
     <div class="field">

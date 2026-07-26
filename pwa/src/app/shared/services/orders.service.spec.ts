@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { OrdersService } from './orders.service';
 
-describe('OrdersService price negotiation', () => {
+describe('OrdersService direct acceptance', () => {
   let service: OrdersService;
   let http: HttpTestingController;
 
@@ -17,40 +17,11 @@ describe('OrdersService price negotiation', () => {
 
   afterEach(() => http.verify());
 
-  it('envoie la proposition du livreur', () => {
-    service.proposePrice('order-1', 1250).subscribe();
-
-    const request = http.expectOne((candidate) =>
-      candidate.url.endsWith('/orders/order-1/price-proposals'),
-    );
+  it('accepte directement la course et synchronise le cache', () => {
+    service.accept('order-1').subscribe();
+    const request = http.expectOne((candidate) => candidate.url.endsWith('/orders/order-1/accept'));
     expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({ priceFcfa: 1250 });
-    request.flush({ id: 'proposal-1', priceFcfa: 1250, status: 'PENDING' });
-  });
-
-  it('charge la proposition en attente', () => {
-    service.pendingPriceProposal('order-1').subscribe();
-
-    const request = http.expectOne((candidate) =>
-      candidate.url.endsWith('/orders/order-1/price-proposal'),
-    );
-    expect(request.request.method).toBe('GET');
-    request.flush(null);
-  });
-
-  it('accepte la proposition et synchronise le cache', () => {
-    service.respondToPriceProposal('order-1', 'proposal-1', true).subscribe();
-
-    const request = http.expectOne((candidate) =>
-      candidate.url.endsWith('/orders/order-1/price-proposal/proposal-1'),
-    );
-    expect(request.request.method).toBe('PATCH');
-    expect(request.request.body).toEqual({ accept: true });
-    request.flush({
-      accepted: true,
-      order: { id: 'order-1', status: 'ACCEPTED', priceFcfa: 1250 },
-    });
-
-    expect(service.findCached('order-1')?.priceFcfa).toBe(1250);
+    request.flush({ id: 'order-1', status: 'ACCEPTED', priceFcfa: 500 });
+    expect(service.findCached('order-1')?.priceFcfa).toBe(500);
   });
 });

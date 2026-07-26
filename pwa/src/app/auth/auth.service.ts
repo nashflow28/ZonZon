@@ -112,6 +112,13 @@ export class AuthService {
       );
   }
 
+  changePassword(currentPassword: string, newPassword: string): Observable<{ ok: boolean }> {
+    return this.http.patch<{ ok: boolean }>(
+      `${environment.apiUrl}${environment.apiPrefix}/auth/password`,
+      { currentPassword, newPassword }
+    );
+  }
+
   /**
    * Upload de la photo de profil (multipart). Le backend ne renvoie QUE
    * `{ profilePhotoUrl }` (pas l'utilisateur complet) — on fusionne dans

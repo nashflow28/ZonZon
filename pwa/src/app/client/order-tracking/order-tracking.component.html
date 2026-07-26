@@ -33,33 +33,6 @@
       }
     </div>
 
-    @if (priceProposal(); as proposal) {
-      <div class="panel">
-        <h4>Proposition de {{ proposal.livreur.firstName || 'votre livreur' }}</h4>
-        <p class="panel-hint">
-          {{ proposal.priceFcfa }} FCFA · la course ne sera attribuée qu'après votre accord.
-        </p>
-        <div class="panel-actions">
-          <button
-            type="button"
-            class="btn-secondary"
-            [disabled]="respondingToPrice()"
-            (click)="respondToPriceProposal(false)"
-          >
-            Refuser
-          </button>
-          <button
-            type="button"
-            class="btn-primary"
-            [disabled]="respondingToPrice()"
-            (click)="respondToPriceProposal(true)"
-          >
-            {{ respondingToPrice() ? 'Traitement…' : 'Accepter le prix' }}
-          </button>
-        </div>
-      </div>
-    }
-
     <div class="info-card">
       <div class="info-row">
         <span class="info-label">Retrait</span>

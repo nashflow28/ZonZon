@@ -3,15 +3,13 @@
     <h3 class="section-title">Client</h3>
     <div class="field">
       <label for="clientPhone">Téléphone</label>
-      <input
+      <app-phone-input
         id="clientPhone"
-        type="tel"
-        inputmode="tel"
-        placeholder="Ex : +22890123456"
+        [inputId]="'clientPhone'"
+        placeholder="90 12 34 56"
         [(ngModel)]="clientPhone"
         name="clientPhone"
-        autocomplete="off"
-      />
+      ></app-phone-input>
       @if (clientPhone.trim().length > 0 && !phoneValid()) {
         <p class="field-error">Numéro invalide (8 à 15 chiffres, indicatif optionnel).</p>
       }

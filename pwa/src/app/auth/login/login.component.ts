@@ -3,10 +3,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth.service';
+import { PhoneInputComponent } from '../../shared/phone-input/phone-input.component';
 
 @Component({
   selector: 'app-login',
-  imports: [ReactiveFormsModule, RouterLink],
+  imports: [ReactiveFormsModule, RouterLink, PhoneInputComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './login.component.html',
   styleUrl: '../auth-form.css',

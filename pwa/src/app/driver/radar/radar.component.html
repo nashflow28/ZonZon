@@ -66,61 +66,19 @@
             <p class="card-desc">{{ order.description }}</p>
             <div class="card-row">
               <span class="card-sub">{{ formatDistance(order.distanceKm) }}</span>
-              @if (order.merchant) {
-                <span class="card-price">{{ order.priceFcfa ?? '—' }} FCFA</span>
-              } @else {
-                <span class="card-price">Prix à proposer</span>
-              }
+              <span class="card-price">{{ order.priceFcfa ?? '—' }} FCFA</span>
             </div>
             <button
               type="button"
               class="btn-primary"
               [disabled]="acceptingId() === order.id"
-              (click)="order.merchant ? accept(order) : openPriceProposal(order)"
+              (click)="accept(order)"
             >
-              {{
-                acceptingId() === order.id
-                  ? 'Traitement…'
-                  : order.merchant
-                    ? 'Accepter'
-                    : 'Proposer un prix'
-              }}
+              {{ acceptingId() === order.id ? 'Traitement…' : 'Accepter' }}
             </button>
           </div>
         }
       </div>
-      @if (proposalOrder(); as selected) {
-        <div class="panel">
-          <h3>Proposer votre prix</h3>
-          <p>
-            {{ formatDistance(selected.distanceKm) }} · {{ selected.pickupAddress }} →
-            {{ selected.deliveryAddress }}
-          </p>
-          <label for="proposalPrice">Montant en FCFA</label>
-          <input
-            id="proposalPrice"
-            type="number"
-            min="100"
-            step="50"
-            inputmode="numeric"
-            [value]="proposalPrice()"
-            (input)="updateProposalPrice($event)"
-          />
-          <div class="panel-actions">
-            <button type="button" class="btn-secondary" (click)="closePriceProposal()">
-              Annuler
-            </button>
-            <button
-              type="button"
-              class="btn-primary"
-              [disabled]="acceptingId() === selected.id"
-              (click)="submitPriceProposal()"
-            >
-              {{ acceptingId() === selected.id ? 'Envoi…' : 'Envoyer le prix' }}
-            </button>
-          </div>
-        </div>
-      }
     }
   }
 </div>

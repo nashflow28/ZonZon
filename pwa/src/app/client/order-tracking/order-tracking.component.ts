@@ -14,12 +14,7 @@ import { Subscription, interval } from 'rxjs';
 import { OrderChatComponent } from '../../shared/components/chat/chat.component';
 import { OrderMapComponent, MapLatLng } from '../../shared/components/map/map.component';
 import { StatusTimelineComponent } from '../../shared/components/status-timeline/status-timeline.component';
-import {
-  EtaResult,
-  Order,
-  PriceProposal,
-  isTerminalOrderStatus,
-} from '../../shared/models/order.model';
+import { EtaResult, Order, isTerminalOrderStatus } from '../../shared/models/order.model';
 import { OrdersService } from '../../shared/services/orders.service';
 import { SignalementsService } from '../../shared/services/signalements.service';
 import { SocketService } from '../../shared/services/socket.service';
@@ -58,8 +53,6 @@ export class ClientOrderTrackingComponent implements OnInit {
   readonly order = signal<Order | null>(null);
   readonly driverPosition = signal<MapLatLng | null>(null);
   readonly eta = signal<EtaResult | null>(null);
-  readonly priceProposal = signal<PriceProposal | null>(null);
-  readonly respondingToPrice = signal(false);
 
   readonly showChat = signal(false);
   readonly showCancelPanel = signal(false);
@@ -139,8 +132,6 @@ export class ClientOrderTrackingComponent implements OnInit {
 
   private applyOrder(order: Order): void {
     this.order.set(order);
-    if (order.status === 'PENDING') this.loadPriceProposal();
-    else this.priceProposal.set(null);
     if (order.status === 'COMPLETED' && !this.ratingSubmitted()) {
       this.showRating.set(true);
     }
@@ -154,14 +145,6 @@ export class ClientOrderTrackingComponent implements OnInit {
         .subscribe((evt) => {
           if (evt.orderId !== this.orderId) return;
           this.driverPosition.set({ lat: evt.lat, lng: evt.lng });
-        }),
-    );
-
-    this.socketSub.add(
-      this.socketService
-        .on$<PriceProposal & { orderId: string }>('orderPriceProposed')
-        .subscribe((proposal) => {
-          if (proposal.orderId === this.orderId) this.priceProposal.set(proposal);
         }),
     );
 
@@ -203,36 +186,8 @@ export class ClientOrderTrackingComponent implements OnInit {
     this.socketSub.add(
       this.socketService.connected$.subscribe(() => {
         this.load();
-        this.loadPriceProposal();
       }),
     );
-  }
-
-  private loadPriceProposal(): void {
-    if (this.order()?.status !== 'PENDING') return;
-    this.ordersService.pendingPriceProposal(this.orderId).subscribe({
-      next: (proposal) => this.priceProposal.set(proposal),
-      error: () => this.priceProposal.set(null),
-    });
-  }
-
-  respondToPriceProposal(accept: boolean): void {
-    const proposal = this.priceProposal();
-    if (!proposal || this.respondingToPrice()) return;
-    this.respondingToPrice.set(true);
-    this.actionError.set(null);
-    this.ordersService.respondToPriceProposal(this.orderId, proposal.id, accept).subscribe({
-      next: (result) => {
-        this.respondingToPrice.set(false);
-        this.priceProposal.set(null);
-        this.applyOrder(result.order);
-      },
-      error: (err: HttpErrorResponse) => {
-        this.respondingToPrice.set(false);
-        this.actionError.set(this.extractMessage(err));
-        this.loadPriceProposal();
-      },
-    });
   }
 
   private refreshEtaIfRelevant(): void {

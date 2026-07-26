@@ -133,16 +133,6 @@ export interface EtaResult {
   positionAt?: string;
 }
 
-export interface PriceProposal {
-  id: string;
-  orderId?: string;
-  priceFcfa: number;
-  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'SUPERSEDED';
-  createdAt: string;
-  expiresAt: string;
-  livreur: OrderUserRef;
-}
-
 export interface StatusHistoryEntry {
   id: string;
   status: OrderStatus;

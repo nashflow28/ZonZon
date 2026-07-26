@@ -19,15 +19,13 @@
         }
         <div class="field">
           <label for="invitePhone">Téléphone du livreur</label>
-          <input
+          <app-phone-input
             id="invitePhone"
-            type="tel"
-            inputmode="tel"
-            placeholder="Ex : +22890123456"
+            [inputId]="'invitePhone'"
+            placeholder="90 12 34 56"
             [(ngModel)]="invitePhone"
             name="invitePhone"
-            autocomplete="off"
-          />
+          ></app-phone-input>
           @if (invitePhone.trim().length > 0 && !invitePhoneValid) {
             <p class="field-error">Numéro invalide (8 à 15 chiffres, indicatif optionnel).</p>
           }

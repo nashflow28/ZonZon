@@ -13,7 +13,6 @@ import {
   OrderStatus,
   PaymentHistoryEntry,
   PaymentStatus,
-  PriceProposal,
   StatusHistoryEntry,
   isTerminalOrderStatus,
 } from '../models/order.model';
@@ -145,27 +144,6 @@ export class OrdersService {
     return this.http
       .post<Order>(`${BASE}/${orderId}/accept`, {})
       .pipe(tap((order) => this.upsertCached(order)));
-  }
-
-  proposePrice(orderId: string, priceFcfa: number): Observable<PriceProposal> {
-    return this.http.post<PriceProposal>(`${BASE}/${orderId}/price-proposals`, { priceFcfa });
-  }
-
-  pendingPriceProposal(orderId: string): Observable<PriceProposal | null> {
-    return this.http.get<PriceProposal | null>(`${BASE}/${orderId}/price-proposal`);
-  }
-
-  respondToPriceProposal(
-    orderId: string,
-    proposalId: string,
-    accept: boolean,
-  ): Observable<{ accepted: boolean; order: Order }> {
-    return this.http
-      .patch<{ accepted: boolean; order: Order }>(
-        `${BASE}/${orderId}/price-proposal/${proposalId}`,
-        { accept },
-      )
-      .pipe(tap((result) => this.upsertCached(result.order)));
   }
 
   eta(orderId: string): Observable<EtaResult> {

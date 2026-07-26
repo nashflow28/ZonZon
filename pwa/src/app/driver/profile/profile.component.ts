@@ -12,6 +12,8 @@ import { OrdersService } from '../../shared/services/orders.service';
 import { ZonesService } from '../../shared/services/zones.service';
 import { Affiliation, UpsertVehiclePayload, VehicleType } from '../driver.model';
 import { DriverService } from '../driver.service';
+import { ChangePasswordComponent } from '../../shared/components/change-password/change-password.component';
+import { formatPhone } from '../../shared/phone-input/phone-display';
 
 /**
  * Profil livreur : infos + statut de validation, dispo/visibilité, véhicule +
@@ -20,7 +22,7 @@ import { DriverService } from '../driver.service';
  */
 @Component({
   selector: 'app-driver-profile',
-  imports: [FormsModule, PushSettingsRowComponent],
+  imports: [FormsModule, PushSettingsRowComponent, ChangePasswordComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',
@@ -138,6 +140,10 @@ export class DriverProfileComponent implements OnInit, OnDestroy {
   displayName(u: User | null): string {
     if (!u) return '';
     return `${u.firstName} ${u.lastName}`.trim();
+  }
+
+  displayPhone(phone: string | null | undefined): string {
+    return formatPhone(phone);
   }
 
   // ---- Édition infos ----

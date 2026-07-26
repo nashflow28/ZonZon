@@ -16,7 +16,7 @@
       />
     </label>
     <h2 class="name">{{ displayName(user()) }}</h2>
-    <p class="phone">{{ user()?.phone }}</p>
+    <p class="phone">{{ displayPhone(user()?.phone) }}</p>
   </div>
 
   <div class="approval-banner" [class.approval-banner--ok]="isApproved()" [class.approval-banner--danger]="approvalStatus() === 'REJECTED'">
@@ -180,7 +180,7 @@
               </span>
             </div>
             @if (a.merchant?.phone) {
-              <p class="card-sub">{{ a.merchant?.phone }}</p>
+              <p class="card-sub">{{ displayPhone(a.merchant?.phone) }}</p>
             }
             @if (a.status === 'PENDING') {
               <div class="edit-actions">
@@ -219,6 +219,8 @@
   </button>
 
   <app-push-settings-row />
+
+  <app-change-password />
 
   <button type="button" class="row-btn row-btn--danger" (click)="requestLogout()">
     <span>Déconnexion</span>

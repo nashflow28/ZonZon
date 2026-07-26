@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { MerchantDriver, MerchantDriverStatus } from '../merchant.model';
 import { MerchantService } from '../merchant.service';
+import { PhoneInputComponent } from '../../shared/phone-input/phone-input.component';
 
 const PHONE_PATTERN = /^\+?[0-9]{8,15}$/;
 
@@ -13,7 +14,7 @@ const PHONE_PATTERN = /^\+?[0-9]{8,15}$/;
  */
 @Component({
   selector: 'app-merchant-drivers',
-  imports: [FormsModule],
+  imports: [FormsModule, PhoneInputComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './drivers.component.html',
   styleUrl: './drivers.component.css',

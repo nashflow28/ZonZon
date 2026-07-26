@@ -46,21 +46,6 @@ export class RealtimeNotificationsBridge {
       });
 
     this.socketService
-      .on$<{ priceFcfa: number }>('orderPriceProposed')
-      .subscribe(({ priceFcfa }) => {
-        this.webPush.notifyLocal('ZonZon', `Un livreur propose ${priceFcfa} FCFA.`);
-      });
-
-    this.socketService
-      .on$<{ accepted: boolean }>('orderPriceProposalResponded')
-      .subscribe(({ accepted }) => {
-        this.webPush.notifyLocal(
-          'ZonZon',
-          accepted ? 'Votre prix a été accepté.' : 'Votre prix a été refusé.',
-        );
-      });
-
-    this.socketService
       .on$<{ id: string; pickupAddress?: string }>('newOrderAvailable')
       .subscribe(() => {
         this.webPush.notifyLocal('ZonZon', 'Nouvelle course disponible près de vous.');
