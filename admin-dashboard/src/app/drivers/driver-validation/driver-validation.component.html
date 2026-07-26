@@ -110,7 +110,7 @@
             <span class="text-slate-300">Pièce d'identité chargée</span>
           </ng-container>
           <ng-template #idCardState>
-            <ng-container *ngIf="isIdCardLoading(driver.id); else idCardMissing">
+            <ng-container *ngIf="isIdCardLoading(driver.id); else idCardIdle">
               <div
                 class="w-12 h-12 rounded-lg bg-slate-800 border border-slate-700/50 flex items-center justify-center shrink-0"
               >
@@ -122,13 +122,34 @@
               <span class="text-slate-300">Chargement sécurisé…</span>
             </ng-container>
           </ng-template>
-          <ng-template #idCardMissing>
+          <ng-template #idCardIdle>
+            <ng-container *ngIf="isIdCardMissing(driver.id); else idCardHidden">
+              <div
+                class="w-12 h-12 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0"
+              >
+                <lucide-icon name="id-card" class="w-5 h-5 text-amber-400"></lucide-icon>
+              </div>
+              <span class="text-amber-300 font-semibold">Pièce d'identité non fournie</span>
+            </ng-container>
+          </ng-template>
+          <!--
+            Affichage à la demande : la pièce d'identité n'est plus chargée
+            automatiquement pour tous les livreurs à l'ouverture de l'écran.
+            Elle ne transite et ne s'affiche que sur action explicite de l'admin.
+          -->
+          <ng-template #idCardHidden>
             <div
-              class="w-12 h-12 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0"
+              class="w-12 h-12 rounded-lg bg-slate-800 border border-slate-700/50 flex items-center justify-center shrink-0"
             >
-              <lucide-icon name="id-card" class="w-5 h-5 text-amber-400"></lucide-icon>
+              <lucide-icon name="id-card" class="w-5 h-5 text-slate-400"></lucide-icon>
             </div>
-            <span class="text-amber-300 font-semibold">Pièce d'identité non fournie</span>
+            <button
+              type="button"
+              (click)="showIdCardPhoto(driver.id)"
+              class="text-sky-300 hover:text-sky-200 font-semibold underline underline-offset-2 transition"
+            >
+              Afficher la pièce d'identité
+            </button>
           </ng-template>
         </div>
 

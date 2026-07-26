@@ -10,9 +10,15 @@ if (environment.sentryDsn) {
     environment: environment.production ? 'production' : 'development',
     integrations: [
       Sentry.browserTracingIntegration(),
+      // Le dashboard affiche des données personnelles (noms, téléphones,
+      // adresses, conversations) et les pièces d'identité des livreurs.
+      // Le replay doit donc masquer le texte et bloquer les médias : sans cela,
+      // 10 % des sessions admin transmettaient ces contenus à un tiers, ce qui
+      // annulait la protection appliquée côté backend (select:false, bucket
+      // privé, accès restreint).
       Sentry.replayIntegration({
-        maskAllText: false,
-        blockAllMedia: false,
+        maskAllText: true,
+        blockAllMedia: true,
       }),
     ],
     tracesSampleRate: environment.production ? 0.1 : 1.0,

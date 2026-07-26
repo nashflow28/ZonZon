@@ -71,7 +71,6 @@ export class DriverValidationComponent implements OnInit, OnDestroy {
         this.loadingIdCardIds.set(new Set());
         this.missingIdCardIds.set(new Set());
         this.drivers.set(data ?? []);
-        this.preloadIdCardPhotos(data ?? []);
         this.isLoading.set(false);
       },
       error: (err) => {
@@ -183,10 +182,14 @@ export class DriverValidationComponent implements OnInit, OnDestroy {
     return `${(driver.firstName?.[0] ?? '').toUpperCase()}${(driver.lastName?.[0] ?? '').toUpperCase()}`;
   }
 
-  private preloadIdCardPhotos(drivers: PendingDriver[]): void {
-    for (const driver of drivers) {
-      void this.loadIdCardPhoto(driver.id);
-    }
+  /**
+   * Charge la pièce d'identité d'un livreur, sur action explicite de l'admin.
+   * Le préchargement automatique de toutes les pièces à l'ouverture de l'écran
+   * a été retiré : il faisait transiter et afficher des documents d'identité
+   * sans qu'aucun besoin ne le justifie.
+   */
+  showIdCardPhoto(driverId: string): void {
+    void this.loadIdCardPhoto(driverId);
   }
 
   private async loadIdCardPhoto(driverId: string): Promise<void> {
