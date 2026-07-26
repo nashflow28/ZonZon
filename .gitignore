@@ -73,3 +73,7 @@ GoogleService-Info.plist
 
 firebase-adminsdk.json
 .claude/
+
+# Artefacts d'outillage Codex (captures, pieces jointes) — pas du code source
+.codex/
+.codex-remote-attachments/
