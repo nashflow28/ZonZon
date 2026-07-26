@@ -50,4 +50,8 @@ export class RegisterDto {
   @IsOptional()
   @IsEnum(VehicleType)
   vehicleType?: VehicleType;
+
+  @IsOptional()
+  @IsString()
+  verificationToken?: string;
 }

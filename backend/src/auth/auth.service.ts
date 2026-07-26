@@ -9,12 +9,14 @@ import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
 import { UserRole, UserStatus } from '../entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
+import { WhatsappOtpService } from './whatsapp-otp.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private whatsappOtp: WhatsappOtpService,
   ) {}
 
   async validateUser(phone: string, pass: string) {
@@ -38,6 +40,8 @@ export class AuthService {
         "Impossible de créer un compte administrateur via l'inscription publique",
       );
     }
+
+    this.whatsappOtp.assertProof(dto.phone, dto.verificationToken);
 
     const existing = await this.usersService.findByPhone(dto.phone);
     if (existing) {
@@ -77,10 +81,36 @@ export class AuthService {
     }
     // P0 sécurité (CDC V1) : un compte suspendu ne peut plus se connecter.
     if (user.status === UserStatus.SUSPENDED) {
-      throw new UnauthorizedException(
-        'Compte suspendu. Contactez le support.',
-      );
+      throw new UnauthorizedException('Compte suspendu. Contactez le support.');
     }
     return this.login(user);
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.usersService.findByIdWithPassword(userId);
+    if (!user.password) {
+      throw new UnauthorizedException(
+        'Ce compte ne possède pas de mot de passe local',
+      );
+    }
+
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) {
+      throw new UnauthorizedException('Mot de passe actuel incorrect');
+    }
+    if (currentPassword === newPassword) {
+      throw new ConflictException(
+        'Le nouveau mot de passe doit être différent de l’ancien',
+      );
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password = await bcrypt.hash(newPassword, salt);
+    await this.usersService.updatePassword(userId, password);
+    return { ok: true };
   }
 }

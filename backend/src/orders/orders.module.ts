@@ -12,7 +12,6 @@ import { PriceChange } from '../entities/price-change.entity';
 import { PaymentStatusHistory } from '../entities/payment-status-history.entity';
 import { Zone } from '../entities/zone.entity';
 import { DeliveryRun } from '../entities/delivery-run.entity';
-import { OrderPriceProposal } from '../entities/order-price-proposal.entity';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PricingModule } from '../pricing/pricing.module';
@@ -28,7 +27,6 @@ import { MerchantDriversModule } from '../merchant-drivers/merchant-drivers.modu
       PaymentStatusHistory,
       Zone,
       DeliveryRun,
-      OrderPriceProposal,
     ]),
     UsersModule,
     NotificationsModule,

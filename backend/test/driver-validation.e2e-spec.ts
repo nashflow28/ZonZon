@@ -24,7 +24,7 @@ import { OrderStatus } from '../src/entities/delivery-order.entity';
 import {
   TestAppBundle,
   buildTestApp,
-  proposeAndAcceptPrice,
+  acceptOrderDirectly,
   setDriverProfilePhoto,
 } from './test-helpers';
 
@@ -171,13 +171,7 @@ describe('Driver validation & availability (e2e)', () => {
     });
 
     it('POST /orders/:id/accept → 201, status ACCEPTED', async () => {
-      const response = await proposeAndAcceptPrice(
-        app,
-        orderId,
-        livreurToken,
-        clientToken,
-      );
-      const res = { body: response.body.order };
+      const res = await acceptOrderDirectly(app, orderId, livreurToken);
 
       expect(res.body.status).toBe(OrderStatus.ACCEPTED);
     });

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Message } from '../entities/message.entity';
 import { MessageReadReceipt } from '../entities/message-read-receipt.entity';
 import { DirectMessage } from '../entities/direct-message.entity';
+import { DirectThreadState } from '../entities/direct-thread-state.entity';
 import { MerchantDriver } from '../entities/merchant-driver.entity';
 import { User } from '../entities/user.entity';
 import { DeliveryOrder } from '../entities/delivery-order.entity';
@@ -20,6 +21,7 @@ import { ConversationsModule } from '../conversations/conversations.module';
       Message,
       MessageReadReceipt,
       DirectMessage,
+      DirectThreadState,
       MerchantDriver,
       User,
       DeliveryOrder,

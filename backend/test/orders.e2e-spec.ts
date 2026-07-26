@@ -51,7 +51,6 @@ describe('Orders (e2e)', () => {
   let secondLivreurToken: string;
   let secondLivreurId: string;
   let orderId: string;
-  let proposalId: string;
 
   it('POST /auth/register — admin → 201 + token', async () => {
     // Note: /auth/register REFUSE explicitement le rôle ADMIN (sécurité).
@@ -194,29 +193,14 @@ describe('Orders (e2e)', () => {
     expect(res.body.some((o: any) => o.id === orderId)).toBe(true);
   });
 
-  it('POST /orders/:id/price-proposals (livreur) → proposition sans attribution', async () => {
+  it('POST /orders/:id/accept (livreur) → attribution directe au prix administré', async () => {
     const res = await request(app.getHttpServer())
-      .post(`/orders/${orderId}/price-proposals`)
+      .post(`/orders/${orderId}/accept`)
       .set('Authorization', `Bearer ${livreurToken}`)
-      .send({ priceFcfa: 700 })
       .expect(201);
 
-    expect(res.body.status).toBe('PENDING');
-    expect(res.body.priceFcfa).toBe(700);
-    proposalId = res.body.id;
-    expect((bundle.ordersRepo._store.get(orderId) as any).livreur).toBeFalsy();
-  });
-
-  it('PATCH proposition (client accepte) → attribution + prix proposé', async () => {
-    const res = await request(app.getHttpServer())
-      .patch(`/orders/${orderId}/price-proposal/${proposalId}`)
-      .set('Authorization', `Bearer ${clientToken}`)
-      .send({ accept: true })
-      .expect(200);
-
-    expect(res.body.accepted).toBe(true);
-    expect(res.body.order.status).toBe(OrderStatus.ACCEPTED);
-    expect(res.body.order.priceFcfa).toBe(700);
+    expect(res.body.status).toBe(OrderStatus.ACCEPTED);
+    expect(res.body.priceFcfa).toBe(450);
   });
 
   it('PATCH /orders/:id/status → IN_PROGRESS (livreur) → 200', async () => {
@@ -239,50 +223,11 @@ describe('Orders (e2e)', () => {
     expect(res.body.status).toBe(OrderStatus.COMPLETED);
   });
 
-  it('Second livreur qui propose après attribution → 409', async () => {
+  it('Second livreur qui accepte après attribution → 409', async () => {
     await request(app.getHttpServer())
-      .post(`/orders/${orderId}/price-proposals`)
+      .post(`/orders/${orderId}/accept`)
       .set('Authorization', `Bearer ${secondLivreurToken}`)
-      .send({ priceFcfa: 800 })
       .expect(409);
-  });
-
-  it('un refus remet la course en attente pour la proposition d’un autre livreur', async () => {
-    const created = await request(app.getHttpServer())
-      .post('/orders')
-      .set('Authorization', `Bearer ${clientToken}`)
-      .send({
-        pickupAddress: 'Adidogomé',
-        pickupLat: 6.1979,
-        pickupLng: 1.1471,
-        deliveryAddress: 'Lomé Centre',
-        deliveryLat: 6.1319,
-        deliveryLng: 1.2228,
-        description: 'Course à renégocier',
-      })
-      .expect(201);
-
-    const first = await request(app.getHttpServer())
-      .post(`/orders/${created.body.id}/price-proposals`)
-      .set('Authorization', `Bearer ${livreurToken}`)
-      .send({ priceFcfa: 1200 })
-      .expect(201);
-
-    const rejected = await request(app.getHttpServer())
-      .patch(`/orders/${created.body.id}/price-proposal/${first.body.id}`)
-      .set('Authorization', `Bearer ${clientToken}`)
-      .send({ accept: false })
-      .expect(200);
-    expect(rejected.body.accepted).toBe(false);
-    expect(rejected.body.order.status).toBe(OrderStatus.PENDING);
-
-    const second = await request(app.getHttpServer())
-      .post(`/orders/${created.body.id}/price-proposals`)
-      .set('Authorization', `Bearer ${secondLivreurToken}`)
-      .send({ priceFcfa: 950 })
-      .expect(201);
-    expect(second.body.priceFcfa).toBe(950);
-    expect(second.body.status).toBe('PENDING');
   });
 
   it('refuse une sixième commande ouverte pour le même client', async () => {

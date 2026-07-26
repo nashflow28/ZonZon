@@ -6,7 +6,25 @@ import { UpdatePricingDto } from './dto/update-pricing.dto';
 
 const SINGLETON_ID = 1;
 const DEFAULT_PRICE_PER_KM = 200;
+const DEFAULT_SHORT_TRIP_PRICE_FCFA = 500;
+const DEFAULT_SHORT_TRIP_MAX_DISTANCE_KM = 2.5;
 const CACHE_TTL_MS = 60 * 1000;
+
+export function calculateDeliveryPrice(params: {
+  distanceKm: number;
+  pricePerKm: number;
+  shortTripPriceFcfa: number;
+  shortTripMaxDistanceKm: number;
+  basePriceFcfa?: number;
+}): number {
+  if (params.distanceKm <= params.shortTripMaxDistanceKm) {
+    return params.shortTripPriceFcfa;
+  }
+  return (
+    (params.basePriceFcfa ?? 0) +
+    Math.round(params.distanceKm * params.pricePerKm)
+  );
+}
 
 /**
  * Priorité 3 backlog V1 (Lot 1) : tarif au km configurable par l'admin.
@@ -49,7 +67,8 @@ export class PricingService {
       config = this.pricingRepo.create({
         id: SINGLETON_ID,
         pricePerKm: DEFAULT_PRICE_PER_KM,
-        minPriceFcfa: null,
+        minPriceFcfa: DEFAULT_SHORT_TRIP_PRICE_FCFA,
+        shortTripMaxDistanceKm: DEFAULT_SHORT_TRIP_MAX_DISTANCE_KM,
       });
       config = await this.pricingRepo.save(config);
     }
@@ -63,9 +82,14 @@ export class PricingService {
     return config.pricePerKm;
   }
 
-  async getMinPriceFcfa(): Promise<number | null> {
+  async getMinPriceFcfa(): Promise<number> {
     const config = await this.getConfig();
     return config.minPriceFcfa;
+  }
+
+  async getShortTripMaxDistanceKm(): Promise<number> {
+    const config = await this.getConfig();
+    return config.shortTripMaxDistanceKm;
   }
 
   async updateConfig(dto: UpdatePricingDto): Promise<PricingConfig> {
@@ -75,6 +99,9 @@ export class PricingService {
     }
     if (dto.minPriceFcfa !== undefined) {
       config.minPriceFcfa = dto.minPriceFcfa;
+    }
+    if (dto.shortTripMaxDistanceKm !== undefined) {
+      config.shortTripMaxDistanceKm = dto.shortTripMaxDistanceKm;
     }
     const saved = await this.pricingRepo.save(config);
     this.invalidateCache();

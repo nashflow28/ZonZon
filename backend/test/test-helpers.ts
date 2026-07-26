@@ -33,6 +33,7 @@ import { AuthController } from '../src/auth/auth.controller';
 import { AuthService } from '../src/auth/auth.service';
 import { JwtStrategy } from '../src/auth/jwt.strategy';
 import { JwtAuthGuard } from '../src/auth/jwt-auth.guard';
+import { WhatsappOtpService } from '../src/auth/whatsapp-otp.service';
 import { OrdersController } from '../src/orders/orders.controller';
 import { OrdersService } from '../src/orders/orders.service';
 import { OrdersGateway } from '../src/orders/orders.gateway';
@@ -58,7 +59,6 @@ import { DeliveryStatusHistory } from '../src/entities/delivery-status-history.e
 import { PriceChange } from '../src/entities/price-change.entity';
 import { PaymentStatusHistory } from '../src/entities/payment-status-history.entity';
 import { Zone } from '../src/entities/zone.entity';
-import { OrderPriceProposal } from '../src/entities/order-price-proposal.entity';
 
 jest.mock('axios');
 export const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -320,7 +320,6 @@ export interface TestAppBundle {
   vehiclesRepo: ReturnType<typeof makeInMemoryRepo<Vehicle>>;
   ordersRepo: ReturnType<typeof makeInMemoryRepo<DeliveryOrder>>;
   deliveryRunsRepo: ReturnType<typeof makeInMemoryRepo<DeliveryRun>>;
-  priceProposalsRepo: ReturnType<typeof makeInMemoryRepo<OrderPriceProposal>>;
   merchantDriversRepo: ReturnType<typeof makeInMemoryRepo<MerchantDriver>>;
   statusHistoryRepo: ReturnType<typeof makeInMemoryRepo<DeliveryStatusHistory>>;
   priceChangeRepo: ReturnType<typeof makeInMemoryRepo<PriceChange>>;
@@ -331,8 +330,6 @@ export interface TestAppBundle {
     broadcastOrderAccepted: jest.Mock;
     broadcastStatusUpdate: jest.Mock;
     broadcastPaymentUpdate: jest.Mock;
-    broadcastPriceProposal: jest.Mock;
-    broadcastPriceProposalResponse: jest.Mock;
     isUserConnected: jest.Mock;
   };
 }
@@ -384,7 +381,6 @@ export async function buildTestApp(): Promise<TestAppBundle> {
   const vehiclesRepo = makeInMemoryRepo<Vehicle>();
   const ordersRepo = makeInMemoryRepo<DeliveryOrder>();
   const deliveryRunsRepo = makeInMemoryRepo<DeliveryRun>();
-  const priceProposalsRepo = makeInMemoryRepo<OrderPriceProposal>();
   const deviceTokensRepo = makeInMemoryRepo<DeviceToken>();
   const merchantDriversRepo = makeInMemoryRepo<MerchantDriver>();
   const driverPositionsRepo = makeInMemoryRepo<DriverPosition>();
@@ -400,8 +396,6 @@ export async function buildTestApp(): Promise<TestAppBundle> {
     broadcastOrderAccepted: jest.fn(),
     broadcastStatusUpdate: jest.fn(),
     broadcastPaymentUpdate: jest.fn(),
-    broadcastPriceProposal: jest.fn(),
-    broadcastPriceProposalResponse: jest.fn(),
     isUserConnected: jest.fn().mockReturnValue(false),
   };
 
@@ -417,7 +411,6 @@ export async function buildTestApp(): Promise<TestAppBundle> {
         getRepository: (entity: any) => {
           if (entity === User) return usersRepo;
           if (entity === DeliveryRun) return deliveryRunsRepo;
-          if (entity === OrderPriceProposal) return priceProposalsRepo;
           return ordersRepo;
         },
       }),
@@ -437,7 +430,18 @@ export async function buildTestApp(): Promise<TestAppBundle> {
   };
   const fakePricing = {
     getPricePerKm: jest.fn().mockResolvedValue(150),
-    getMinPriceFcfa: jest.fn().mockResolvedValue(null),
+    getMinPriceFcfa: jest.fn().mockResolvedValue(500),
+    getConfig: jest.fn().mockResolvedValue({
+      pricePerKm: 150,
+      minPriceFcfa: 500,
+      shortTripMaxDistanceKm: 2.5,
+    }),
+  };
+  const fakeWhatsappOtp = {
+    isEnabled: jest.fn().mockReturnValue(false),
+    assertProof: jest.fn(),
+    request: jest.fn(),
+    verify: jest.fn(),
   };
 
   const moduleRef = await Test.createTestingModule({
@@ -463,6 +467,7 @@ export async function buildTestApp(): Promise<TestAppBundle> {
       ZonesService,
       DeviceTokensService,
       JwtStrategy,
+      { provide: WhatsappOtpService, useValue: fakeWhatsappOtp },
       { provide: APP_GUARD, useClass: JwtAuthGuard },
       { provide: OrdersGateway, useValue: fakeGateway },
       { provide: NotificationsService, useValue: fakeNotifications },
@@ -472,10 +477,6 @@ export async function buildTestApp(): Promise<TestAppBundle> {
       { provide: getRepositoryToken(Vehicle), useValue: vehiclesRepo },
       { provide: getRepositoryToken(DeliveryOrder), useValue: ordersRepo },
       { provide: getRepositoryToken(DeliveryRun), useValue: deliveryRunsRepo },
-      {
-        provide: getRepositoryToken(OrderPriceProposal),
-        useValue: priceProposalsRepo,
-      },
       {
         provide: getRepositoryToken(DeviceToken),
         useValue: deviceTokensRepo,
@@ -527,7 +528,6 @@ export async function buildTestApp(): Promise<TestAppBundle> {
     vehiclesRepo,
     ordersRepo,
     deliveryRunsRepo,
-    priceProposalsRepo,
     merchantDriversRepo,
     statusHistoryRepo,
     priceChangeRepo,
@@ -565,24 +565,17 @@ export async function registerAndLogin(
   return { token: res.body.access_token, id: res.body.user.id };
 }
 
-/** Nouveau flux client : le livreur propose, puis le client attribue la course. */
-export async function proposeAndAcceptPrice(
+/** Flux standard : un livreur disponible accepte directement la course. */
+export async function acceptOrderDirectly(
   app: INestApplication,
   orderId: string,
   livreurToken: string,
-  clientToken: string,
-  priceFcfa = 700,
 ) {
-  const proposal = await request(app.getHttpServer())
-    .post(`/orders/${orderId}/price-proposals`)
-    .set('Authorization', `Bearer ${livreurToken}`)
-    .send({ priceFcfa })
-    .expect(201);
   return request(app.getHttpServer())
-    .patch(`/orders/${orderId}/price-proposal/${proposal.body.id}`)
-    .set('Authorization', `Bearer ${clientToken}`)
-    .send({ accept: true })
-    .expect(200);
+    .post(`/orders/${orderId}/accept`)
+    .set('Authorization', `Bearer ${livreurToken}`)
+    .send({})
+    .expect(201);
 }
 
 /** Passe un livreur en APPROVED directement dans le repo in-memory (pas de route publique pour ça). */

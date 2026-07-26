@@ -34,8 +34,9 @@ import { Notification } from './entities/notification.entity';
 import { Conversation } from './entities/conversation.entity';
 import { ConversationParticipant } from './entities/conversation-participant.entity';
 import { DirectMessage } from './entities/direct-message.entity';
+import { DirectThreadState } from './entities/direct-thread-state.entity';
 import { DeliveryRun } from './entities/delivery-run.entity';
-import { OrderPriceProposal } from './entities/order-price-proposal.entity';
+import { PhoneVerification } from './entities/phone-verification.entity';
 import { UsersModule } from './users/users.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuthModule } from './auth/auth.module';
@@ -127,8 +128,9 @@ import { StorageModule } from './storage/storage.module';
         Conversation,
         ConversationParticipant,
         DirectMessage,
+        DirectThreadState,
         DeliveryRun,
-        OrderPriceProposal,
+        PhoneVerification,
       ],
       migrations: [__dirname + '/migrations/*{.ts,.js}'],
       migrationsRun: process.env.NODE_ENV === 'production',

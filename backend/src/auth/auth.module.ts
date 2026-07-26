@@ -7,10 +7,14 @@ import { AuthController } from './auth.controller';
 import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { PhoneVerification } from '../entities/phone-verification.entity';
+import { WhatsappOtpService } from './whatsapp-otp.service';
 
 @Module({
   imports: [
     UsersModule,
+    TypeOrmModule.forFeature([PhoneVerification]),
     PassportModule,
     JwtModule.registerAsync({
       useFactory: () => {
@@ -47,6 +51,7 @@ import { JwtAuthGuard } from './jwt-auth.guard';
   controllers: [AuthController],
   providers: [
     AuthService,
+    WhatsappOtpService,
     JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],

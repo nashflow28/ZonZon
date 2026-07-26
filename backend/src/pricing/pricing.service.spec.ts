@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 
-import { PricingService } from './pricing.service';
+import { calculateDeliveryPrice, PricingService } from './pricing.service';
 import { PricingConfig } from '../entities/pricing-config.entity';
 
 const mockRepo = () => ({
@@ -33,6 +33,7 @@ describe('PricingService', () => {
         id: 1,
         pricePerKm: 250,
         minPriceFcfa: 300,
+        shortTripMaxDistanceKm: 2.5,
         updatedAt: new Date(),
       };
       repo.findOne.mockResolvedValue(existing);
@@ -51,7 +52,8 @@ describe('PricingService', () => {
 
       expect(result.id).toBe(1);
       expect(result.pricePerKm).toBe(200);
-      expect(result.minPriceFcfa).toBeNull();
+      expect(result.minPriceFcfa).toBe(500);
+      expect(result.shortTripMaxDistanceKm).toBe(2.5);
       expect(repo.save).toHaveBeenCalled();
     });
 
@@ -59,7 +61,8 @@ describe('PricingService', () => {
       const existing = {
         id: 1,
         pricePerKm: 200,
-        minPriceFcfa: null,
+        minPriceFcfa: 500,
+        shortTripMaxDistanceKm: 2.5,
         updatedAt: new Date(),
       };
       repo.findOne.mockResolvedValue(existing);
@@ -76,20 +79,22 @@ describe('PricingService', () => {
       repo.findOne.mockResolvedValue({
         id: 1,
         pricePerKm: 200,
-        minPriceFcfa: null,
+        minPriceFcfa: 500,
+        shortTripMaxDistanceKm: 2.5,
       });
       const price = await service.getPricePerKm();
       expect(price).toBe(200);
     });
 
-    it('renvoie minPriceFcfa (null si non défini)', async () => {
+    it('renvoie le forfait course courte', async () => {
       repo.findOne.mockResolvedValue({
         id: 1,
         pricePerKm: 200,
-        minPriceFcfa: null,
+        minPriceFcfa: 500,
+        shortTripMaxDistanceKm: 2.5,
       });
       const min = await service.getMinPriceFcfa();
-      expect(min).toBeNull();
+      expect(min).toBe(500);
     });
   });
 
@@ -98,7 +103,8 @@ describe('PricingService', () => {
       const existing = {
         id: 1,
         pricePerKm: 200,
-        minPriceFcfa: null,
+        minPriceFcfa: 500,
+        shortTripMaxDistanceKm: 2.5,
         updatedAt: new Date(),
       };
       repo.findOne.mockResolvedValue(existing);
@@ -121,7 +127,8 @@ describe('PricingService', () => {
       repo.findOne.mockResolvedValue({
         id: 1,
         pricePerKm: 200,
-        minPriceFcfa: null,
+        minPriceFcfa: 500,
+        shortTripMaxDistanceKm: 2.5,
         updatedAt: new Date(),
       });
       repo.save.mockImplementation(async (c: any) => c);
@@ -135,6 +142,7 @@ describe('PricingService', () => {
         id: 1,
         pricePerKm: 200,
         minPriceFcfa: 100,
+        shortTripMaxDistanceKm: 2.5,
         updatedAt: new Date(),
       });
       repo.save.mockImplementation(async (c: any) => c);
@@ -142,6 +150,49 @@ describe('PricingService', () => {
       const updated = await service.updateConfig({});
       expect(updated.pricePerKm).toBe(200);
       expect(updated.minPriceFcfa).toBe(100);
+      expect(updated.shortTripMaxDistanceKm).toBe(2.5);
     });
+
+    it('met à jour la distance maximale du forfait', async () => {
+      repo.findOne.mockResolvedValue({
+        id: 1,
+        pricePerKm: 200,
+        minPriceFcfa: 500,
+        shortTripMaxDistanceKm: 2.5,
+        updatedAt: new Date(),
+      });
+      repo.save.mockImplementation(async (c: any) => c);
+
+      const updated = await service.updateConfig({
+        shortTripMaxDistanceKm: 3,
+      });
+      expect(updated.shortTripMaxDistanceKm).toBe(3);
+    });
+  });
+});
+
+describe('calculateDeliveryPrice', () => {
+  const base = {
+    pricePerKm: 200,
+    shortTripPriceFcfa: 500,
+    shortTripMaxDistanceKm: 2.5,
+  };
+
+  it('applique 500 FCFA jusqu’à 2,50 km inclus', () => {
+    expect(calculateDeliveryPrice({ ...base, distanceKm: 2.5 })).toBe(500);
+  });
+
+  it('applique le tarif kilométrique juste au-dessus du seuil', () => {
+    expect(calculateDeliveryPrice({ ...base, distanceKm: 2.51 })).toBe(502);
+  });
+
+  it('ajoute le prix de base de zone uniquement au-delà du forfait', () => {
+    expect(
+      calculateDeliveryPrice({
+        ...base,
+        distanceKm: 3,
+        basePriceFcfa: 100,
+      }),
+    ).toBe(700);
   });
 });

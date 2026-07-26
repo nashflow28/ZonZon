@@ -362,19 +362,6 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
-  broadcastPriceProposal(clientId: string, proposal: any) {
-    this.server.to(`user:${clientId}`).emit('orderPriceProposed', proposal);
-  }
-
-  broadcastPriceProposalResponse(
-    livreurId: string,
-    payload: { orderId: string; proposalId: string; accepted: boolean },
-  ) {
-    this.server
-      .to(`user:${livreurId}`)
-      .emit('orderPriceProposalResponded', payload);
-  }
-
   broadcastStatusUpdate(
     orderId: string,
     status: string,

@@ -343,6 +343,21 @@ export class UsersService {
     return this.findOne(userId);
   }
 
+  /** Charge le hash uniquement pour les opérations d’authentification. */
+  async findByIdWithPassword(userId: string): Promise<User> {
+    const user = await this.usersRepository
+      .createQueryBuilder('user')
+      .addSelect('user.password')
+      .where('user.id = :userId', { userId })
+      .getOne();
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+    return user;
+  }
+
+  async updatePassword(userId: string, passwordHash: string): Promise<void> {
+    await this.usersRepository.update(userId, { password: passwordHash });
+  }
+
   /** Resolves international and local phone input to the same account. */
   async findByPhone(phone: string): Promise<User | null> {
     const raw = phone.trim();

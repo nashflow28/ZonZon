@@ -232,8 +232,12 @@ describe('OrdersService', () => {
     };
     pricingService = {
       getPricePerKm: jest.fn().mockResolvedValue(200),
-      getMinPriceFcfa: jest.fn().mockResolvedValue(null),
-      getConfig: jest.fn(),
+      getMinPriceFcfa: jest.fn().mockResolvedValue(500),
+      getConfig: jest.fn().mockResolvedValue({
+        pricePerKm: 200,
+        minPriceFcfa: 500,
+        shortTripMaxDistanceKm: 2.5,
+      }),
       updateConfig: jest.fn(),
     };
     merchantDriversService = {
@@ -371,7 +375,7 @@ describe('OrdersService', () => {
       expect(ordersRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           distanceKm: 0.5,
-          priceFcfa: 100, // 0.5 * 200
+          priceFcfa: 500, // forfait administré jusqu'à 2,5 km
         }),
       );
     });
@@ -561,9 +565,10 @@ describe('OrdersService', () => {
       );
     });
 
-    it('le plancher minPriceFcfa global s’applique même avec un tarif par zone', async () => {
+    it('le forfait course courte s’applique même avec un tarif par zone', async () => {
       usersService.findOne.mockResolvedValue(clientUser);
-      // 3 km × 50 (override très bas) + basePrice 0 = 150, mais plancher 1000
+      // Le seuil est porté à 3,5 km pour ce scénario : la course de 3 km
+      // utilise donc le forfait de 1000 FCFA malgré l'override de zone.
       mockedAxios.get.mockResolvedValue({
         data: {
           features: [{ properties: { summary: { distance: 3000 } } }],
@@ -574,7 +579,11 @@ describe('OrdersService', () => {
         basePrice: 0,
         pricePerKmOverride: 50,
       });
-      pricingService.getMinPriceFcfa.mockResolvedValue(1000);
+      pricingService.getConfig.mockResolvedValue({
+        pricePerKm: 200,
+        minPriceFcfa: 1000,
+        shortTripMaxDistanceKm: 3.5,
+      });
       ordersRepository.save.mockImplementation(async (o: any) => ({
         id: 'ord-zone-floor',
         ...o,

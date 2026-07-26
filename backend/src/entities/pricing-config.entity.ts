@@ -15,9 +15,22 @@ export class PricingConfig {
   @Column({ type: 'int', default: 200 })
   pricePerKm: number;
 
-  /** Prix plancher optionnel (FCFA). `null` = pas de plancher. */
-  @Column({ type: 'int', nullable: true })
-  minPriceFcfa: number | null;
+  /** Forfait appliqué aux courses dont la distance ne dépasse pas le seuil. */
+  @Column({ type: 'int', default: 500 })
+  minPriceFcfa: number;
+
+  /** Jusqu'à cette distance incluse, le forfait `minPriceFcfa` s'applique. */
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 2.5,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string | number) => Number(value),
+    },
+  })
+  shortTripMaxDistanceKm: number;
 
   @UpdateDateColumn()
   updatedAt: Date;

@@ -22,8 +22,6 @@ import { AvailableDriversQueryDto } from './dto/available-drivers-query.dto';
 import { AssignOrderDto } from './dto/assign-order.dto';
 import { SearchMerchantClientsQueryDto } from './dto/search-merchant-clients-query.dto';
 import { CreateDeliveryRunDto } from './dto/create-delivery-run.dto';
-import { ProposePriceDto } from './dto/propose-price.dto';
-import { RespondPriceProposalDto } from './dto/respond-price-proposal.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { UserRole } from '../entities/user.entity';
@@ -126,45 +124,6 @@ export class OrdersController {
   @Post(':id/accept')
   accept(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.ordersService.acceptOrder(id, user.id ?? user.sub);
-  }
-
-  @Roles(UserRole.LIVREUR)
-  @Post(':id/price-proposals')
-  proposePrice(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ProposePriceDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.ordersService.proposePrice(
-      id,
-      user.id ?? user.sub,
-      dto.priceFcfa,
-    );
-  }
-
-  @Roles(UserRole.CLIENT)
-  @Get(':id/price-proposal')
-  getPendingPriceProposal(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.ordersService.getPendingPriceProposal(id, user.id ?? user.sub);
-  }
-
-  @Roles(UserRole.CLIENT)
-  @Patch(':id/price-proposal/:proposalId')
-  respondToPriceProposal(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('proposalId', ParseUUIDPipe) proposalId: string,
-    @Body() dto: RespondPriceProposalDto,
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
-    return this.ordersService.respondToPriceProposal(
-      id,
-      proposalId,
-      user.id ?? user.sub,
-      dto.accept,
-    );
   }
 
   @Get(':id/eta')

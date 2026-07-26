@@ -20,7 +20,7 @@ import {
 import {
   TestAppBundle,
   buildTestApp,
-  proposeAndAcceptPrice,
+  acceptOrderDirectly,
   setDriverProfilePhoto,
 } from './test-helpers';
 
@@ -142,7 +142,7 @@ describe('Historique & traçabilité (e2e)', () => {
         .expect(201);
       orderId = orderRes.body.id;
 
-      await proposeAndAcceptPrice(app, orderId, livreurToken, clientToken);
+      await acceptOrderDirectly(app, orderId, livreurToken);
 
       await request(app.getHttpServer())
         .patch(`/orders/${orderId}/status`)
