@@ -70,7 +70,10 @@ class ChatService {
         .setTransports(['websocket'])
         .disableAutoConnect()
         .enableReconnection()
-        .setReconnectionAttempts(8)
+        // Reconnexion illimitée : avec 8 tentatives, le socket du chat
+        // abandonnait après ~40 s de coupure et la conversation restait morte
+        // jusqu'au prochain retour d'arrière-plan.
+        .setReconnectionAttempts(double.infinity)
         .setReconnectionDelay(1000)
         .setReconnectionDelayMax(5000)
         .setTimeout(8000)

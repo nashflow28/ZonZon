@@ -18,7 +18,10 @@ void main() {
       expect(options['extraHeaders'], {'Authorization': 'Bearer token-123'});
       expect(options['transports'], ['websocket']);
       expect(options['autoConnect'], isFalse);
-      expect(options['reconnectionAttempts'], 8);
+      // Reconnexion illimitée : une limite finie faisait abandonner le socket
+      // après ~40 s de coupure réseau, sans aucune reprise tant que l'app
+      // restait au premier plan.
+      expect(options['reconnectionAttempts'], double.infinity);
       expect(options['reconnectionDelay'], 1000);
       expect(options['reconnectionDelayMax'], 5000);
       expect(options['timeout'], 8000);
@@ -40,7 +43,10 @@ void main() {
       expect(options['extraHeaders'], {'Authorization': 'Bearer token-456'});
       expect(options['transports'], ['websocket']);
       expect(options['autoConnect'], isFalse);
-      expect(options['reconnectionAttempts'], 8);
+      // Reconnexion illimitée : une limite finie faisait abandonner le socket
+      // après ~40 s de coupure réseau, sans aucune reprise tant que l'app
+      // restait au premier plan.
+      expect(options['reconnectionAttempts'], double.infinity);
       expect(options['reconnectionDelay'], 1000);
       expect(options['reconnectionDelayMax'], 5000);
       expect(options['timeout'], 8000);

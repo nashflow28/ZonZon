@@ -228,7 +228,12 @@ class OrderSocketController {
         .setTransports(['websocket'])
         .disableAutoConnect()
         .enableReconnection()
-        .setReconnectionAttempts(8)
+        // Reconnexion illimitée (défaut Socket.IO). Avec 8 tentatives et un
+        // backoff plafonné à 5 s, le socket abandonnait définitivement après
+        // ~40 s de coupure : un livreur qui traverse une zone sans réseau ne
+        // retrouvait jamais le temps réel tant que l'app restait au premier
+        // plan, puisque la seule reprise passe par un retour d'arrière-plan.
+        .setReconnectionAttempts(double.infinity)
         .setReconnectionDelay(1000)
         .setReconnectionDelayMax(5000)
         .setTimeout(8000)
@@ -450,9 +455,16 @@ class OrderSocketController {
   /// éventuellement l'utiliser pour distinguer une vraie mise à jour d'un
   /// simple "je suis toujours là".
   void emitDriverLocation(double lat, double lng, {bool heartbeat = false}) {
+    // Sans cette garde, Socket.IO empile les positions dans un `sendBuffer` non
+    // borné pendant une coupure, puis les rejoue toutes à la reconnexion. Le
+    // backend les horodate à la réception : le marqueur du livreur "téléporte"
+    // alors sur tout le trajet passé. Une position GPS périmée n'a aucune
+    // valeur — la perdre est préférable à la rejouer.
+    final socket = _socket;
+    if (socket == null || !socket.connected) return;
     final payload = <String, dynamic>{'lat': lat, 'lng': lng};
     if (heartbeat) payload['heartbeat'] = true;
-    _socket?.emit('driver:location', payload);
+    socket.emit('driver:location', payload);
   }
 
   /// Rattrape les événements potentiellement manqués pendant que
