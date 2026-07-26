@@ -1,0 +1,77 @@
+# Déploiement du backend ZonZon sur le VPS OVH (production).
+#
+# Ce fichier reproduit à l'identique la configuration du conteneur
+# `zonzon-backend-ovh` lancé manuellement le 16/07/2026 — elle a été extraite
+# de `docker inspect`, pas réécrite de mémoire. Elle n'existait jusqu'ici dans
+# aucun fichier : redéployer imposait de reconstituer une commande `docker run`
+# de 12 labels Traefik, 2 volumes, un réseau et un env-file.
+#
+# Déploiement :
+#   cd /opt/zonzon/backend && docker compose up -d --build
+#
+# Les migrations TypeORM s'appliquent automatiquement au démarrage
+# (`migrationsRun: NODE_ENV === 'production'`). Il n'y a pas de commande de
+# migration à lancer.
+#
+# Rollback : retaguer l'image précédente sur `zonzon-backend:working` puis
+#   docker compose up -d --no-build
+
+services:
+  zonzon-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zonzon-backend:working
+    container_name: zonzon-backend-ovh
+    restart: unless-stopped
+
+    # Secrets de production : fichier présent sur le VPS uniquement (chmod 600),
+    # jamais versionné.
+    env_file:
+      - .env
+
+    # Bind sur la loopback : l'exposition publique passe exclusivement par le
+    # proxy Traefik de Coolify, via le réseau ci-dessous.
+    ports:
+      - "127.0.0.1:3050:3050"
+
+    # `external: true` est impératif — sans cela Compose créerait de nouveaux
+    # volumes vides et les fichiers déjà téléversés deviendraient invisibles.
+    volumes:
+      - zonzon_uploads:/app/uploads
+      - zonzon_identity:/app/private_uploads/identity
+
+    networks:
+      - coolify
+
+    # Labels Traefik repris du conteneur en production, avec une correction :
+    # les routers référencent un service `zonzon` qui n'était déclaré par aucun
+    # label. Il devait être défini ailleurs dans la configuration Coolify et
+    # pointait sur l'IP de l'ancien conteneur — à la recréation, Traefik
+    # renvoyait `the service "zonzon@docker" does not exist` (503).
+    # On le déclare donc ici : la configuration devient autoportante et
+    # survivra à toute recréation du conteneur.
+    labels:
+      traefik.enable: "true"
+      traefik.http.services.zonzon.loadbalancer.server.port: "3050"
+      traefik.docker.network: "coolify"
+      traefik.http.routers.zonzon-http.entrypoints: "http"
+      traefik.http.routers.zonzon-http.rule: 'Host("api.kore-innov.com")'
+      traefik.http.routers.zonzon-http.middlewares: "redirect-to-https"
+      traefik.http.routers.zonzon-http.service: "zonzon"
+      traefik.http.routers.zonzon-https.entrypoints: "https"
+      traefik.http.routers.zonzon-https.rule: 'Host("api.kore-innov.com")'
+      traefik.http.routers.zonzon-https.service: "zonzon"
+      traefik.http.routers.zonzon-https.tls: "true"
+      traefik.http.routers.zonzon-https.tls.certresolver: "letsencrypt"
+      traefik.http.routers.zonzon-https.tls.domains[0].main: "api.kore-innov.com"
+
+volumes:
+  zonzon_uploads:
+    external: true
+  zonzon_identity:
+    external: true
+
+networks:
+  coolify:
+    external: true
