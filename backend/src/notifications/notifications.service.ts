@@ -103,7 +103,32 @@ export class NotificationsService {
     return this.app;
   }
 
+  /**
+   * Contrat : cette méthode ne rejette JAMAIS.
+   *
+   * Elle est appelée en « fire-and-forget » (`void sendToUser(...)`) depuis les
+   * flux métier. Sans cette garantie, une simple coupure TiDB pendant un envoi
+   * produisait une `unhandledRejection` — qui, sur Node 22, **termine le
+   * process** : la VM Fly redémarre et toutes les connexions Socket.IO
+   * (courses en cours, positions livreurs, chat) tombent.
+   *
+   * L'envoi de notification est accessoire au flux métier : son échec doit être
+   * journalisé, jamais propagé.
+   */
   async sendToUser(userId: string, payload: PushPayload): Promise<void> {
+    try {
+      await this.deliverToUser(userId, payload);
+    } catch (err) {
+      this.logger.error(
+        `Échec de l'envoi de notification à ${userId} : ${(err as Error).message}`,
+      );
+    }
+  }
+
+  private async deliverToUser(
+    userId: string,
+    payload: PushPayload,
+  ): Promise<void> {
     // Persistance indépendante de l'envoi FCM : même si Firebase n'est pas
     // configuré (no-op ci-dessous), la notification reste consultable via
     // le centre de notifications (GET /notifications). Les erreurs sont
@@ -169,7 +194,7 @@ export class NotificationsService {
           code === 'messaging/invalid-registration-token'
         ) {
           // Token périmé → on le supprime de device_tokens
-          await this.deviceTokens.deleteByToken(token);
+          await this.deviceTokens.deleteByToken(token, userId);
           // Et on nettoie aussi le champ legacy s'il pointait sur le même
           await this.usersRepo
             .createQueryBuilder()

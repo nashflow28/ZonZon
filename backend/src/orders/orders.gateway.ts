@@ -325,8 +325,21 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     livreur?: Record<string, unknown>,
     order?: Record<string, unknown>,
   ) {
+    // Payload complet (contient l'entité commande : adresses, clientPhone,
+    // clientName, entités User) — réservé aux parties prenantes de la course.
     const payload = { orderId, livreurId, livreur, order };
-    this.server.to(`role:${UserRole.LIVREUR}`).emit('orderAccepted', payload);
+    // Payload minimal pour les autres livreurs : leur seul besoin est de retirer
+    // la carte du radar. Diffuser `order` à toute la room `role:LIVREUR` exposait
+    // les données personnelles du client à tous les livreurs connectés.
+    const radarPayload = { orderId, livreurId };
+
+    this.server
+      .to(`role:${UserRole.LIVREUR}`)
+      .except(`user:${livreurId}`)
+      .emit('orderAccepted', radarPayload);
+    // Le livreur gagnant reçoit le payload complet : il en a besoin pour ouvrir
+    // sa course active et démarrer le suivi GPS.
+    this.server.to(`user:${livreurId}`).emit('orderAccepted', payload);
     if (clientId) {
       this.server.to(`user:${clientId}`).emit('orderAccepted', payload);
     }

@@ -106,14 +106,25 @@ describe('DeviceTokensService', () => {
   });
 
   describe('deleteByToken', () => {
-    it('appelle delete avec la bonne clé', async () => {
+    it('scope la suppression au propriétaire du token', async () => {
       repo.delete.mockResolvedValue({ affected: 1 });
-      await service.deleteByToken('tok-z');
-      expect(repo.delete).toHaveBeenCalledWith({ token: 'tok-z' });
+      await service.deleteByToken('tok-z', 'user-1');
+      // `userId` est indispensable : sans lui, un utilisateur authentifié
+      // pouvait supprimer le token FCM d'un tiers et le priver de toute
+      // notification.
+      expect(repo.delete).toHaveBeenCalledWith({
+        token: 'tok-z',
+        userId: 'user-1',
+      });
     });
 
     it("no-op si le token est vide (évite un DELETE sans where)", async () => {
-      await service.deleteByToken('');
+      await service.deleteByToken('', 'user-1');
+      expect(repo.delete).not.toHaveBeenCalled();
+    });
+
+    it("no-op si l'userId est vide (évite un DELETE non scopé)", async () => {
+      await service.deleteByToken('tok-z', '');
       expect(repo.delete).not.toHaveBeenCalled();
     });
   });

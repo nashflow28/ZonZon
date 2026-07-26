@@ -237,9 +237,12 @@ describe('AuthService', () => {
       });
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
+      // 403 et non 401 : le porteur est authentifié. Un 401 est interprété par
+      // les clients comme une session expirée et déclenche une déconnexion
+      // complète (purge du JWT et du token FCM).
       await expect(
         service.changePassword('u', 'wrong', 'new-password'),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+      ).rejects.toBeInstanceOf(ForbiddenException);
       expect(usersService.updatePassword).not.toHaveBeenCalled();
     });
 

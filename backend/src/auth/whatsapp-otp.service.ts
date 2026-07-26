@@ -17,6 +17,23 @@ import { PhoneVerification } from '../entities/phone-verification.entity';
 
 type VerificationProof = { purpose: 'phone-verification'; phone: string };
 
+/**
+ * Le jeton de preuve OTP ne doit JAMAIS être signé avec le secret des jetons
+ * d'accès : sa payload n'a pas de `sub`, et un `JwtStrategy` qui ne vérifie pas
+ * la présence de `sub` l'accepterait comme un jeton d'accès valide.
+ * On dérive donc un secret distinct du `JWT_SECRET` (pas de variable d'env
+ * supplémentaire à provisionner) et on isole l'audience.
+ */
+const OTP_PROOF_AUDIENCE = 'zonzon:otp-proof';
+
+function otpProofSecret(): string {
+  const base = process.env.JWT_SECRET;
+  if (!base) {
+    throw new Error('JWT_SECRET manquant dans la configuration');
+  }
+  return `${base}::otp-proof`;
+}
+
 @Injectable()
 export class WhatsappOtpService {
   private readonly logger = new Logger(WhatsappOtpService.name);
@@ -97,7 +114,11 @@ export class WhatsappOtpService {
     return {
       verificationToken: this.jwt.sign(
         { purpose: 'phone-verification', phone } satisfies VerificationProof,
-        { expiresIn: '10m' },
+        {
+          expiresIn: '10m',
+          secret: otpProofSecret(),
+          audience: OTP_PROOF_AUDIENCE,
+        },
       ),
     };
   }
@@ -106,7 +127,10 @@ export class WhatsappOtpService {
     if (!this.isEnabled()) return;
     if (!token) throw new BadRequestException('Validation WhatsApp requise');
     try {
-      const payload = this.jwt.verify<VerificationProof>(token);
+      const payload = this.jwt.verify<VerificationProof>(token, {
+        secret: otpProofSecret(),
+        audience: OTP_PROOF_AUDIENCE,
+      });
       if (payload.purpose !== 'phone-verification' || payload.phone !== phone) {
         throw new Error('proof mismatch');
       }

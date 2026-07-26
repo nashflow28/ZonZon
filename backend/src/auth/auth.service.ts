@@ -92,15 +92,19 @@ export class AuthService {
     newPassword: string,
   ) {
     const user = await this.usersService.findByIdWithPassword(userId);
+    // 403 et non 401 : le porteur est authentifié, c'est la donnée fournie qui
+    // est invalide. Un 401 est interprété par les clients (mobile, PWA) comme
+    // une session expirée et provoque une déconnexion complète — se tromper de
+    // mot de passe déconnectait l'utilisateur et détruisait son token FCM.
     if (!user.password) {
-      throw new UnauthorizedException(
+      throw new ForbiddenException(
         'Ce compte ne possède pas de mot de passe local',
       );
     }
 
     const matches = await bcrypt.compare(currentPassword, user.password);
     if (!matches) {
-      throw new UnauthorizedException('Mot de passe actuel incorrect');
+      throw new ForbiddenException('Mot de passe actuel incorrect');
     }
     if (currentPassword === newPassword) {
       throw new ConflictException(

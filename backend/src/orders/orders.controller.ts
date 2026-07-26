@@ -84,7 +84,14 @@ export class OrdersController {
     );
   }
 
-  @Roles(UserRole.ADMIN, UserRole.LIVREUR)
+  /**
+   * Liste globale, non filtrée par acteur : réservée à l'ADMIN.
+   * Ouverte auparavant aux LIVREUR, ce qui permettait à n'importe quel livreur
+   * d'aspirer toutes les livraisons de la plateforme (adresses, clientPhone,
+   * clientName, entités User complètes). Aucun front n'appelait cette route
+   * côté livreur — le radar passe par `GET /orders/available`.
+   */
+  @Roles(UserRole.ADMIN)
   @Get()
   findAll(@Query() query: ListOrdersDto) {
     return this.ordersService.findAll(query);

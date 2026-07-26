@@ -88,7 +88,8 @@ export class UsersController {
     // token == null/empty → délistage
     const targetToken = dto.previousToken ?? dto.lastToken;
     if (targetToken) {
-      await this.deviceTokensService.deleteByToken(targetToken);
+      // Scopé sur l'appelant : on ne peut délister qu'un de ses propres tokens.
+      await this.deviceTokensService.deleteByToken(targetToken, userId);
     } else {
       await this.deviceTokensService.deleteAllForUser(userId);
     }

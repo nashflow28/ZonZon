@@ -22,6 +22,9 @@ describe('WhatsappOtpService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     delete process.env.WHATSAPP_OTP_ENABLED;
+    // Le jeton de preuve est signé avec un secret dérivé de JWT_SECRET, distinct
+    // de celui des jetons d'accès.
+    process.env.JWT_SECRET = 'test-secret-for-otp-proof-derivation';
     service = new WhatsappOtpService(repository as never, jwt as never);
   });
 
@@ -61,8 +64,16 @@ describe('WhatsappOtpService', () => {
     expect(challenge.consumedAt).toBeInstanceOf(Date);
     expect(jwt.sign).toHaveBeenCalledWith(
       { purpose: 'phone-verification', phone: challenge.phone },
-      { expiresIn: '10m' },
+      {
+        expiresIn: '10m',
+        // Secret distinct de celui des jetons d'accès et audience isolée :
+        // sans cela, ce jeton (dépourvu de `sub`) serait accepté comme jeton
+        // d'accès et authentifierait le premier utilisateur de la table.
+        secret: `${process.env.JWT_SECRET}::otp-proof`,
+        audience: 'zonzon:otp-proof',
+      },
     );
+    expect(jwt.sign.mock.calls[0][1].secret).not.toBe(process.env.JWT_SECRET);
   });
 
   it('lie la preuve au numéro exact lorsque le contrôle est activé', () => {

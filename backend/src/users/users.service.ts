@@ -418,6 +418,11 @@ export class UsersService {
   }
 
   async findOne(id: string) {
+    // Garde indispensable : TypeORM ignore les valeurs `undefined` dans un
+    // `where` (invalidWhereValuesBehavior par défaut = "ignore"), donc
+    // `findOne({ where: { id: undefined } })` produit un SELECT sans clause
+    // WHERE et renvoie le premier utilisateur de la table.
+    if (!id) throw new NotFoundException('Utilisateur introuvable');
     const user = await this.usersRepository.findOne({
       where: { id },
       relations: ['vehicle'],

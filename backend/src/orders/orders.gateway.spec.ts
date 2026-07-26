@@ -35,11 +35,17 @@ function buildMockServer(
       sockets: socketsMap,
     },
     to(room: string) {
-      return {
-        emit(event: string, payload: any) {
-          emitCalls.push({ room, event, payload });
+      // Reproduit l'opérateur de diffusion de socket.io : `.to(...)` est
+      // chaînable avec `.except(...)` avant `.emit(...)`.
+      const makeOperator = (except?: string) => ({
+        except(excludedRoom: string) {
+          return makeOperator(excludedRoom);
         },
-      };
+        emit(event: string, payload: any) {
+          emitCalls.push({ room, event, payload, except });
+        },
+      });
+      return makeOperator();
     },
     emit(event: string, payload: any) {
       emitCalls.push({ room: '__broadcast__', event, payload });
@@ -480,9 +486,51 @@ describe('OrdersGateway', () => {
         (c) =>
           c.event === 'orderAccepted' &&
           c.room.startsWith('user:') &&
-          c.room !== 'user:client-1',
+          c.room !== 'user:client-1' &&
+          // Le livreur gagnant reçoit légitimement le payload complet sur sa
+          // room personnelle (il en a besoin pour ouvrir sa course active).
+          c.room !== 'user:driver-1',
       );
       expect(merchantEmits).toHaveLength(0);
+    });
+
+    it("ne diffuse pas les données de la commande à la room globale des livreurs", () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+
+      const order = {
+        id: 'ord-1',
+        clientPhone: '+22890000000',
+        deliveryAddress: 'Rue X, Lomé',
+      };
+      gateway.broadcastOrderAccepted(
+        'ord-1',
+        'driver-1',
+        'client-1',
+        'merchant-1',
+        { id: 'driver-1', phone: '+22891111111' },
+        order,
+      );
+
+      const radarEmit = emitCalls.find(
+        (c) =>
+          c.event === 'orderAccepted' &&
+          c.room === `role:${UserRole.LIVREUR}`,
+      );
+      expect(radarEmit).toBeDefined();
+      // Payload minimal : aucune donnée personnelle du client ni du livreur.
+      expect(radarEmit!.payload).toEqual({
+        orderId: 'ord-1',
+        livreurId: 'driver-1',
+      });
+      // Et le livreur gagnant est exclu de cette diffusion (il reçoit le
+      // payload complet sur sa room personnelle).
+      expect(radarEmit!.except).toBe('user:driver-1');
+
+      const winnerEmit = emitCalls.find(
+        (c) => c.event === 'orderAccepted' && c.room === 'user:driver-1',
+      );
+      expect(winnerEmit!.payload.order).toEqual(order);
     });
 
     it('pousse immédiatement la dernière position connue au client et au commerçant', () => {

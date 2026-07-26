@@ -64,7 +64,12 @@ type RouteCacheGeomEntry = { route: RouteWithGeometry; at: number };
  * géofencing mobile) restent valides pour la rétro-compatibilité.
  */
 const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
-  [OrderStatus.PENDING]: [OrderStatus.ACCEPTED, OrderStatus.CANCELLED],
+  // ACCEPTED est volontairement absent : le passage à ACCEPTED est le rôle
+  // exclusif de `acceptOrder` (verrou pessimiste + UPDATE conditionnel), qui ne
+  // consulte pas cette table. L'exposer ici permettait au client d'appeler
+  // PATCH /orders/:id/status {ACCEPTED} et de figer sa course avec livreur=null,
+  // sans aucune transition de sortie possible.
+  [OrderStatus.PENDING]: [OrderStatus.CANCELLED],
   [OrderStatus.ACCEPTED]: [
     OrderStatus.EN_ROUTE_PICKUP,
     OrderStatus.AT_PICKUP,
@@ -104,6 +109,9 @@ const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
  * déclencher — le client ne garde que la capacité d'annuler (CANCELLED).
  */
 const LIVREUR_ONLY_STATUSES: ReadonlySet<OrderStatus> = new Set([
+  // Défense en profondeur : si ACCEPTED était un jour réintroduit dans
+  // ALLOWED_TRANSITIONS, il resterait interdit au client.
+  OrderStatus.ACCEPTED,
   OrderStatus.EN_ROUTE_PICKUP,
   OrderStatus.AT_PICKUP,
   OrderStatus.IN_PROGRESS,

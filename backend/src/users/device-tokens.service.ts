@@ -50,10 +50,15 @@ export class DeviceTokensService {
 
   /**
    * Supprime un token précis (logout d'un device, ou token expiré côté FCM).
+   *
+   * `userId` est obligatoire : sans ce filtre, un utilisateur authentifié
+   * pouvait envoyer le token FCM d'un tiers via `previousToken` et le priver
+   * silencieusement de toute notification (nouvelle course, message,
+   * validation de compte).
    */
-  async deleteByToken(token: string): Promise<void> {
-    if (!token) return;
-    await this.repo.delete({ token });
+  async deleteByToken(token: string, userId: string): Promise<void> {
+    if (!token || !userId) return;
+    await this.repo.delete({ token, userId });
   }
 
   /**
