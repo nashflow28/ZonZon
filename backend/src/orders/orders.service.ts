@@ -1476,8 +1476,16 @@ export class OrdersService {
     const actorId = actor.id ?? actor.sub;
     const isClient = order.client?.id === actorId;
     const isLivreur = order.livreur?.id === actorId;
+    // Le commerçant créateur doit pouvoir annuler sa propre livraison. Il était
+    // le seul acteur absent de ce contrôle (il est bien pris en compte dans
+    // computeEta, updatePaymentStatus, getStatusHistory et le gateway), si bien
+    // qu'une livraison de type 1 pour un client sans compte n'était annulable
+    // par personne tant qu'aucun livreur ne l'avait acceptée.
+    // Il reste exclu de LIVREUR_ONLY_STATUSES : il ne peut donc pas faire
+    // avancer la course, seulement l'annuler.
+    const isMerchant = order.merchant?.id === actorId;
     const isAdmin = actor.role === UserRole.ADMIN;
-    if (!isClient && !isLivreur && !isAdmin) {
+    if (!isClient && !isLivreur && !isMerchant && !isAdmin) {
       throw new ForbiddenException('Vous ne pouvez pas modifier cette course');
     }
 
@@ -1512,6 +1520,8 @@ export class OrdersService {
         order.cancelledBy = 'LIVREUR';
       } else if (role === UserRole.CLIENT) {
         order.cancelledBy = 'CLIENT';
+      } else if (role === UserRole.COMMERCANT) {
+        order.cancelledBy = 'COMMERCANT';
       } else {
         order.cancelledBy = null;
       }
@@ -1595,7 +1605,9 @@ export class OrdersService {
         const body =
           order.cancelledBy === 'ADMIN'
             ? "La course a été annulée par l'administration."
-            : 'Le client a annulé la course en cours.';
+            : order.cancelledBy === 'COMMERCANT'
+              ? 'Le commerçant a annulé la course en cours.'
+              : 'Le client a annulé la course en cours.';
         void this.notifications.sendToUser(livreurId, {
           title: 'Course annulée',
           body,

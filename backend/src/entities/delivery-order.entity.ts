@@ -163,10 +163,10 @@ export class DeliveryOrder {
 
   @Column({
     type: 'enum',
-    enum: ['CLIENT', 'LIVREUR', 'ADMIN'],
+    enum: ['CLIENT', 'LIVREUR', 'ADMIN', 'COMMERCANT'],
     nullable: true,
   })
-  cancelledBy: 'CLIENT' | 'LIVREUR' | 'ADMIN' | null;
+  cancelledBy: 'CLIENT' | 'LIVREUR' | 'ADMIN' | 'COMMERCANT' | null;
 
   @Column({ type: 'datetime', nullable: true })
   acceptedAt: Date | null;

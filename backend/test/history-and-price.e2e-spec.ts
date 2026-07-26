@@ -254,11 +254,11 @@ describe('Historique & traçabilité (e2e)', () => {
     });
 
     it('refuse l’ajustement sur une course terminale (CANCELLED)', async () => {
-      // `updateStatus` n'autorise pas le commerçant (seuls client/livreur/
-      // admin peuvent changer le statut) — on annule via un admin.
+      // Le commerçant créateur peut annuler sa propre livraison : il n'a plus
+      // besoin qu'un admin intervienne à sa place.
       await request(app.getHttpServer())
         .patch(`/orders/${orderId}/status`)
-        .set('Authorization', `Bearer ${adminToken}`)
+        .set('Authorization', `Bearer ${merchantToken}`)
         .send({ status: OrderStatus.CANCELLED })
         .expect(200);
 
