@@ -19,7 +19,7 @@
           <h2 class="text-lg font-bold text-white truncate">#{{ shortId() }}</h2>
           <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold border"
                 [ngClass]="statusBadgeClass()">
-            {{ o.status }}
+            {{ statusLabel(o.status) }}
           </span>
         </div>
       </div>

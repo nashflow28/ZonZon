@@ -10,13 +10,18 @@ import { SkeletonRowComponent } from '../shared/skeleton/skeleton-row.component'
 import { PageActionsService } from '../shared/page-actions.service';
 import { orderStatusPillClass, paymentStatusPillClass } from '../shared/status-colors';
 
+/** Les 9 statuts du backend + « ALL ». Le backend les accepte tous en filtre. */
 type StatusFilter =
   | 'ALL'
   | 'PENDING'
   | 'ACCEPTED'
+  | 'EN_ROUTE_PICKUP'
+  | 'AT_PICKUP'
   | 'IN_PROGRESS'
+  | 'NEAR_CLIENT'
   | 'COMPLETED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'FAILED';
 
 const PAGE_LIMIT = 20;
 
@@ -209,6 +214,8 @@ export class ArchivesComponent implements OnInit, OnDestroy {
       case 'PAY_ON_DELIVERY': return 'À la livraison';
       case 'RECEIVED_BY_MERCHANT': return 'Reçu (commerçant)';
       case 'RECEIVED_BY_LIVREUR': return 'Reçu (livreur)';
+      case 'CASH_ON_DELIVERY': return 'Espèces à la livraison';
+      case 'REFUNDED': return 'Remboursé';
       default: return '—';
     }
   }

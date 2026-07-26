@@ -40,12 +40,20 @@ export interface PagedOrders {
 }
 
 /// Valeurs possibles du statut de paiement (contrat backend déployé).
+/**
+ * Doit rester aligné sur `PaymentStatus` du backend
+ * (`backend/src/entities/delivery-order.entity.ts`). `CASH_ON_DELIVERY` est le
+ * statut posé par le livreur à la livraison — chemin nominal du paiement au
+ * Togo — et `REFUNDED` celui du commerçant.
+ */
 export type PaymentStatus =
   | 'UNPAID'
   | 'PAID'
   | 'PAY_ON_DELIVERY'
   | 'RECEIVED_BY_MERCHANT'
-  | 'RECEIVED_BY_LIVREUR';
+  | 'RECEIVED_BY_LIVREUR'
+  | 'CASH_ON_DELIVERY'
+  | 'REFUNDED';
 
 /// Livreur disponible pour une réassignation manuelle, tel que renvoyé par
 /// `GET /orders/available-drivers`.

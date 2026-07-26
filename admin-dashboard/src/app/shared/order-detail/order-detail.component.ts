@@ -5,7 +5,7 @@ import { LucideAngularModule } from 'lucide-angular';
 import { AvailableDriver, Order, OrdersService, PaymentStatus } from '../../orders.service';
 import { ChatMessage, MessagesService } from '../messages.service';
 import { LiveStatusService } from '../live-status.service';
-import { orderStatusPillClass } from '../status-colors';
+import { orderStatusLabel, orderStatusPillClass } from '../status-colors';
 
 interface TimelineStep {
   key: 'PENDING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED';
@@ -21,6 +21,8 @@ const PAYMENT_STATUS_OPTIONS: { value: PaymentStatus; label: string }[] = [
   { value: 'PAID', label: 'Payé' },
   { value: 'RECEIVED_BY_MERCHANT', label: 'Reçu (commerçant)' },
   { value: 'RECEIVED_BY_LIVREUR', label: 'Reçu (livreur)' },
+  { value: 'CASH_ON_DELIVERY', label: 'Espèces à la livraison' },
+  { value: 'REFUNDED', label: 'Remboursé' },
 ];
 
 @Component({
@@ -179,7 +181,8 @@ export class OrderDetailComponent implements OnDestroy {
       COMPLETED: 'Livrée'
     };
 
-    if (status === 'CANCELLED') {
+    // FAILED est terminal au même titre que CANCELLED.
+    if (status === 'CANCELLED' || status === 'FAILED') {
       return order.map((k) => ({
         key: k,
         label: labels[k],
@@ -187,7 +190,18 @@ export class OrderDetailComponent implements OnDestroy {
       }));
     }
 
-    const currentIdx = order.indexOf(status as TimelineStep['key']);
+    // Les statuts fins du suivi livreur se rattachent à l'étape qui les
+    // englobe. Sans ce mapping, `indexOf` renvoyait -1 et TOUTES les étapes
+    // s'affichaient en « future » : une course NEAR_CLIENT (livreur quasiment
+    // arrivé) apparaissait comme n'ayant jamais démarré.
+    const STEP_BY_STATUS: Record<string, TimelineStep['key']> = {
+      EN_ROUTE_PICKUP: 'ACCEPTED',
+      AT_PICKUP: 'ACCEPTED',
+      NEAR_CLIENT: 'IN_PROGRESS'
+    };
+    const effectiveStatus = STEP_BY_STATUS[status] ?? status;
+
+    const currentIdx = order.indexOf(effectiveStatus as TimelineStep['key']);
     return order.map((k, i) => {
       let state: TimelineStep['state'] = 'future';
       if (currentIdx === -1) state = 'future';
@@ -202,6 +216,11 @@ export class OrderDetailComponent implements OnDestroy {
   readonly statusBadgeClass = computed(() => {
     return orderStatusPillClass(this._order()?.status);
   });
+
+  /** Libellé FR — le statut brut du backend ne doit pas atteindre l'écran. */
+  statusLabel(status: string | undefined | null): string {
+    return orderStatusLabel(status);
+  }
 
   onClose(): void {
     this.close.emit();

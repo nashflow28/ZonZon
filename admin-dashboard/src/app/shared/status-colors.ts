@@ -44,6 +44,34 @@ const ORDER_STATUS_VARIANTS: Record<string, ZzStatusVariant> = {
   FAILED: 'coral',
 };
 
+/**
+ * Statuts terminaux : une course dans l'un de ces états n'évoluera plus.
+ * `FAILED` en fait partie — l'omettre laissait une course échouée dans les
+ * « courses en direct » du dashboard, indéfiniment.
+ */
+export const TERMINAL_ORDER_STATUSES = ['COMPLETED', 'CANCELLED', 'FAILED'] as const;
+
+/** Vrai si la course est dans un état terminal. */
+export function isTerminalOrderStatus(status: string | undefined | null): boolean {
+  return !!status && (TERMINAL_ORDER_STATUSES as readonly string[]).includes(status);
+}
+
+/** Libellé FR d'un statut de commande (les 9 valeurs du backend). */
+export function orderStatusLabel(status: string | undefined | null): string {
+  switch (status) {
+    case 'PENDING': return 'En attente';
+    case 'ACCEPTED': return 'Acceptée';
+    case 'EN_ROUTE_PICKUP': return 'En route (retrait)';
+    case 'AT_PICKUP': return 'Au point de retrait';
+    case 'IN_PROGRESS': return 'En cours';
+    case 'NEAR_CLIENT': return 'Proche du client';
+    case 'COMPLETED': return 'Livrée';
+    case 'CANCELLED': return 'Annulée';
+    case 'FAILED': return 'Échec';
+    default: return status ?? '—';
+  }
+}
+
 /** Variante de couleur pour un statut de commande. */
 export function orderStatusVariant(status: string | undefined | null): ZzStatusVariant {
   if (!status) return 'mut';
@@ -64,6 +92,8 @@ const PAYMENT_STATUS_VARIANTS: Record<string, ZzStatusVariant> = {
   PAID: 'go',
   RECEIVED_BY_MERCHANT: 'go',
   RECEIVED_BY_LIVREUR: 'go',
+  CASH_ON_DELIVERY: 'go',
+  REFUNDED: 'coral',
 };
 
 /** Variante de couleur pour un statut de paiement. */

@@ -8,6 +8,7 @@ import { PageActionsService } from '../shared/page-actions.service';
 import { EmptyStateComponent } from '../shared/empty-state/empty-state.component';
 import { OrderDetailComponent } from '../shared/order-detail/order-detail.component';
 import { TimeAgoPipe } from '../shared/time-ago.pipe';
+import { isTerminalOrderStatus, orderStatusLabel } from '../shared/status-colors';
 
 @Component({
   selector: 'app-dashboard',
@@ -28,9 +29,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   readonly isLoading = signal<boolean>(true);
   readonly selectedOrder = signal<Order | null>(null);
 
-  /** Courses "live" : ni terminées, ni annulées. */
+  /** Courses "live" : tout ce qui n'est pas dans un état terminal. */
   readonly orders = computed<Order[]>(() =>
-    this.allOrders().filter((o) => o.status !== 'COMPLETED' && o.status !== 'CANCELLED')
+    this.allOrders().filter((o) => !isTerminalOrderStatus(o.status))
   );
 
   /** Courses terminées aujourd'hui. */
@@ -122,20 +123,36 @@ export class DashboardComponent implements OnInit, OnDestroy {
       case 'PENDING':
         return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/50';
       case 'ACCEPTED':
+      case 'AT_PICKUP':
         return 'bg-blue-500/20 text-blue-300 border-blue-500/50';
       case 'IN_PROGRESS':
+      case 'EN_ROUTE_PICKUP':
+      case 'NEAR_CLIENT':
         return 'bg-purple-500/20 text-purple-300 border-purple-500/50';
       case 'COMPLETED':
         return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50';
       case 'CANCELLED':
         return 'bg-red-500/20 text-red-300 border-red-500/50';
+      case 'FAILED':
+        return 'bg-orange-500/20 text-orange-300 border-orange-500/50';
       default:
         return 'bg-slate-500/20 text-slate-300 border-slate-500/50';
     }
   }
 
+  /** Libellé FR — le statut brut du backend ne doit pas atteindre l'écran. */
+  statusLabel(status: string): string {
+    return orderStatusLabel(status);
+  }
+
   isPulsing(status: string): boolean {
-    return status === 'PENDING' || status === 'IN_PROGRESS';
+    return (
+      status === 'PENDING' ||
+      status === 'IN_PROGRESS' ||
+      status === 'EN_ROUTE_PICKUP' ||
+      status === 'AT_PICKUP' ||
+      status === 'NEAR_CLIENT'
+    );
   }
 
   openOrder(order: Order): void {
