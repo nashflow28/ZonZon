@@ -1394,3 +1394,51 @@ Demande UX en deux axes :
 - Le téléphone client a reçu automatiquement l'état `ACCEPTÉE`, le montant `1 412 FCFA` et `Livreur : Pixel Livreur`. Le flux temps réel client/livreur est donc validé sur deux appareils.
 - Le Pixel a demandé l'autorisation de localisation et l'écran système Google **Location Accuracy** reste affiché dans l'émulateur. La course et son acceptation sont déjà validées ; il faut activer ce réglage uniquement pour poursuivre un test GPS de déplacement précis.
 - La course de test reste active pour permettre la poursuite du scénario (statuts, position et clôture) si nécessaire.
+
+### Session 81 (2026-07-26) — Revue complète du projet et sauvegarde du travail en attente
+
+**1. Travail non commité sauvegardé (113 fichiers).** Le working tree contenait 85 fichiers
+modifiés (+1838/−1789) et 19 fichiers nouveaux, jamais commités : OTP WhatsApp, changement de
+mot de passe, forfait courses courtes, états de fils de discussion directe, et 3 migrations
+(`1780600000000`, `1780700000000`, `1780800000000`). Découpé en 6 commits par application
+(`8975d89` → `3af77bf`) pour que chacun soit cohérent et compile. Non poussé.
+
+**2. Deux changements non documentés découverts en préparant les commits :**
+- La **négociation de prix a été entièrement retirée** du backend (`proposePrice`,
+  `getPendingPriceProposal`, `respondToPriceProposal` + DTO). Retrait cohérent : aucun front ne
+  l'appelle plus. **Mais l'entité `order-price-proposal.entity.ts` et la migration
+  `AddOrderPriceProposals` subsistent** — une table est créée en production pour rien.
+- L'**URL de production est passée** de `zonzon-backend.fly.dev` à `api.kore-innov.com` sur les
+  3 fronts. Restent désalignés : `pwa/ngsw-config.json`, `pwa/src/environments/environment.ts`,
+  `.github/workflows/flutter-ci.yml` (qui force encore l'ancienne URL au build APK) et `CLAUDE.md`.
+
+**3. Revue complète — 11 agents en lecture seule sur zones disjointes.**
+Livrable : **`REVUE_COMPLETE_2026-07-26.md`**. ~235 findings (~22 critiques, ~87 majeurs).
+Les 10 findings critiques ont été vérifiés indépendamment par lecture du code et, pour TypeORM
+0.3.30 et socket_io_client 3.1.4, du source des dépendances installées.
+
+**État de santé mesuré** : backend build OK + **386/386** unitaires + **58/58 e2e** ;
+mobile `flutter analyze` **0 problème** + **42/42** ; PWA et admin build prod OK (admin :
+bundle initial 611,7 kB au-dessus du budget de 500 kB). Aucun secret commité.
+7 vulnérabilités npm en prod côté backend, toutes transitives et à impact faible.
+
+**Critiques à traiter avant tout déploiement** (détail et correctifs dans le rapport) :
+1. **Sentry Session Replay non masqué** dans l'admin (`maskAllText:false`, `blockAllMedia:false`,
+   10 % des sessions) alors que les CNI des livreurs sont préchargées automatiquement.
+2. **Un client peut geler sa propre commande** : `PATCH /orders/:id/status {ACCEPTED}` passe les
+   3 gardes et laisse la course avec `livreur = null`, sans aucune sortie possible.
+3. **Jeton de preuve OTP utilisable comme jeton d'accès** (même secret, pas de `sub`,
+   `findOne(undefined)` renvoie le premier utilisateur). Latent tant que `WHATSAPP_OTP_ENABLED=false`.
+4. **`GET /orders` ouvert aux livreurs** sans filtre par acteur.
+5. **`orderAccepted` diffuse la commande complète** (PII client) à tous les livreurs connectés.
+6. **Tab bar PWA à 15 px de hauteur utile** sur iPhone à encoche.
+7. **Un mot de passe actuel erroné déconnecte l'utilisateur** (401 traité comme session morte).
+8. **Le socket mobile meurt après ~40 s de coupure** et rejoue ensuite toutes les positions GPS.
+9. **Admin : `CASH_ON_DELIVERY` et `REFUNDED` inconnus** → paiement cash affiché « — » et
+   écrasable.
+10. **`GET /orders/merchant-clients/search` renvoie 400 en permanence** (`@Type(() => Number)`
+    manquant) — la recherche de client du commerçant n'a jamais fonctionné.
+
+**Vérification à faire en production avant le prochain déploiement** :
+`SHOW COLUMNS FROM delivery_orders LIKE 'status';` — la migration `1778500000000` insère des
+valeurs d'enum au milieu de la liste, ce que TiDB n'accepte pas.
