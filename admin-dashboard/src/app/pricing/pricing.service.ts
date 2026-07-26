@@ -7,12 +7,14 @@ export interface Pricing {
   id: string;
   pricePerKm: number;
   minPriceFcfa: number;
+  shortTripMaxDistanceKm: number;
   updatedAt: string;
 }
 
 export interface UpdatePricingDto {
   pricePerKm?: number;
   minPriceFcfa?: number;
+  shortTripMaxDistanceKm?: number;
 }
 
 @Injectable({ providedIn: 'root' })

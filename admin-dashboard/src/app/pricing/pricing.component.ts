@@ -11,7 +11,7 @@ import { PageActionsService } from '../shared/page-actions.service';
   standalone: true,
   imports: [CommonModule, FormsModule, LucideAngularModule],
   templateUrl: './pricing.component.html',
-  styleUrl: './pricing.component.css'
+  styleUrl: './pricing.component.css',
 })
 export class PricingComponent implements OnInit, OnDestroy {
   private pricingService = inject(PricingService);
@@ -25,6 +25,7 @@ export class PricingComponent implements OnInit, OnDestroy {
   // Champs du formulaire d'édition
   readonly pricePerKmInput = signal<number | null>(null);
   readonly minPriceFcfaInput = signal<number | null>(null);
+  readonly shortTripMaxDistanceKmInput = signal<number | null>(null);
 
   readonly isSaving = signal<boolean>(false);
   readonly saveSuccess = signal<boolean>(false);
@@ -48,21 +49,30 @@ export class PricingComponent implements OnInit, OnDestroy {
         this.pricing.set(data);
         this.pricePerKmInput.set(data.pricePerKm);
         this.minPriceFcfaInput.set(data.minPriceFcfa);
+        this.shortTripMaxDistanceKmInput.set(data.shortTripMaxDistanceKm);
         this.isLoading.set(false);
       },
       error: (err) => {
         console.error('Erreur chargement tarifs', err);
         this.errored.set(true);
         this.isLoading.set(false);
-      }
+      },
     });
   }
 
   save(): void {
     const pricePerKm = this.pricePerKmInput();
     const minPriceFcfa = this.minPriceFcfaInput();
+    const shortTripMaxDistanceKm = this.shortTripMaxDistanceKmInput();
 
-    if (pricePerKm === null || pricePerKm < 0 || minPriceFcfa === null || minPriceFcfa < 0) {
+    if (
+      pricePerKm === null ||
+      pricePerKm <= 0 ||
+      minPriceFcfa === null ||
+      minPriceFcfa < 0 ||
+      shortTripMaxDistanceKm === null ||
+      shortTripMaxDistanceKm <= 0
+    ) {
       this.saveError.set('Merci de saisir des valeurs numériques positives.');
       this.saveSuccess.set(false);
       return;
@@ -72,23 +82,30 @@ export class PricingComponent implements OnInit, OnDestroy {
     this.saveError.set('');
     this.saveSuccess.set(false);
 
-    this.pricingService.updatePricing({ pricePerKm, minPriceFcfa }).subscribe({
-      next: (updated) => {
-        this.pricing.set(updated);
-        this.pricePerKmInput.set(updated.pricePerKm);
-        this.minPriceFcfaInput.set(updated.minPriceFcfa);
-        this.isSaving.set(false);
-        this.saveSuccess.set(true);
-        setTimeout(() => this.saveSuccess.set(false), 3000);
-      },
-      error: (err) => {
-        console.error('Erreur mise à jour tarifs', err);
-        this.isSaving.set(false);
-        this.saveError.set(
-          err?.error?.message || "Impossible d'enregistrer les tarifs. Réessayez."
-        );
-      }
-    });
+    this.pricingService
+      .updatePricing({
+        pricePerKm,
+        minPriceFcfa,
+        shortTripMaxDistanceKm,
+      })
+      .subscribe({
+        next: (updated) => {
+          this.pricing.set(updated);
+          this.pricePerKmInput.set(updated.pricePerKm);
+          this.minPriceFcfaInput.set(updated.minPriceFcfa);
+          this.shortTripMaxDistanceKmInput.set(updated.shortTripMaxDistanceKm);
+          this.isSaving.set(false);
+          this.saveSuccess.set(true);
+          setTimeout(() => this.saveSuccess.set(false), 3000);
+        },
+        error: (err) => {
+          console.error('Erreur mise à jour tarifs', err);
+          this.isSaving.set(false);
+          this.saveError.set(
+            err?.error?.message || "Impossible d'enregistrer les tarifs. Réessayez.",
+          );
+        },
+      });
   }
 
   onPricePerKmChange(value: string): void {
@@ -97,5 +114,9 @@ export class PricingComponent implements OnInit, OnDestroy {
 
   onMinPriceChange(value: string): void {
     this.minPriceFcfaInput.set(value === '' ? null : Number(value));
+  }
+
+  onShortTripDistanceChange(value: string): void {
+    this.shortTripMaxDistanceKmInput.set(value === '' ? null : Number(value));
   }
 }
