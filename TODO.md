@@ -106,7 +106,7 @@
 
 **Avant d'activer `WHATSAPP_OTP_ENABLED` — les deux ensemble**
 - [x] Secret dédié + `audience` pour le jeton de preuve OTP, et garde sur `payload.sub` dans `jwt.strategy.ts:21`
-- [ ] Implémenter le flux OTP dans la PWA (sinon 100 % des inscriptions iOS tombent le jour de la bascule)
+- [x] Implémenter le flux OTP dans la PWA (sinon 100 % des inscriptions iOS tombent le jour de la bascule)
 
 **Fort rapport valeur/effort**
 - [x] `UsersService.findOne` : garde `if (!id)` + `invalidWhereValuesBehavior: 'throw'`
@@ -130,7 +130,7 @@
 - [ ] `synchronize: false` partout + migrations en CI + `release_command` Fly
 - [ ] Rendre `updateStatus` atomique (UPDATE conditionnel comme `acceptOrder`)
 - [ ] Repo de test : lever sur opérateur inconnu au lieu de `return true`
-- [ ] Parcours commerçant : annulation de sa propre livraison, encaissement cash côté livreur PWA
+- [x] Parcours commerçant : annulation de sa propre livraison, encaissement cash côté livreur PWA
 - [ ] Migrer sur `AppColors` (1 fichier sur 40 l'utilise) et trancher sur le thème clair
 - [ ] Décider du temps réel admin : émettre vers `role:ADMIN` ou retirer l'indicateur « live »
 
