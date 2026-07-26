@@ -18,7 +18,7 @@
 | Admin | Angular 21 + Tailwind CSS |
 | Mobile | Flutter (Android) |
 | Base de données | TiDB Serverless (compatible MySQL) |
-| Hébergement backend | Fly.io (Paris, CDG) |
+| Hébergement backend | **OVH VPS-2** (Coolify/Traefik) — Fly.io conservé en secours |
 | Hébergement admin | Cloudflare Pages |
 | Notifications push | Firebase Cloud Messaging (FCM) |
 | Routing/Distances | OpenRouteService (free tier, clé déjà configurée) |
@@ -38,7 +38,7 @@
 **Manques V1 identifiés** (→ backlog priorisé) :
 - **P1** : validation admin obligatoire des livreurs ; disponibilité livreur (disponible/indisponible) ; blocage des livreurs non validés/indisponibles (voir + accepter).
 - **P2** : livraison commerçant→client (Type 1) — le commerçant ne peut aujourd'hui PAS créer de livraison (`POST /orders` réservé `@Roles(CLIENT)`, pas de champ commerçant/créateur sur `DeliveryOrder`) ; rattachement client par compte ou téléphone.
-- **P3** : attribution manuelle d'un livreur ; relation livreur affilié à un commerçant ; tarif configurable **200 FCFA/km** (aujourd'hui `PRICE_PER_KM = 150` en dur) + ajustement manuel ; statuts de livraison étendus (arrivé retrait, colis récupéré, proche client, échoué) ; `paymentStatus` ; zones/quartiers de Lomé.
+- **P3** : attribution manuelle d'un livreur ; relation livreur affilié à un commerçant ; tarif administré (**200 FCFA/km**, forfait **500 FCFA jusqu'à 2,5 km**, trois valeurs configurables) + ajustement manuel commerçant ; statuts de livraison étendus (arrivé retrait, colis récupéré, proche client, échoué) ; `paymentStatus` ; zones/quartiers de Lomé.
 - Profil livreur incomplet vs CDC : manquent photo pièce d'identité et zone habituelle (à intégrer avec P1/P3).
 
 **Contrainte de toutes les évolutions V1** : ne pas casser tracking GPS, Socket.IO, FCM, messagerie client↔livreur, admin dashboard.
@@ -49,8 +49,10 @@
 
 | Service | URL / Détail | Status |
 |---------|-------------|--------|
-| **Backend** | `https://zonzon-backend.fly.dev` | ✅ Live (machine Fly active) |
-| **Admin** | `https://zonzon-admin.pages.dev` | ✅ Live |
+| **Backend principal** | `https://api.kore-innov.com` (OVH VPS-2) | ✅ Live (HTTPS/Let's Encrypt) |
+| **Backend secours** | `https://zonzon-backend.fly.dev` | ✅ Conservé comme fallback |
+| **Admin** | `https://zonzon-admin.pages.dev` | ✅ Live (Cloudflare Pages) |
+| **PWA iOS** | `https://zonzon-pwa.pages.dev` | ✅ Live (Cloudflare Pages) |
 | **Base de données** | TiDB Serverless, cluster `zonzon-db`, AWS Frankfurt | ✅ Active |
 | **Firebase** | Projet `zonzon-4eb31`, compte `koreinnovation28@gmail.com` | ✅ Configuré |
 | **Fly.io** | App `zonzon-backend`, compte `koreinnovation28@gmail.com` | ✅ Actif |
@@ -71,19 +73,19 @@
 - `.env` — Variables d'environnement locales (DB locale, JWT, ORS key)
 - `firebase-adminsdk.json` — Clé privée Firebase Admin SDK (NE PAS COMMITTER)
 - `fly.toml` — Configuration Fly.io (min_machines_running=1 pour WebSocket)
-- `Dockerfile` — Multi-stage build Node 20 Alpine
+- `Dockerfile` — Multi-stage build Node 22 Alpine
 
 ### Mobile (`/mobile_app/`)
-- `lib/config/env.dart` — URL API (`defaultValue: 'https://zonzon-backend.fly.dev'`) + `apiPrefix = '/v1'` (préfixe HTTP, NON utilisé par les sockets ni les uploads)
+- `lib/config/env.dart` — URL API (`defaultValue: 'https://api.kore-innov.com'`) + `apiPrefix = '/v1'` (préfixe HTTP, NON utilisé par les sockets ni les uploads)
 - `android/app/google-services.json` — Config Firebase Android
 
 ### Admin (`/admin-dashboard/`)
-- `src/environments/environment.prod.ts` — `apiUrl: 'https://zonzon-backend.fly.dev'` + `apiPrefix: '/v1'`
+- `src/environments/environment.prod.ts` — `apiUrl: 'https://api.kore-innov.com'` + `apiPrefix: '/v1'`
 - `src/environments/environment.ts` — `apiUrl: 'http://localhost:3050'` + `apiPrefix: '/v1'`
 
 ---
 
-## Variables d'environnement Fly.io (secrets)
+## Variables d'environnement production (Fly.io secours et OVH principal)
 
 Ces secrets sont configurés sur Fly.io via `flyctl secrets set` :
 
@@ -101,7 +103,7 @@ ORS_API_KEY=*** (confidentiel)
 COMMISSION_RATE=0.35
 UPLOAD_DIR=uploads
 NOTIFY_RADIUS_KM=5
-FRONTEND_URLS=https://zonzon-admin.pages.dev
+FRONTEND_URLS=https://zonzon-admin.pages.dev,https://zonzon-pwa.pages.dev
 FRONTEND_URL_PATTERNS=^https://[a-z0-9-]+\.zonzon-admin\.pages\.dev$  (optionnel, regex pour previews Cloudflare)
 FIREBASE_CREDENTIALS_JSON=*** (contenu du fichier firebase-adminsdk.json)
 OBJECT_STORAGE_ENDPOINT=https://004d946c5f3886bb2afba3d14d422c66.r2.cloudflarestorage.com
@@ -127,11 +129,11 @@ IDENTITY_STORAGE_FORCE_PATH_STYLE=false
 ```powershell
 cd C:\laragon\www\ZonZon\mobile_app
 flutter build apk --release `
-  --dart-define=API_URL=https://zonzon-backend.fly.dev `
+  --dart-define=API_URL=https://api.kore-innov.com `
   "--dart-define=SENTRY_DSN=https://5b733a06f8e026418f487fe2335679b3@o4511315040337920.ingest.de.sentry.io/4511324268724304"
-# APK généré : build\app\outputs\flutter-apk\app-release.apk (≈58 MB)
+# APK généré : build\app\outputs\flutter-apk\app-release.apk (≈60 MB)
 ```
-> **Note** : `env.dart` pointe par défaut sur `https://zonzon-backend.fly.dev`. `--dart-define=API_URL` est optionnel. `--dart-define=SENTRY_DSN` active le reporting d'erreurs Sentry (recommandé en prod).
+> **Note** : `env.dart` pointe par défaut sur `https://api.kore-innov.com`. `--dart-define=API_URL` est donc optionnel. `--dart-define=SENTRY_DSN` active le reporting d'erreurs Sentry (recommandé en prod).
 
 ### Builder l'APK pour tests locaux
 ```powershell
@@ -206,6 +208,7 @@ flyctl logs --app zonzon-backend --no-tail
 | POST | `/auth/login` | Connexion |
 | GET | `/auth/me` | Infos utilisateur connecté |
 | PATCH | `/users/me` | Modifier prénom/nom ✅ (ajouté) |
+| PATCH | `/auth/password` | Modifier le mot de passe avec vérification de l'ancien |
 | POST | `/users/me/photo` | Upload photo de profil |
 | GET | `/vehicles/me` | Infos véhicule livreur |
 | PUT | `/vehicles/me` | Modifier/créer véhicule |
@@ -262,6 +265,70 @@ Installés dans `.agents/skills/` via `npx skills add flutter/skills --skill '*'
 ---
 
 ## Historique des sessions
+
+### Session 74 (2026-07-16) — Préparation migration backend vers OVH
+
+- Connexion SSH `ovh-ubuntu` validée ; le VPS utilise Ubuntu, Docker et Coolify (pas Dokploy). Les sites `kore-innov.com` et `formations.kore-innov.com` restent en place derrière le proxy Coolify.
+- Build backend local réussi ; tests backend **383/383** verts.
+- Copie de travail du backend transférée dans `/opt/zonzon/backend` sur OVH sans `.env`, `firebase-adminsdk.json`, uploads ni `node_modules` ; image `zonzon-backend:working` construite avec succès sur le VPS.
+- Déploiement suspendu avant démarrage du conteneur : une commande de diagnostic Fly mal quotée a affiché `FIREBASE_CREDENTIALS_JSON`. La clé Firebase concernée doit être révoquée/régénérée avant toute injection de secrets sur OVH. Aucun secret n'a été copié sur OVH et Fly reste la production active.
+- À la demande du PO, poursuite en mode parallèle sans ancienne clé Firebase : les variables de production hors FCM ont été injectées dans `/opt/zonzon/backend/.env` (permissions `600`), puis le conteneur `zonzon-backend-ovh` a été lancé avec volumes Docker dédiés `zonzon_uploads` et `zonzon_identity`. `GET http://141.95.170.57:3050/` retourne `200`, `/v1/shops/categories` retourne `200`, et le handshake Socket.IO `/socket.io/?EIO=4&transport=polling` retourne `200`. Le domaine HTTPS/reverse-proxy et la bascule des clients restent à faire. FCM reste désactivé sur OVH jusqu'à la nouvelle clé.
+- Nouvelle clé Firebase téléchargée localement par le PO, validée pour le projet `zonzon-4eb31`, puis injectée sans affichage dans Fly.io et `/opt/zonzon/backend/.env` sur OVH. Le conteneur OVH parse bien le projet Firebase et l'API Fly/OVH répond `200`. L'ancienne clé précédemment exposée doit encore être révoquée depuis Google Cloud/Firebase.
+- Le PO confirme avoir révoqué l'ancienne clé dans Google Cloud. L'identifiant de la nouvelle clé est présent dans le conteneur OVH ; le backend OVH reste sain (`GET /` 200). Rotation Firebase considérée terminée.
+- Route reverse-proxy ajoutée au réseau Coolify pour `api.kore-innov.com` avec redirection HTTP→HTTPS et certificat Let's Encrypt prévu. Le DNS OVH ne contient pas encore d'enregistrement A pour ce sous-domaine ; la bascule des clients attend ce point externe.
+
+### Session 76 (2026-07-16) — Bascule clients vers OVH et validation publique
+
+- DNS `api.kore-innov.com A 141.95.170.57` ajouté par le PO ; le certificat Let's Encrypt est maintenant émis et valide pour `api.kore-innov.com`.
+- URLs de production mises à jour vers OVH dans `mobile_app/lib/config/env.dart`, `admin-dashboard/src/environments/environment.prod.ts` et `pwa/src/environments/environment.prod.ts`.
+- Validation locale : backend `npm run build` OK et tests Jest **383/383**, `flutter analyze` sans constat, `flutter test` **41/41**, APK release généré dans `mobile_app/build/app/outputs/flutter-apk/app-release.apk` (60,3 Mo).
+- Admin republié sur Cloudflare Pages (`zonzon-admin`, déploiement `071d47ad`) et PWA republiée (`zonzon-pwa`, déploiement `7840a95d`).
+- Vérifications publiques : API `GET /` → `200`, catégories avec CORS PWA → `200`, handshake Socket.IO HTTPS → `200`, admin et PWA → `200`. Les bundles compilés contiennent `https://api.kore-innov.com`.
+- Le backend Fly.io reste démarré comme solution de secours ; aucune suppression de données ni désactivation n'a été effectuée.
+
+### Session 77 (2026-07-16) — Installation APK sur Samsung
+
+- Appareil détecté via ADB : Samsung `SM-S918B` (`R5CW92DM43V`).
+- APK release OVH installé avec succès (`adb install -r`) puis lancé (`com.example.mobile_app`).
+- Processus Android actif après 3 secondes, aucune ligne `FATAL EXCEPTION`/`AndroidRuntime` détectée dans les derniers logs.
+
+### Session 78 (2026-07-16) — Profils, téléphones et recherche de lieux
+
+- Backend : endpoint authentifié `PATCH /v1/auth/password` ajouté. Il vérifie l'ancien mot de passe, refuse un nouveau secret identique, impose 8 caractères minimum et ne renvoie jamais le hash. Tests Jest : **386/386**.
+- Flutter : dialogue partagé de changement de mot de passe dans les profils client, livreur et commerçant ; affichage téléphonique normalisé ; sélecteur d'indicatif réutilisé dans la boutique et les invitations de livreurs, avec Togo `+228` par défaut.
+- Flutter : `LocationSearchField` fixe explicitement texte blanc, curseur bleu et fond du champ afin que la saisie reste visible au-dessus de la carte. Tests ajoutés : formatage `PhoneDisplay` et saisie de recherche.
+- PWA : sélecteur d'indicatif standalone (authentification, création de livraison, invitations) et composant partagé de changement de mot de passe dans les trois profils. Build OK, tests **2/2** ; publié sur Cloudflare Pages (déploiement `eee67fca`).
+- Validation Flutter : `flutter analyze` sans constat, `flutter test` **43/43**, APK release régénéré dans `mobile_app/build/app/outputs/flutter-apk/app-release.apk`. L'installation sur le Samsung attend sa reconnexion ADB ; l'ancienne version reste installée.
+- Backend OVH et Fly.io redéployés ; health checks publics `200`. Le conteneur OVH démarre correctement avec l'environnement protégé déjà présent sur le VPS.
+
+### Session 73 (2026-07-13) — Essai émulateur Android
+
+- AVD `Medium_Phone` démarré en 69 s; APK debug courant compilé et installé sur `emulator-5554`.
+- ZonZon démarre et reste actif sans crash ni erreur Flutter/Android (`pid` présent, Logcat propre).
+- Test visuel non exploitable : le processus Android `System UI` de l'AVD entre systématiquement en ANR, y compris après redémarrage ciblé. Prochain essai recommandé sur `UniCampus_API35` ou téléphone physique.
+
+### Session 72 (2026-07-13) — Résilience aux erreurs DNS mobiles
+
+- Diagnostic terrain : backend Fly.io disponible (`HTTP 200`), mais Android échoue parfois à résoudre `zonzon-backend.fly.dev` lors des transitions Wi-Fi/4G, DNS privé ou pertes réseau temporaires.
+- `ApiClient` détecte maintenant les `Failed host lookup` même encapsulés par `http.ClientException`, attend 800 ms puis rejoue une fois la requête. Aucun retry automatique des timeouts afin d'éviter une double création si la requête a atteint le serveur.
+- Les écrans peuvent traduire les erreurs via `apiErrorMessage`; la création client n'affiche plus `ClientException`/`SocketException`, mais une consigne réseau claire.
+- Validation : `flutter analyze` sans constat, `flutter test` 38/38 dont 3 nouveaux tests réseau.
+
+### Session 71 (2026-07-13) — Carte détaillée et navigation par icônes
+
+- Le mode clair utilise désormais les tuiles OpenStreetMap standard, plus riches en commerces, services, bâtiments publics et points de repère. Le mode sombre conserve les deux couches CARTO.
+- Attribution OpenStreetMap/CARTO ajoutée aux cartes principale et de sélection de lieu.
+- La barre client masque les textes Accueil/Commandes/Messages/Boutiques, conserve leurs libellés sémantiques et utilise des icônes de 30 à 32 px dans une barre de 64 px.
+- Validation : `flutter analyze` sans constat, `flutter test` 35/35.
+- APK release généré et installé sur le Samsung `SM-S918B` : 61 767 818 octets, SHA-256 `C66551657C06A81760CF22A9F49DEBDD80EA165C1BADBDE8F0D72CF8278F34A7`.
+
+### Session 70 (2026-07-13) — Correctif zone sûre carte accueil
+
+- Le bouton clair/sombre de `OrderMapWidget` tient désormais compte de `MediaQuery.padding.top`, évitant tout chevauchement avec les icônes système Android/iOS.
+- Le bandeau `ZonZonExpress` de l'accueil client est aligné sur ce contrôle et réserve sa largeur à droite.
+- L'entrée Profil est retirée de la barre client (désormais 4 onglets). Un bouton Profil est placé à côté du contrôle clair/sombre; sa branche `go_router` est conservée et masque la barre inférieure lorsqu'elle est ouverte, avec retour explicite vers Accueil.
+- Validation : `flutter analyze` sans constat, `flutter test` 35/35.
+- APK release régénéré : `mobile_app/build/app/outputs/flutter-apk/app-release.apk` (61 751 426 octets, SHA-256 `CD38C29C1A5FAEBF649EFC3A15C9D23000802C14A18ABE4ADE1B1E4B48289FFD`).
 
 ### Session 69 (2026-07-12) — Publication post-négociation
 
@@ -1261,3 +1328,69 @@ Demande UX en deux axes :
   | `CLOUDFLARE_API_TOKEN` | Token API Cloudflare (Edit Cloudflare Pages) |
   | `CLOUDFLARE_ACCOUNT_ID` | ID du compte Cloudflare |
   | `GOOGLE_SERVICES_JSON` | `base64 -i android/app/google-services.json` |
+### Session 74 (2026-07-13) — Validation Firebase Cloud Messaging
+
+- Projet Firebase contrôlé dans la console : `zonzon-4eb31`, application Android `com.example.mobile_app`, sender ID `767758360586`, cohérents avec `mobile_app/android/app/google-services.json`.
+- API Firebase Cloud Messaging HTTP v1 confirmée **activée** ; ancienne API Cloud Messaging confirmée désactivée.
+- Secret Fly.io `FIREBASE_CREDENTIALS_JSON` confirmé présent et déployé sur `zonzon-backend` (valeur non exposée).
+- Chaîne applicative contrôlée : initialisation Firebase, permission Android 13+, channel `zonzon_default`, synchronisation et renouvellement du token, endpoint `/users/me/fcm-token`, stockage multi-device et nettoyage des tokens invalides.
+- Vérification Android : l'application `com.example.mobile_app` est installée sur l'émulateur et `FlutterFirebaseMessagingBackgroundService` démarre sans erreur FCM visible.
+- Test fonctionnel ciblé restant : connecter un compte ZonZon sur un appareil, accepter l'autorisation de notifications, puis déclencher un message ou changement de statut depuis un second compte. Aucune campagne Firebase générale n'a été envoyée afin de ne pas notifier les utilisateurs réels.
+### Session 75 (2026-07-13) — Préparation OTP WhatsApp
+
+- Backend : entité `PhoneVerification` + migration `1780600000000-AddPhoneVerifications`, codes à 6 chiffres uniquement stockés sous hash bcrypt, expiration 5 min, renvoi limité à 60 s, maximum 5 essais et consommation unique.
+- API publique préparée : `GET /auth/otp/whatsapp/status`, `POST /auth/otp/whatsapp/request`, `POST /auth/otp/whatsapp/verify`. La vérification retourne une preuve JWT courte (10 min) liée strictement au numéro.
+- Inscription : `verificationToken` optionnel dans le DTO mais exigé par `AuthService` lorsque `WHATSAPP_OTP_ENABLED=true`. Par défaut `false`, donc aucune régression avant la configuration Meta.
+- Fournisseur : adaptateur WhatsApp Cloud API direct (Meta), template Authentication configurable et secrets documentés dans `backend/.env.example`. Aucun secret ni code OTP n'est journalisé.
+- Flutter : l'écran d'inscription détecte l'activation, demande le code, affiche un dialogue OTP à 6 chiffres puis transmet la preuve à l'inscription. Un backend ancien retournant 404 sur le statut est traité comme OTP désactivé pour permettre un déploiement progressif.
+- Validation : backend build OK + 377/377 tests (dont 4 tests OTP dédiés) ; `flutter analyze` sans issue + 38/38 tests.
+- Restant bloqué par configuration externe : compte Meta Business, numéro dédié, template Authentication approuvé, jeton permanent et `Phone Number ID`; ensuite secrets Fly.io, déploiement et test réel.
+
+### Session 76 (2026-07-13) — Tarification administrée et retrait de la négociation
+
+- Décision produit appliquée : suppression de la validation du prix entre livreur et client. Une course client affiche désormais son estimation et le premier livreur éligible l'accepte directement via `POST /orders/:id/accept`.
+- Backend : suppression des routes, services, DTO et événements Socket de proposition/réponse. L'entité et l'ancienne migration `1780500000000-AddOrderPriceProposals` restent dans l'historique du dépôt uniquement pour ne pas casser les bases déjà migrées.
+- Tarification : `pricing_config` contient désormais `pricePerKm` (défaut 200), `minPriceFcfa` utilisé comme forfait courte distance (défaut 500) et `shortTripMaxDistanceKm` (défaut 2,5). À distance ≤ seuil, le forfait s'applique ; au-delà, le calcul est `base zone + distance × prix/km`.
+- Migration : `1780700000000-AddShortTripPricing` ajoute le seuil et normalise le forfait à 500 FCFA. Elle doit être exécutée avant l'utilisation du nouvel admin en production (`migrationsRun: true` lors du déploiement Fly.io).
+- Admin Angular : le menu existant **Tarifs** gère les trois paramètres et affiche un résumé de la règle active.
+- Flutter Android et PWA iOS : suppression des boîtes de proposition/validation, restauration du prix estimé et acceptation directe côté livreur.
+- Validation : backend build OK, Jest 381/381, E2E 58/58 ; Flutter `analyze` sans erreur et 38/38 tests ; builds production admin et PWA réussis (seul warning admin préexistant sur le budget initial).
+- État livraison : code prêt localement, non déployé et APK non régénéré pendant cette session.
+
+### Session 77 (2026-07-14) — Contrôles de carte visibles pendant le suivi client
+
+- Régression corrigée dans `mobile_app/lib/screens/order_tracking_screen.dart` : l'en-tête plein écran de la course recouvrait le bouton clair/sombre intégré à `OrderMapWidget` et aucun bouton Profil n'était rendu sur cet écran.
+- Disposition : l'en-tête s'arrête désormais à `right: 124`, le Profil est placé à `right: 64` et le thème reste à `right: 12`; les trois éléments partagent le même décalage sous la zone sûre Android/iOS.
+- `MapProfileButton` est maintenant un composant partagé dans `mobile_app/lib/widgets/map_appearance_controls.dart`, utilisé par l'accueil et le suivi pour éviter les divergences visuelles.
+- Validation : `dart format` appliqué, `flutter analyze` sans erreur et 38/38 tests Flutter réussis.
+- État livraison : APK non régénéré et non installé pendant cette session.
+
+### Session 78 (2026-07-14) — Temps réel robuste et conversations directes unifiées
+
+- **Temps réel Flutter** : `RealtimeServices` possède désormais l'unique `OrderSocketController` de la session. Son initialisation est atomique (les appels concurrents partagent la même Future), les écrans ne détruisent plus le socket partagé et un retour au premier plan déclenche une resynchronisation HTTP via `connected$`.
+- **Courses/statuts** : les événements Socket.IO sont propagés sans filtre global mutable, puis filtrés par chaque consommateur. Cela évite qu'un écran commerçant ou client masque les événements d'un autre écran. Le radar livreur reste instantané via `newOrderAvailable`, avec `GET /orders/available` toutes les 15 s comme secours.
+- **Commerçant** : les changements d'acceptation/statut ne rechargent plus boutique et catalogue; seule la liste des livraisons est resynchronisée.
+- **Messagerie directe** : une seule conversation est affichée par paire d'utilisateurs, avec dernier message, compteur non lu et tri chronologique. Un message général peut être lié facultativement à une course (`orderId`) et affiche alors son badge de contexte dans le même fil.
+- **Navigation chat** : les courses client↔livreur ouvrent le fil direct unique avec la course présélectionnée. Les courses créées par un commerçant conservent le chat de groupe client/livreur/commerçant, présenté séparément comme « Discussion de course ».
+- **Suppression** : nouvelle entité `DirectThreadState`, migration `1780800000000-AddDirectThreadStates` et `DELETE /direct-messages/:userId`. La suppression masque l'historique uniquement pour son propriétaire; un nouveau message fait réapparaître le fil. Aucun message n'est effacé pour l'autre participant.
+- **Fichiers majeurs** : `backend/src/messages/direct-messages.service.ts`, `backend/src/entities/direct-thread-state.entity.ts`, `mobile_app/lib/services/realtime_services.dart`, `mobile_app/lib/screens/direct_thread_screen.dart`, `mobile_app/lib/screens/messaging_hub_screen.dart`.
+- **Validation** : backend `npm run build` OK et Jest **383/383**; Flutter `flutter analyze --no-pub` sans issue et `flutter test` **40/40**.
+- **Déploiement restant** : déployer le backend pour exécuter la migration `1780800000000`, puis régénérer l'APK. Aucun déploiement, commit ni APK n'a été produit pendant cette session.
+
+### Session 79 (2026-07-14) — Déploiement backend et installation Android
+
+- Backend déployé avec `flyctl deploy --app zonzon-backend`; image `deployment-01KXFN5R0V2TMEYRKE7BSMTQ7X`, machine Fly version **28** en région `cdg`, état `started` et smoke checks réussis. Le démarrage Nest/TypeORM est propre, ce qui valide l'exécution des migrations `1780600000000`, `1780700000000` et `1780800000000`.
+- Santé production vérifiée après redémarrage : `GET https://zonzon-backend.fly.dev/` retourne **HTTP 200** avec `{"status":"ok","env":"production"}`.
+- APK release généré avec `flutter build apk --release --dart-define=API_URL=https://zonzon-backend.fly.dev` : `mobile_app/build/app/outputs/flutter-apk/app-release.apk`, 61 571 458 octets (58,7 Mo), SHA-256 `37305DB06F8FFD004BC2BEA26FEEFE44261D627D8A76B85A24F43B8098AADA91`.
+- APK installé avec conservation des données (`adb install -r`) sur `R5CW92DM43V`, Samsung `SM-S918B`. Package `com.example.mobile_app`, version `1.0.0` / code 1, mise à jour à `2026-07-14 06:37:46`.
+- Application lancée via ADB, processus Android actif et aucun `FATAL EXCEPTION`/crash de l'application dans les logs immédiats.
+
+### Session 80 (2026-07-14) — Test E2E téléphone client → Pixel 9 livreur
+
+- L'AVD `Pixel_9_Pro` (API 37.1, Google Play, x86_64) a été démarré avec `-gpu swiftshader_indirect`; le Samsung physique `R5CW92DM43V` est resté connecté en parallèle.
+- L'APK release existant a été installé avec succès sur `emulator-5554`, package `com.example.mobile_app`.
+- Compte de test livreur créé depuis le Pixel : `Pixel Livreur`, téléphone `+22899123457`, véhicule Moto, avec photo de profil. Le compte est apparu dans **Validation livreurs** de l'admin et a été approuvé, puis rendu disponible sur le radar.
+- Depuis le téléphone client, une course Soviépé → Université de Lomé a été créée : 7,1 km, estimation 1 412 FCFA. Elle est apparue sur le radar Pixel sans actualisation manuelle, puis a été acceptée.
+- Le téléphone client a reçu automatiquement l'état `ACCEPTÉE`, le montant `1 412 FCFA` et `Livreur : Pixel Livreur`. Le flux temps réel client/livreur est donc validé sur deux appareils.
+- Le Pixel a demandé l'autorisation de localisation et l'écran système Google **Location Accuracy** reste affiché dans l'émulateur. La course et son acceptation sont déjà validées ; il faut activer ce réglage uniquement pour poursuivre un test GPS de déplacement précis.
+- La course de test reste active pour permettre la poursuite du scénario (statuts, position et clôture) si nécessaire.

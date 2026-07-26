@@ -89,7 +89,17 @@
 
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)
 
+- [x] **OPS — Déployer le backend temps réel/messagerie et installer l'APK** — Fly.io version 28 saine (`HTTP 200`), APK release généré puis installé et lancé via ADB sur le Samsung SM-S918B sans crash au démarrage. *(2026-07-14)*
+- [x] **Temps réel et messagerie unifiée** — socket partagé avec initialisation atomique et resynchronisation au retour au premier plan, conversation directe unique par contact, contexte de course dans les messages, suppression locale des conversations et rafraîchissement ciblé commerçant. Backend build + Jest 383/383, Flutter analyze propre + tests 40/40. *(2026-07-14)*
+- [x] **Suivi client — empêcher l'en-tête de masquer les contrôles de carte** — zone droite réservée au thème et au profil pendant une course active, composant Profil partagé avec l'accueil. `flutter analyze` OK, 38/38 tests. *(2026-07-14)*
+- [x] **UI carte accueil — respecter la barre d'état** — bouton clair/sombre placé sous la zone sûre et bandeau ZonZon aligné sans chevauchement. *(2026-07-13)*
+- [x] **Navigation client — déplacer Profil en haut** — retrait du menu inférieur, bouton à côté du thème de carte et retour explicite vers Accueil. *(2026-07-13)*
+- [x] **Carte et navigation client — enrichir les repères et alléger le menu** — fond OSM détaillé en clair, attribution visible, libellés inférieurs masqués et icônes agrandies. *(2026-07-13)*
+- [x] **Réseau mobile — gérer les échecs DNS Fly.io** — retry court uniquement sur `Failed host lookup`, message utilisateur lisible et protection contre les doubles commandes sur timeout. *(2026-07-13)*
+
 ### Audit global post-négociation (2026-07-12)
+
+> Historique conservé. La négociation client/livreur décrite ci-dessous a été retirée le 2026-07-13 au profit de la tarification administrée.
 
 - [x] **P0 — Ne jamais sérialiser les secrets User** — `password` et `fcmToken` hors sélection TypeORM par défaut, sélection explicite limitée à l'auth/FCM, assertions e2e. *(2026-07-12)*
 - [x] **P0 — Activer la course Flutter après accord sur le prix** — restauration de la commande, panneau livreur et GPS déclenchés par les événements d'acceptation. *(2026-07-12)*
@@ -104,11 +114,21 @@
 
 ### Négociation du prix client/livreur (2026-07-12)
 
+> Fonctionnalité obsolète et supprimée du backend, de Flutter et de la PWA le 2026-07-13. L'ancienne migration est conservée uniquement pour la compatibilité des bases déjà migrées.
+
 - [x] **P0 — Backend propositions de prix** — proposition livreur historisée, acceptation/refus client transactionnel, attribution uniquement après acceptation, socket et notifications. *(2026-07-12)*
 - [x] **P0 — Mobile livreur** — remplacer l'acceptation directe d'une course client par la saisie et l'envoi d'un prix. *(2026-07-12)*
 - [x] **P0 — Mobile client** — masquer le prix estimé avant attribution et afficher l'acceptation/refus d'une proposition en temps réel. *(2026-07-12)*
 - [x] **P1 — Suivi plein écran carte** — informations de course dans un panneau superposé rétractable, suivi commerçant et statuts vérifiés. *(2026-07-12)*
 - [x] **Tests de non-régression** — concurrence, refus/remise au radar, acceptation/attribution, tournées commerçant et interfaces. *(2026-07-12)*
+
+### Tarification administrée (2026-07-13)
+
+- [x] **Supprimer la négociation client/livreur** — endpoints, services, événements Socket, DTO, interfaces Flutter/PWA et tests remplacés par l'acceptation directe du livreur.
+- [x] **Règle tarifaire configurable** — 200 FCFA/km par défaut ; forfait 500 FCFA pour toute course jusqu'à 2,5 km inclus ; valeurs stockées dans `pricing_config`.
+- [x] **Menu admin Tarifs** — édition du prix/km, du forfait courte distance et du seuil kilométrique, avec validation et résumé de la règle active.
+- [x] **Migration et non-régression** — migration `1780700000000-AddShortTripPricing`, backend 381/381 + E2E 58/58, Flutter 38/38 + analyse sans erreur, builds admin et PWA réussis.
+- [ ] **Déployer la tarification administrée** — backend Fly.io d'abord (migration automatique), puis admin Cloudflare/PWA et nouvel APK Flutter.
 
 - [x] **P0 — Backend indisponible après messagerie directe** — `DirectMessagesService` requiert `UserRepository`, omis de `MessagesModule`; les requêtes client `/orders/mine` expiraient. Repository ajouté, backend redéployé et machine Fly redémarrée; health check `200`. *(2026-07-12)*
 
@@ -237,10 +257,13 @@
   - Avatar circulaire + upload photo (`POST /users/me/photo`)
   - Édition prénom/nom (`PATCH /users/me`)
   - Numéro de téléphone en lecture seule
+  - Changement sécurisé du mot de passe (`PATCH /auth/password`) avec vérification de l'ancien secret
+  - Affichage téléphone normalisé et indicatif Togo par défaut dans les champs de saisie
   - Accès à l'historique des commandes (`OrderHistoryScreen`)
   - Déconnexion avec dialog de confirmation
 - [x] **Routage** : route `clientProfile = '/home/client/profile'` dans `app_router.dart`
 - [x] **Accès** : icône `account_circle_outlined` dans `OrderHeader` → `_openProfile()` dans `order_screen.dart`
+- [x] **Correctifs profil et saisie téléphone (2026-07-16)** — changement de mot de passe partagé client/livreur/commerçant, sélecteur d'indicatif Flutter/PWA (Togo +228 par défaut) sur les saisies téléphone, et texte de recherche de lieu rendu explicitement visible.
 
 ### Annulation d'une commande par le client
 - [x] **Mobile** : bouton "Annuler la commande" dans `order_screen.dart` quand `_activeOrderStatus IN ('PENDING','ACCEPTED')`
@@ -399,6 +422,7 @@
 
 ## 🛠 DEVOPS
 
+- [x] **Migration backend vers le VPS OVH-2** — conteneur `zonzon-backend-ovh` opérationnel derrière Coolify/Traefik, DNS `api.kore-innov.com → 141.95.170.57`, HTTPS Let's Encrypt actif, CORS admin/PWA validé, handshake Socket.IO validé. Admin et PWA republiés sur Cloudflare Pages avec la nouvelle API, APK release régénéré et installé sur le Samsung connecté. Fly.io reste actif comme secours. *(2026-07-16)*
 - [x] **CI/CD GitHub Actions** — 3 workflows créés (backend-ci.yml, admin-ci.yml, flutter-ci.yml). Tests sur tous les PRs, déploiements sur push main uniquement. Secrets à configurer: FLY_API_TOKEN, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, GOOGLE_SERVICES_JSON
 - [x] **Éviter les coûts GitHub Actions automatiques** — les workflows `ci`, backend, admin, Flutter et deploy ne s'exécutent plus sur push/PR/tag ; ils sont désormais uniquement disponibles via `workflow_dispatch`. Tests et déploiements réalisés localement jusqu'à décision contraire. *(2026-07-11)*
 - [x] **Déploiement local reproductible** — `deploy.bat` valide et déploie backend/Fly.io, dashboard/Cloudflare Pages puis génère l'APK Android, sans GitHub Actions. *(2026-07-11)*
@@ -459,6 +483,10 @@
 
 ---
 
+## ✅ TESTS E2E RÉCENTS
+
+- [x] **Test réel téléphone client → Pixel 9 livreur** *(2026-07-14)* — compte `Pixel Livreur` créé avec `+22899123457`, approuvé depuis l'interface admin puis rendu disponible. Une course Soviépé → Université de Lomé (7,1 km, 1 412 FCFA) créée sur le téléphone client est apparue instantanément sur le Pixel sans actualisation et a été acceptée ; le client a immédiatement affiché `ACCEPTÉE` avec le livreur associé.
+
 ## ⏰ À REPROGRAMMER (post-tests utilisateurs)
 
 > Reportées explicitement par le PO car non prioritaires pendant la phase de tests actuelle. Le paiement initial se fait à la livraison, et chez le commerçant directement par mobile money sur son numéro perso.
@@ -467,10 +495,12 @@
   - Aujourd'hui : paiement à l'arrivée + transfert direct au commerçant
   - Plus tard : intégration TMoney / Flooz / Mixx by YAS ou agrégateur (PayDunya, CinetPay)
   - Champs à ajouter : `paymentStatus`, `paymentMethod`, `paymentReference` sur `DeliveryOrder`
-- [ ] **🔴 Vérification OTP SMS à l'inscription**
+- [~] **🔴 Vérification OTP WhatsApp à l'inscription**
+  - Code préparé : endpoints request/verify, challenge haché et expirant, preuve signée, limitation des essais/renvois, migration et écran Flutter conditionnel. *(2026-07-13)*
+  - À fournir : compte Meta Business, numéro WhatsApp dédié, `Phone Number ID`, jeton permanent et template Authentication approuvé. Garder `WHATSAPP_OTP_ENABLED=false` jusque-là.
   - Aujourd'hui : compte créé sans confirmation du numéro
   - Risque : faux comptes, fraude
-  - Plus tard : Twilio / Africa's Talking / Sinch + endpoints `/auth/otp/request` + `/auth/otp/verify`
+  - Activation finale : secrets Fly.io, déploiement backend, test réel puis nouvel APK.
 - [ ] **🟠 Refresh tokens**
   - Aujourd'hui : JWT 7 jours sans rotation
   - Plus tard : access token court (15 min) + refresh token long révocable
@@ -492,6 +522,7 @@ Pour l'historique complet, voir la section "Historique des sessions" dans [PROGR
 - [x] Fix double-clic annulation livreur (StatefulBuilder)
 - [x] Fix MIME multipart upload photo produit
 - [x] Modération boutiques côté admin (PENDING/APPROVED/REJECTED/SUSPENDED)
+- [x] **Configuration Firebase Cloud Messaging production validée** — projet Android et sender ID cohérents, API HTTP v1 activée, secret Firebase Admin déployé sur Fly.io, service FCM Android démarré sans erreur. Test réel ciblé à exécuter avec deux comptes connectés. *(2026-07-13)*
 
 ### 🍏 PWA iOS (Angular) — après V1 Android
 > Nouveau dossier `pwa/`. Backend prod consommé tel quel. 3 rôles visés (parité Flutter). Détail: PROGRESS.md Session 58.
