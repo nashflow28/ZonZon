@@ -1522,3 +1522,45 @@ Rollback : `sudo docker tag zonzon-backend:rollback-20260726 zonzon-backend:work
 
 ⚠️ **La procédure `flyctl deploy` documentée plus haut dans ce fichier et dans `CLAUDE.md` ne
 concerne que le backend de secours** ; elle ne met pas à jour la production OVH.
+
+### Session 84 (2026-07-26) — Déploiement admin, PWA et génération de l'APK
+
+**Admin et PWA déployés sur Cloudflare Pages**, commit `b66bfc3`, environnement Production,
+branche `main` :
+- `zonzon-admin` → https://zonzon-admin.pages.dev (HTTP 200)
+- `zonzon-pwa` → https://zonzon-pwa.pages.dev (HTTP 200, `ngsw.json` et
+  `manifest.webmanifest` servis)
+
+Deux constats au passage :
+- `wrangler` **était déjà authentifié** (`koreinnovation28@gmail.com`, credentials en cache) —
+  contrairement à ce que notaient les sessions précédentes, aucune action manuelle n'a été
+  nécessaire.
+- Le projet Cloudflare **`zonzon-pwa` existait déjà**, alors que la session 64 indiquait le
+  contraire.
+- `/ngsw.json` a renvoyé 404 pendant quelques secondes après déploiement : cache CDN de
+  l'ancienne version, résorbé seul.
+
+**Vérification du contenu réellement servi** (et pas seulement du code HTTP) :
+- Admin : `maskAllText:!0,blockAllMedia:!0` présent dans `main-L3MVZCBS.js` (`!0` = `true` en
+  JS minifié) et `CASH_ON_DELIVERY` dans `chunk-FUXM2DNO.js`.
+- PWA : « Recevoir un code sur WhatsApp » présent dans `chunk-656DX22Q.js`.
+
+**APK release généré** : `mobile_app/build/app/outputs/flutter-apk/app-release.apk`,
+**58,7 Mo**, SHA-256 `b0a36f1109dc1497ac2be22ef500a08b90d94be45a3bd63499e75383eb7304c3`.
+Vérifié dans le binaire AOT (`lib/arm64-v8a/libapp.so`) : **7 occurrences de `kore-innov`,
+0 de `fly.dev`** — l'APK pointe bien sur la production OVH.
+
+⚠️ **Cet APK reste signé avec la clé de debug** (`signingConfig = signingConfigs.getByName("debug")`,
+`android/app/build.gradle.kts:39`) et porte l'applicationId placeholder
+**`com.example.mobile_app`** (`:25`). Conséquences avant toute distribution élargie :
+- le Play Store refuse tout paquet en `com.example.*` ;
+- une APK signée debug **ne peut jamais être mise à jour** par une APK signée en release : le
+  jour de la vraie signature, tous les utilisateurs devront désinstaller/réinstaller, ce qui
+  effacera `flutter_secure_storage` (donc la session) et les adresses récentes.
+À traiter avant la distribution : définir l'applicationId définitif, régénérer
+`google-services.json` dans la console Firebase, créer un keystore de release référencé via
+`key.properties` (hors dépôt).
+
+**Documentation corrigée** : `CLAUDE.md` documentait `flyctl deploy` comme procédure de
+déploiement du backend, ce qui ne met pas à jour la production OVH. URLs, procédures backend
+OVH / admin / PWA, commandes de logs et points critiques mis à jour.
