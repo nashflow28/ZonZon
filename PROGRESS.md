@@ -1473,3 +1473,52 @@ conteneur `zonzon-backend-ovh` (qui détient les credentials TiDB).
 - Les migrations s'appliquent automatiquement au démarrage du conteneur
   (`migrationsRun: NODE_ENV === 'production'`) : **redéployer suffit**, il n'y a pas de commande
   de migration à lancer.
+
+### Session 83 (2026-07-26) — Déploiement OVH et versionnement de la configuration
+
+**Sécurité — dernier point de la revue levé** : aucune pièce d'identité n'est stockée en base
+(6 livreurs, 0 pièce, 0 à migrer). Le risque de fuite legacy (URL publique, `/uploads/` non
+authentifié) n'existe pas. Les correctifs Sentry restent justifiés à titre préventif.
+
+**Analyse du déploiement OVH.** Le conteneur `zonzon-backend-ovh` **n'était pas géré par
+Coolify** (aucun label `coolify.managed`) : lancé par un `docker run` manuel, avec 12 labels
+Traefik écrits à la main, attaché au réseau `coolify` pour le proxy. Aucun dépôt git, aucun
+compose, aucun script sur le VPS — la commande de lancement n'existait nulle part. Le dépôt
+GitHub étant privé, le VPS ne peut pas cloner sans clé de déploiement.
+
+**Méthode retenue : docker-compose généré depuis `docker inspect`** du conteneur en service,
+plutôt qu'une reconstitution de mémoire. `backend/docker-compose.yml` est désormais versionné.
+
+**Déroulé :**
+1. Tag de rollback `zonzon-backend:rollback-20260726` créé **avant** toute modification.
+2. Code transféré par `tar | ssh` (296 Ko), en excluant `.env`, `node_modules`, `dist`, `.git`
+   et `firebase-adminsdk.json` — vérifié : aucun secret dans l'archive, `.env` du VPS intact.
+3. `docker compose config` validé, volumes confirmés `external: true`.
+4. Build pendant que l'ancien conteneur servait toujours.
+5. Bascule (`up -d`).
+
+**Incident et correction (~3 min d'indisponibilité).** Après bascule, Traefik a renvoyé
+**503 « no available server »** alors que l'application répondait 200 en local. Cause :
+`the service "zonzon@docker" does not exist` — les routers référençaient un service `zonzon`
+qu'aucun label ne définissait. Il devait être résolu ailleurs dans la configuration Coolify et
+pointait sur l'IP de l'ancien conteneur, qui a changé à la recréation. Corrigé en déclarant
+`traefik.http.services.zonzon.loadbalancer.server.port: "3050"` dans le compose : la
+configuration est maintenant autoportante et survit à toute recréation.
+
+**Résultat vérifié :**
+- `GET /` → **200**, `GET /v1/shops/categories` → **200**, `GET /v1/orders` sans auth → **401**.
+- Migration **`AddCommercantCancelledBy1780900000000` appliquée** — 37 migrations au total,
+  `cancelledBy` vaut désormais `enum('CLIENT','LIVREUR','ADMIN','COMMERCANT')`.
+- Les 19 commits de la revue (correctifs de sécurité, crash profil, safe areas iOS, statuts
+  admin, OTP PWA…) sont **en production**.
+
+**Déploiements suivants :**
+```bash
+# depuis le poste local, après commit :
+tar czf - -C backend --exclude=node_modules --exclude=dist --exclude=.git --exclude=.env   --exclude=uploads --exclude=private_uploads --exclude=firebase-adminsdk.json .   | ssh ovh-ubuntu 'sudo tar xzf - -C /opt/zonzon/backend'
+ssh ovh-ubuntu 'cd /opt/zonzon/backend && sudo docker compose up -d --build'
+```
+Rollback : `sudo docker tag zonzon-backend:rollback-20260726 zonzon-backend:working && sudo docker compose up -d --no-build`
+
+⚠️ **La procédure `flyctl deploy` documentée plus haut dans ce fichier et dans `CLAUDE.md` ne
+concerne que le backend de secours** ; elle ne met pas à jour la production OVH.
