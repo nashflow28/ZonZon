@@ -18,6 +18,7 @@ import 'create_delivery_screen.dart';
 import 'merchant_drivers_screen.dart';
 import 'merchant_orders_screen.dart';
 import '../notifications_screen.dart';
+import '../../utils/user_initials.dart';
 import '../../widgets/change_password_dialog.dart';
 import '../../widgets/phone_field.dart';
 
@@ -132,12 +133,19 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
+    final firstName = _firstNameCtrl.text.trim();
+    final lastName = _lastNameCtrl.text.trim();
+    if (firstName.length < 2 || lastName.length < 2) {
+      showAdaptiveSnack(
+        context,
+        'Le prénom et le nom sont obligatoires (2 caractères minimum).',
+        isError: true,
+      );
+      return;
+    }
     final res = await _api.patch(
       '/users/me',
-      body: {
-        'firstName': _firstNameCtrl.text.trim(),
-        'lastName': _lastNameCtrl.text.trim(),
-      },
+      body: {'firstName': firstName, 'lastName': lastName},
     );
     if (!mounted) return;
     if (res.statusCode == 200 || res.statusCode == 201) {
@@ -311,8 +319,7 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                 : null,
             child: photoUrl == null
                 ? Text(
-                    ((_user?.firstName ?? '?')[0] + (_user?.lastName ?? '?')[0])
-                        .toUpperCase(),
+                    userInitials(_user?.firstName, _user?.lastName),
                     style: const TextStyle(
                       fontSize: 36,
                       color: Colors.white,

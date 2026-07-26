@@ -17,6 +17,7 @@ import '../screens/order_history_screen.dart';
 import '../utils/affiliation_status_utils.dart';
 import '../screens/notifications_screen.dart';
 import '../utils/platform_adapter.dart';
+import '../utils/user_initials.dart';
 import '../widgets/change_password_dialog.dart';
 import '../widgets/phone_field.dart';
 
@@ -279,12 +280,19 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
+    final firstName = _firstNameCtrl.text.trim();
+    final lastName = _lastNameCtrl.text.trim();
+    if (firstName.length < 2 || lastName.length < 2) {
+      showAdaptiveSnack(
+        context,
+        'Le prénom et le nom sont obligatoires (2 caractères minimum).',
+        isError: true,
+      );
+      return;
+    }
     final res = await _api.patch(
       '/users/me',
-      body: {
-        'firstName': _firstNameCtrl.text.trim(),
-        'lastName': _lastNameCtrl.text.trim(),
-      },
+      body: {'firstName': firstName, 'lastName': lastName},
     );
     if (res.statusCode == 200 || res.statusCode == 201) {
       await _load();
@@ -518,8 +526,7 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                 : null,
             child: photoUrl == null
                 ? Text(
-                    ((_user?.firstName ?? '?')[0] + (_user?.lastName ?? '?')[0])
-                        .toUpperCase(),
+                    userInitials(_user?.firstName, _user?.lastName),
                     style: const TextStyle(
                       fontSize: 36,
                       color: Colors.white,
