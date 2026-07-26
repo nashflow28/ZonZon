@@ -6,7 +6,12 @@ import { Subscription } from 'rxjs';
 import { OrderChatComponent } from '../../shared/components/chat/chat.component';
 import { OrderMapComponent, MapLatLng } from '../../shared/components/map/map.component';
 import { StatusTimelineComponent } from '../../shared/components/status-timeline/status-timeline.component';
-import { Order, OrderStatus, isTerminalOrderStatus } from '../../shared/models/order.model';
+import {
+  Order,
+  OrderStatus,
+  isSettledPayment,
+  isTerminalOrderStatus,
+} from '../../shared/models/order.model';
 import { OrdersService } from '../../shared/services/orders.service';
 import { SocketService } from '../../shared/services/socket.service';
 import { orderStatusPillClass, paymentStatusPillClass } from '../../shared/status-colors';
@@ -183,6 +188,40 @@ export class DriverDeliveryDetailComponent implements OnInit {
 
   toggleChat(): void {
     this.showChat.update((v) => !v);
+  }
+
+  /**
+   * Le livreur peut confirmer un encaissement en espèces une fois la course
+   * terminée — c'est le chemin nominal du paiement au Togo, et le backend le
+   * réserve précisément à ce rôle. Sans ce bouton, la course restait UNPAID et
+   * le commerçant ne pouvait pas non plus passer RECEIVED_BY_MERCHANT (qui
+   * exige un paiement déjà constaté) : la chaîne d'encaissement était bloquée
+   * de bout en bout.
+   */
+  readonly canConfirmCash = computed(() => {
+    const o = this.order();
+    if (!o || o.status !== 'COMPLETED') return false;
+    return !isSettledPayment(o.paymentStatus);
+  });
+
+  readonly confirmingCash = signal(false);
+
+  confirmCashPayment(): void {
+    if (!this.canConfirmCash() || this.confirmingCash()) return;
+    this.confirmingCash.set(true);
+    this.actionError.set(null);
+    this.ordersService
+      .updatePaymentStatus(this.orderId, 'CASH_ON_DELIVERY')
+      .subscribe({
+        next: (order) => {
+          this.confirmingCash.set(false);
+          this.applyOrder(order);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.confirmingCash.set(false);
+          this.actionError.set(this.extractMessage(err));
+        },
+      });
   }
 
   advance(): void {

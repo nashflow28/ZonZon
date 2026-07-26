@@ -78,6 +78,20 @@
         </button>
       </div>
     } @else {
+      <!-- Course terminée : le livreur confirme l'encaissement en espèces.
+           Sans cette action, la course restait UNPAID et bloquait toute la
+           chaîne de règlement jusqu'au commerçant. -->
+      @if (canConfirmCash()) {
+        <button
+          type="button"
+          class="btn-primary btn-advance"
+          [disabled]="confirmingCash()"
+          (click)="confirmCashPayment()"
+        >
+          {{ confirmingCash() ? 'Enregistrement…' : 'J’ai reçu l’argent (espèces)' }}
+        </button>
+      }
+
       <div class="actions-row">
         <button type="button" class="action-btn" (click)="toggleChat()">
           {{ showChat() ? 'Fermer le chat' : 'Discuter' }}

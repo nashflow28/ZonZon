@@ -34,6 +34,23 @@ export function isTerminalOrderStatus(status: OrderStatus | string | undefined |
   return !!status && TERMINAL_ORDER_STATUSES.has(status as OrderStatus);
 }
 
+/**
+ * Statuts pour lesquels le paiement est considéré comme réglé — miroir de
+ * `SETTLED_PAYMENT_STATUSES` côté backend, qui refuse tout double règlement.
+ */
+export const SETTLED_PAYMENT_STATUSES: ReadonlySet<PaymentStatus> = new Set<PaymentStatus>([
+  'PAID',
+  'RECEIVED_BY_LIVREUR',
+  'RECEIVED_BY_MERCHANT',
+  'CASH_ON_DELIVERY',
+  'REFUNDED',
+]);
+
+/** Vrai si le paiement de la course est déjà réglé. */
+export function isSettledPayment(status: PaymentStatus | string | undefined | null): boolean {
+  return !!status && SETTLED_PAYMENT_STATUSES.has(status as PaymentStatus);
+}
+
 /** Référence utilisateur allégée telle que renvoyée dans les relations d'une commande. */
 export interface OrderUserRef {
   id: string;
