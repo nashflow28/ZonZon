@@ -317,10 +317,15 @@ antérieure : elle a bien été implémentée, mais elle est cassée par un déc
   `'production'` exacte déclenche un `ALTER TABLE` automatique par TypeORM. Les migrations
   tournent au boot, sans `release_command`, et ne sont pas idempotentes : une migration
   multi-instruction qui échoue à mi-parcours **empêche l'app de redémarrer, définitivement**.
-- **`1778500000000-AddExtendedOrderStatuses` insère des valeurs d'enum au milieu de la liste**
-  (vérifié dans le fichier). TiDB restreint le `MODIFY ENUM` à l'ajout en fin. À vérifier en
-  production : `SHOW COLUMNS FROM delivery_orders LIKE 'status';` — si l'enum n'a pas 9 valeurs,
-  toute transition vers les nouveaux statuts échoue.
+- ~~**`1778500000000-AddExtendedOrderStatuses` insère des valeurs d'enum au milieu de la liste.**
+  TiDB restreint le `MODIFY ENUM` à l'ajout en fin.~~
+  **✅ VÉRIFIÉ EN PRODUCTION le 26/07/2026 — risque écarté.** `SHOW COLUMNS` renvoie bien les
+  9 valeurs :
+  `enum('PENDING','ACCEPTED','EN_ROUTE_PICKUP','AT_PICKUP','IN_PROGRESS','NEAR_CLIENT','COMPLETED','CANCELLED','FAILED')`.
+  TiDB a accepté le réordonnancement. Confirmation fonctionnelle : une commande `FAILED` existe
+  en base. Les 36 migrations sont appliquées.
+  ⚠️ Ne pas en conclure que le réordonnancement est sûr en général — la prudence reste de
+  n'ajouter qu'en fin de liste (c'est ce que fait `1780900000000`).
 - **`AddShortTripPricing` écrase inconditionnellement `minPriceFcfa`** — la valeur réglée par
   l'admin est perdue au déploiement.
 - **Aucun index sur `delivery_orders(status, createdAt)` ni `users(role, driverApprovalStatus,
@@ -568,9 +573,13 @@ négligence.
 2. **Fermer `CLIENT -> ACCEPTED`** (§3.2) — 1 ligne.
 3. **Retirer `LIVREUR` de `GET /orders`** (§3.4) — 1 ligne, sans régression.
 4. **Réduire le payload `orderAccepted`** vers `role:LIVREUR` (§3.5).
-5. **Vérifier l'enum en production** : `SHOW COLUMNS FROM delivery_orders LIKE 'status';`
-   (§4.3) — à faire **avant** le prochain déploiement, pas après.
-6. **Sauvegarder TiDB** : 3 migrations non idempotentes sont en attente de déploiement.
+5. ~~**Vérifier l'enum en production**~~ ✅ **FAIT le 26/07** — les 9 valeurs sont bien
+   présentes, TiDB a accepté la migration. Risque écarté (§4.3).
+6. **Sauvegarder TiDB** avant le prochain déploiement. Correction : les 3 migrations que l'on
+   croyait en attente **sont déjà appliquées** (36 au total en base) — elles étaient parties au
+   déploiement du 14/07, `flyctl deploy` envoyant le répertoire de travail et non le commit git.
+   La seule migration réellement en attente est `1780900000000-AddCommercantCancelledBy`
+   (vérifié : `cancelledBy` n'a encore que 3 valeurs en base).
 
 ### Correctifs d'une ligne, à fort impact
 

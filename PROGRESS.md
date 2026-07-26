@@ -1442,3 +1442,34 @@ bundle initial 611,7 kB au-dessus du budget de 500 kB). Aucun secret commité.
 **Vérification à faire en production avant le prochain déploiement** :
 `SHOW COLUMNS FROM delivery_orders LIKE 'status';` — la migration `1778500000000` insère des
 valeurs d'enum au milieu de la liste, ce que TiDB n'accepte pas.
+
+### Session 82 (2026-07-26) — Vérification de l'état des migrations en production
+
+Connexion SSH `ovh-ubuntu` (141.95.170.57), requêtes **en lecture seule** exécutées depuis le
+conteneur `zonzon-backend-ovh` (qui détient les credentials TiDB).
+
+**Résultats :**
+- **36 migrations appliquées** en base. Les 3 dernières sont `AddPhoneVerifications1780600000000`,
+  `AddShortTripPricing1780700000000` et `AddDirectThreadStates1780800000000` — elles étaient
+  **déjà déployées** (déploiement Fly du 14/07). Le fait qu'elles n'aient pas été commitées ne
+  les avait pas empêchées de partir : `flyctl deploy` envoie le répertoire de travail, pas le
+  commit git. Fly et OVH partagent la même base TiDB.
+- **✅ Risque TiDB sur l'enum `status` écarté.** `SHOW COLUMNS` renvoie les 9 valeurs :
+  `enum('PENDING','ACCEPTED','EN_ROUTE_PICKUP','AT_PICKUP','IN_PROGRESS','NEAR_CLIENT','COMPLETED','CANCELLED','FAILED')`.
+  TiDB a accepté le réordonnancement de la migration `1778500000000`. Confirmation
+  fonctionnelle : une commande `FAILED` existe en base. Le point `[À CONFIRMER]` de
+  `REVUE_COMPLETE_2026-07-26.md` est tranché.
+- **`cancelledBy` n'a encore que 3 valeurs** (`CLIENT`, `LIVREUR`, `ADMIN`) → la migration
+  `1780900000000-AddCommercantCancelledBy` est bien la **seule en attente**.
+
+**État du déploiement :**
+- `api.kore-innov.com` → HTTP 200, conteneur OVH démarré depuis **10,4 jours**.
+- Aucun des correctifs de la session 81 n'est donc en production, et **18 commits ne sont pas
+  poussés**.
+- ⚠️ **La procédure de déploiement documentée est obsolète** : `PROGRESS.md` et `CLAUDE.md`
+  indiquent `flyctl deploy --app zonzon-backend`, alors que la production est sur OVH depuis la
+  session 76. Fly reste le secours (même base TiDB, donc une migration lancée là s'applique
+  quand même).
+- Les migrations s'appliquent automatiquement au démarrage du conteneur
+  (`migrationsRun: NODE_ENV === 'production'`) : **redéployer suffit**, il n'y a pas de commande
+  de migration à lancer.
