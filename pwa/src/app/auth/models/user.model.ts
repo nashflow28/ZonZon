@@ -44,4 +44,10 @@ export interface RegisterPayload {
   password: string;
   role: Exclude<Role, 'ADMIN'>;
   vehicleType?: VehicleType;
+  /**
+   * Preuve de validation du numéro par OTP WhatsApp. Exigée par le backend
+   * dès que `WHATSAPP_OTP_ENABLED=true` — sans elle, l'inscription échoue en
+   * 400 « Validation WhatsApp requise ».
+   */
+  verificationToken?: string;
 }

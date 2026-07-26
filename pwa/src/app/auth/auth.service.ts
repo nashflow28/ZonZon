@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, catchError, map, of, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { RealtimeNotificationsBridge } from '../shared/services/realtime-notifications-bridge.service';
 import { SocketService } from '../shared/services/socket.service';
@@ -43,6 +43,46 @@ export class AuthService {
     return this.http
       .post<LoginResponse>(`${environment.apiUrl}${environment.apiPrefix}/auth/register`, payload)
       .pipe(tap((res) => this.persistSession(res)));
+  }
+
+  /**
+   * Validation du numéro par OTP WhatsApp.
+   *
+   * Le backend exige un `verificationToken` à l'inscription dès que
+   * `WHATSAPP_OTP_ENABLED=true`. Sans ce flux, la bascule du flag ferait
+   * échouer 100 % des inscriptions PWA alors que le mobile continuerait de
+   * fonctionner.
+   */
+  isWhatsappOtpEnabled(): Observable<boolean> {
+    return this.http
+      .get<{ enabled: boolean }>(
+        `${environment.apiUrl}${environment.apiPrefix}/auth/otp/whatsapp/status`,
+      )
+      .pipe(
+        map((res) => res?.enabled === true),
+        // Compatibilité de déploiement progressif : un backend antérieur ne
+        // connaît pas encore cette route. On dégrade vers « désactivé » plutôt
+        // que de bloquer l'inscription.
+        catchError(() => of(false)),
+      );
+  }
+
+  requestWhatsappOtp(phone: string): Observable<number> {
+    return this.http
+      .post<{ sent: true; expiresInSeconds: number }>(
+        `${environment.apiUrl}${environment.apiPrefix}/auth/otp/whatsapp/request`,
+        { phone },
+      )
+      .pipe(map((res) => res?.expiresInSeconds ?? 300));
+  }
+
+  verifyWhatsappOtp(phone: string, code: string): Observable<string> {
+    return this.http
+      .post<{ verificationToken: string }>(
+        `${environment.apiUrl}${environment.apiPrefix}/auth/otp/whatsapp/verify`,
+        { phone, code },
+      )
+      .pipe(map((res) => res.verificationToken));
   }
 
   /** Récupère l'utilisateur courant depuis l'API (utile après reload / refresh du profil). */

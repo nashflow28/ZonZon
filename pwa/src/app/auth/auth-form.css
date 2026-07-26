@@ -123,6 +123,40 @@
   cursor: default;
 }
 
+/* Action secondaire (validation du numéro par WhatsApp) : même grammaire que
+   les champs, pour ne pas retomber sur un bouton natif iOS non stylé. */
+.btn-secondary {
+  border: 1px solid var(--zz-line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-height: 44px;
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--zz-card);
+  color: var(--zz-text-hi);
+  cursor: pointer;
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.otp-field {
+  gap: 10px;
+}
+
+.otp-hint {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--zz-text-mut);
+}
+
+.otp-hint--ok {
+  color: var(--zz-go);
+}
+
 .switch-link {
   text-align: center;
   font-size: 14px;

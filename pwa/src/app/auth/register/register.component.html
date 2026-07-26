@@ -21,13 +21,61 @@
 
     <div class="field">
       <label for="phone">Téléphone</label>
+      <!-- Pas d'id sur l'hôte : il ferait doublon avec celui de l'input interne
+           et le <label for="phone"> ne ciblerait plus un élément étiquetable. -->
       <app-phone-input
-        id="phone"
         [inputId]="'phone'"
         placeholder="90 00 00 00"
         formControlName="phone"
       ></app-phone-input>
     </div>
+
+    <!-- Validation du numéro par WhatsApp — affichée uniquement si le backend
+         l'a activée (WHATSAPP_OTP_ENABLED). -->
+    @if (otpEnabled()) {
+      <div class="field otp-field">
+        @if (otpStep() === 'verified') {
+          <p class="otp-hint otp-hint--ok">✓ Numéro validé</p>
+        } @else {
+          <button
+            type="button"
+            class="btn-secondary"
+            [disabled]="otpSending()"
+            (click)="requestOtp()"
+          >
+            {{
+              otpSending()
+                ? 'Envoi…'
+                : otpStep() === 'code-sent'
+                  ? 'Renvoyer le code'
+                  : 'Recevoir un code sur WhatsApp'
+            }}
+          </button>
+
+          @if (otpStep() === 'code-sent') {
+            <label for="otp-code">Code reçu sur WhatsApp</label>
+            <input
+              id="otp-code"
+              type="text"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="6"
+              placeholder="123456"
+              [value]="otpCode()"
+              (input)="otpCode.set($any($event.target).value)"
+            />
+            <button
+              type="button"
+              class="btn-secondary"
+              [disabled]="otpVerifying() || otpCode().trim().length < 4"
+              (click)="verifyOtp()"
+            >
+              {{ otpVerifying() ? 'Vérification…' : 'Valider le code' }}
+            </button>
+          }
+        }
+      </div>
+    }
 
     <div class="field">
       <label for="password">Mot de passe</label>
