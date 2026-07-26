@@ -18,6 +18,8 @@ import 'create_delivery_screen.dart';
 import 'merchant_drivers_screen.dart';
 import 'merchant_orders_screen.dart';
 import '../notifications_screen.dart';
+import '../../widgets/change_password_dialog.dart';
+import '../../widgets/phone_field.dart';
 
 class MerchantProfileScreen extends StatefulWidget {
   const MerchantProfileScreen({super.key});
@@ -269,6 +271,8 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                     'Informations personnelles',
                     _buildProfileFields(),
                   ),
+                  const SizedBox(height: 16),
+                  _buildSection('Sécurité du compte', _buildSecurityTile()),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -424,12 +428,11 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
         const SizedBox(height: 12),
         _field('Nom', _lastNameCtrl, Icons.person_outline),
         const SizedBox(height: 12),
-        _field(
-          'Téléphone',
-          TextEditingController(text: _user?.phone ?? ''),
-          Icons.phone_outlined,
-          readOnly: true,
-        ),
+        if (_user != null)
+          PhoneDisplay(
+            phone: _user!.phone,
+            accentColor: const Color(0xFF0FB271),
+          ),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
@@ -452,6 +455,31 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSecurityTile() {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.lock_outline, color: Color(0xFF0FB271)),
+      title: const Text(
+        'Modifier le mot de passe',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+      ),
+      subtitle: const Text(
+        'Mettez à jour la sécurité de votre compte',
+        style: TextStyle(color: Colors.white60, fontSize: 12),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+      onTap: () async {
+        final changed = await showChangePasswordDialog(
+          context,
+          accentColor: const Color(0xFF0FB271),
+        );
+        if (changed == true && mounted) {
+          showAdaptiveSnack(context, 'Mot de passe modifié');
+        }
+      },
     );
   }
 

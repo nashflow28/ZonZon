@@ -10,8 +10,11 @@ import 'models/user.dart';
 import 'services/api_client.dart';
 import 'services/auth_service.dart';
 import 'services/driver_service.dart';
+import 'services/direct_messages_service.dart';
+import 'services/realtime_services.dart';
 import 'services/whatsapp_service.dart';
 import 'screens/chat_screen.dart';
+import 'screens/direct_thread_screen.dart';
 import 'screens/driver_navigation_screen.dart';
 import 'screens/messaging_hub_screen.dart';
 import 'screens/driver_profile_screen.dart';
@@ -231,13 +234,12 @@ class _DriverScreenState extends State<DriverScreen> {
   /// le client) → tous les events `orderAccepted` / `orderStatusUpdated`
   /// remontent, ce qui permet de retirer une course du radar dès qu'un
   /// autre livreur l'a prise.
-  final OrderSocketController _socketCtrl = OrderSocketController();
+  final OrderSocketController _socketCtrl = RealtimeServices.socket;
 
   StreamSubscription<NewOrderEvent>? _newOrderSub;
   StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
   StreamSubscription<OrderStatusUpdate>? _statusSub;
   StreamSubscription<OrderPaymentUpdate>? _paymentSub;
-  StreamSubscription<OrderPriceProposalResponseEvent>? _priceResponseSub;
   StreamSubscription<void>? _connectedSub;
   StreamSubscription<SocketLifecycleEvent>? _socketLifecycleSub;
   Timer? _radarRefreshTimer;
@@ -318,8 +320,6 @@ class _DriverScreenState extends State<DriverScreen> {
 
   bool _hasSeenRealtimeConnection = false;
   bool _radarSyncInFlight = false;
-  final Set<String> _pendingPriceOrderIds = <String>{};
-  final Map<String, Timer> _proposalExpiryTimers = <String, Timer>{};
   int _historyVersion = 0;
   int _profileVersion = 0;
 
@@ -627,24 +627,6 @@ class _DriverScreenState extends State<DriverScreen> {
         }
       }
     });
-
-    _priceResponseSub = _socketCtrl.priceProposalResponses$.listen((evt) {
-      if (!mounted) return;
-      setState(() => _pendingPriceOrderIds.remove(evt.orderId));
-      _proposalExpiryTimers.remove(evt.orderId)?.cancel();
-      showAdaptiveSnack(
-        context,
-        evt.accepted
-            ? 'Votre prix a été accepté. La course vous est attribuée.'
-            : 'Prix refusé par le client. La course reste disponible.',
-        isError: !evt.accepted,
-      );
-      if (evt.accepted) {
-        unawaited(_restoreActiveOrder());
-      } else {
-        unawaited(_reconcileAvailableOrders());
-      }
-    });
   }
 
   Future<bool> _ensureLocationPermission() async {
@@ -892,97 +874,6 @@ class _DriverScreenState extends State<DriverScreen> {
         );
       }
     }
-  }
-
-  Future<void> _proposePrice(Map<String, dynamic> order) async {
-    final orderId = order['id']?.toString();
-    if (orderId == null || _pendingPriceOrderIds.contains(orderId)) return;
-    final controller = TextEditingController();
-    final price = await showDialog<int>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Proposer votre prix'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${order['distanceKm'] ?? '—'} km'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Montant proposé',
-                suffixText: 'FCFA',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Annuler'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final value = int.tryParse(controller.text.trim());
-              if (value == null || value < 100) return;
-              Navigator.pop(ctx, value);
-            },
-            child: const Text('Envoyer'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (price == null || !mounted) return;
-    setState(() => _pendingPriceOrderIds.add(orderId));
-    try {
-      final res = await _api.post(
-        '/orders/$orderId/price-proposals',
-        body: {'priceFcfa': price},
-      );
-      if (res.statusCode != 200 && res.statusCode != 201) {
-        final body = jsonDecode(res.body);
-        throw Exception(body is Map ? body['message'] : 'Proposition refusée');
-      }
-      final payload = jsonDecode(res.body);
-      final expiresAt = payload is Map
-          ? DateTime.tryParse(payload['expiresAt']?.toString() ?? '')
-          : null;
-      _scheduleProposalExpiry(orderId, expiresAt);
-      if (mounted) {
-        showAdaptiveSnack(
-          context,
-          'Prix proposé. Réponse du client en attente.',
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _pendingPriceOrderIds.remove(orderId));
-      showAdaptiveSnack(
-        context,
-        e.toString().replaceFirst('Exception: ', ''),
-        isError: true,
-      );
-    }
-  }
-
-  void _scheduleProposalExpiry(String orderId, DateTime? expiresAt) {
-    _proposalExpiryTimers.remove(orderId)?.cancel();
-    final delay = expiresAt == null
-        ? const Duration(minutes: 2)
-        : expiresAt.difference(DateTime.now());
-    _proposalExpiryTimers[orderId] = Timer(
-      delay.isNegative ? Duration.zero : delay,
-      () {
-        _proposalExpiryTimers.remove(orderId);
-        if (!mounted) return;
-        setState(() => _pendingPriceOrderIds.remove(orderId));
-        unawaited(_reconcileAvailableOrders());
-      },
-    );
   }
 
   void _declineOrder(String orderId) {
@@ -1456,20 +1347,44 @@ class _DriverScreenState extends State<DriverScreen> {
                     child: ElevatedButton.icon(
                       onPressed: dialogProcessing
                           ? null
-                          : () => pushAdaptive<void>(
-                              dlgCtx,
-                              ChatScreen(
-                                orderId: orderId,
-                                otherPartyName: clientName.isEmpty
-                                    ? 'Client'
-                                    : clientName,
-                                otherPartyPhone:
-                                    client?['phone']?.toString() ??
-                                    orderData['clientPhone']?.toString(),
-                                otherPartyRole: 'CLIENT',
-                                orderStatus: dialogStatus,
-                              ),
-                            ),
+                          : () {
+                              final clientId = client?['id']?.toString() ?? '';
+                              final isGroupConversation =
+                                  orderData['merchant'] is Map;
+                              if (!isGroupConversation && clientId.isNotEmpty) {
+                                pushAdaptive<bool>(
+                                  dlgCtx,
+                                  DirectThreadScreen(
+                                    contact: DirectContact(
+                                      id: clientId,
+                                      name: clientName.isEmpty
+                                          ? 'Client'
+                                          : clientName,
+                                      role: 'CLIENT',
+                                      phone:
+                                          client?['phone']?.toString() ??
+                                          orderData['clientPhone']?.toString(),
+                                    ),
+                                    initialOrderId: orderId,
+                                  ),
+                                );
+                                return;
+                              }
+                              pushAdaptive<void>(
+                                dlgCtx,
+                                ChatScreen(
+                                  orderId: orderId,
+                                  otherPartyName: clientName.isEmpty
+                                      ? 'Client'
+                                      : clientName,
+                                  otherPartyPhone:
+                                      client?['phone']?.toString() ??
+                                      orderData['clientPhone']?.toString(),
+                                  otherPartyRole: 'CLIENT',
+                                  orderStatus: dialogStatus,
+                                ),
+                              );
+                            },
                       icon: const Icon(
                         Icons.chat_bubble_outline,
                         color: Colors.white,
@@ -1633,14 +1548,9 @@ class _DriverScreenState extends State<DriverScreen> {
     _orderAcceptedSub?.cancel();
     _statusSub?.cancel();
     _paymentSub?.cancel();
-    _priceResponseSub?.cancel();
     _connectedSub?.cancel();
     _socketLifecycleSub?.cancel();
     _radarRefreshTimer?.cancel();
-    for (final timer in _proposalExpiryTimers.values) {
-      timer.cancel();
-    }
-    _socketCtrl.dispose();
     super.dispose();
   }
 
@@ -1959,9 +1869,7 @@ class _DriverScreenState extends State<DriverScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            order['merchant'] != null
-                                ? formatFcfa(order['priceFcfa'])
-                                : 'Prix à proposer',
+                            formatFcfa(order['priceFcfa']),
                             style: const TextStyle(
                               color: Color(0xFF0FB271),
                               fontSize: 22,
@@ -2027,14 +1935,8 @@ class _DriverScreenState extends State<DriverScreen> {
                             child: SizedBox(
                               height: 50,
                               child: ElevatedButton(
-                                onPressed:
-                                    _pendingPriceOrderIds.contains(
-                                      order['id']?.toString(),
-                                    )
-                                    ? null
-                                    : () => order['merchant'] != null
-                                          ? _acceptOrder(order['id'].toString())
-                                          : _proposePrice(order),
+                                onPressed: () =>
+                                    _acceptOrder(order['id'].toString()),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF2E90FA),
                                   shape: RoundedRectangleBorder(
@@ -2042,13 +1944,7 @@ class _DriverScreenState extends State<DriverScreen> {
                                   ),
                                 ),
                                 child: Text(
-                                  order['merchant'] != null
-                                      ? 'Accepter la course'
-                                      : _pendingPriceOrderIds.contains(
-                                          order['id']?.toString(),
-                                        )
-                                      ? 'Réponse en attente'
-                                      : 'Proposer un prix',
+                                  'Accepter la course',
                                   style: const TextStyle(
                                     fontSize: 18,
                                     color: Colors.white,

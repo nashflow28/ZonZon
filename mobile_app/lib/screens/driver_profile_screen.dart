@@ -17,6 +17,8 @@ import '../screens/order_history_screen.dart';
 import '../utils/affiliation_status_utils.dart';
 import '../screens/notifications_screen.dart';
 import '../utils/platform_adapter.dart';
+import '../widgets/change_password_dialog.dart';
+import '../widgets/phone_field.dart';
 
 class DriverProfileScreen extends StatefulWidget {
   const DriverProfileScreen({super.key});
@@ -471,6 +473,8 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
             _buildHistoryTile(),
             const SizedBox(height: 16),
             _buildSection('Informations personnelles', _buildProfileFields()),
+            const SizedBox(height: 16),
+            _buildSection('Sécurité du compte', _buildSecurityTile()),
             const SizedBox(height: 16),
             _buildSection('Pièce d\'identité', _buildIdCardSection()),
             const SizedBox(height: 16),
@@ -1096,12 +1100,11 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         const SizedBox(height: 12),
         _field('Nom', _lastNameCtrl, Icons.person_outline),
         const SizedBox(height: 12),
-        _field(
-          'Téléphone',
-          TextEditingController(text: _user?.phone ?? ''),
-          Icons.phone_outlined,
-          readOnly: true,
-        ),
+        if (_user != null)
+          PhoneDisplay(
+            phone: _user!.phone,
+            accentColor: const Color(0xFF0FB271),
+          ),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
@@ -1124,6 +1127,31 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSecurityTile() {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.lock_outline, color: Color(0xFF0FB271)),
+      title: const Text(
+        'Modifier le mot de passe',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+      ),
+      subtitle: const Text(
+        'Mettez à jour la sécurité de votre compte',
+        style: TextStyle(color: Colors.white60, fontSize: 12),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+      onTap: () async {
+        final changed = await showChangePasswordDialog(
+          context,
+          accentColor: const Color(0xFF0FB271),
+        );
+        if (changed == true && mounted) {
+          showAdaptiveSnack(context, 'Mot de passe modifié');
+        }
+      },
     );
   }
 

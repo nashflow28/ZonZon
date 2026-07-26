@@ -4,6 +4,7 @@ import '../controllers/order_socket_controller.dart';
 import '../models/product.dart';
 import '../models/shop.dart';
 import 'active_orders_store.dart';
+import 'realtime_services.dart';
 
 /// Sélection en attente côté HomeTab : produit + boutique chosen depuis
 /// l'onglet Boutiques. Le HomeTab consomme cette valeur et la reset.
@@ -28,12 +29,10 @@ class PendingShopSelection {
 class ClientServices {
   ClientServices._();
 
-  static OrderSocketController? _socket;
   static ActiveOrdersStore? _activeOrders;
 
   /// Socket controller unique pour la session client.
-  static OrderSocketController get socket =>
-      _socket ??= OrderSocketController();
+  static OrderSocketController get socket => RealtimeServices.socket;
 
   /// Store des commandes actives (auto-sync via le socket).
   static ActiveOrdersStore get activeOrders =>
@@ -46,12 +45,10 @@ class ClientServices {
 
   /// À appeler au logout pour libérer le socket et vider le store.
   static Future<void> reset() async {
-    final s = _socket;
     final a = _activeOrders;
-    _socket = null;
     _activeOrders = null;
     pendingShopSelection.value = null;
-    if (s != null) await s.dispose();
+    await RealtimeServices.reset();
     a?.dispose();
   }
 }

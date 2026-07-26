@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/merchant_drivers_service.dart';
 import '../../utils/affiliation_status_utils.dart';
 import '../../utils/platform_adapter.dart';
+import '../../widgets/phone_field.dart';
 
 /// Écran « Mes livreurs » pour un COMMERCANT (Priorité 3, Lot 3, item 2).
 ///
@@ -63,6 +64,7 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
 
   Future<void> _openAddDialog() async {
     final controller = TextEditingController();
+    var fullPhone = '+228';
     final phone = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -71,18 +73,11 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
           'Ajouter un livreur',
           style: TextStyle(color: Colors.white),
         ),
-        content: TextField(
+        content: PhoneField(
           controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.phone,
-          style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(
-            hintText: 'Ex. +228 90 12 34 56 ou 90 12 34 56',
-            hintStyle: TextStyle(color: Colors.white54),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.white24),
-            ),
-          ),
+          textInputAction: TextInputAction.done,
+          hint: 'Numéro du livreur',
+          onFullNumberChanged: (value) => fullPhone = value,
         ),
         actions: [
           TextButton(
@@ -93,12 +88,15 @@ class _MerchantDriversScreenState extends State<MerchantDriversScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF0FB271),
             ),
-            onPressed: () => Navigator.of(ctx).pop(controller.text.trim()),
+            onPressed: () => Navigator.of(
+              ctx,
+            ).pop(controller.text.trim().isEmpty ? null : fullPhone),
             child: const Text('Ajouter'),
           ),
         ],
       ),
     );
+    controller.dispose();
 
     if (phone == null || phone.isEmpty || !mounted) return;
 

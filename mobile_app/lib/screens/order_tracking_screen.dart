@@ -8,9 +8,11 @@ import 'package:latlong2/latlong.dart';
 
 import '../controllers/order_socket_controller.dart';
 import '../models/place.dart';
+import '../router/app_router.dart';
 import '../services/active_orders_store.dart';
 import '../services/api_client.dart';
 import '../services/client_services.dart';
+import '../services/direct_messages_service.dart';
 import '../services/estimate_service.dart';
 import '../services/eta_service.dart';
 import '../services/signalement_service.dart';
@@ -19,9 +21,11 @@ import '../utils/geo_utils.dart';
 import '../utils/order_status_utils.dart';
 import '../utils/platform_adapter.dart';
 import '../widgets/order_map_widget.dart';
+import '../widgets/map_appearance_controls.dart';
 import '../widgets/order_screen_widgets.dart';
 import '../widgets/status_timeline.dart';
 import 'chat_screen.dart';
+import 'direct_thread_screen.dart';
 import 'rating_screen.dart';
 
 /// Écran de suivi d'une commande spécifique.
@@ -58,7 +62,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
   StreamSubscription<OrderPaymentUpdate>? _paymentSub;
   StreamSubscription<NewChatMessageEvent>? _chatMsgSub;
   StreamSubscription<void>? _realtimeReconnectSub;
-  StreamSubscription<OrderPriceProposalEvent>? _priceProposalSub;
 
   Place? _pickup;
   Place? _delivery;
@@ -75,9 +78,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
 
   EtaResult? _eta;
   Timer? _etaTimer;
-  Timer? _proposalTimer;
-  Map<String, dynamic>? _pendingPriceProposal;
-  bool _respondingToPrice = false;
 
   bool _ratingPrompted = false;
 
@@ -92,11 +92,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _bootstrapFromStore();
     _attachStreams();
     _refreshDetails();
-    _refreshPriceProposal();
-    _proposalTimer = Timer.periodic(
-      const Duration(seconds: 8),
-      (_) => _refreshPriceProposal(),
-    );
     _startEtaPolling();
   }
 
@@ -185,15 +180,7 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _realtimeReconnectSub = _socketCtrl.connected$.listen((_) {
       // La mise à jour de statut peut avoir été envoyée pendant la coupure.
       _refreshDetails();
-      _refreshPriceProposal();
     });
-
-    _priceProposalSub = _socketCtrl.priceProposals$
-        .where((event) => event.orderId == widget.orderId)
-        .listen((event) {
-          if (!mounted) return;
-          setState(() => _pendingPriceProposal = event.raw);
-        });
 
     _driverPosSub = _socketCtrl.driverPosition$
         .where((e) => e.orderId == widget.orderId)
@@ -302,59 +289,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     } catch (_) {}
   }
 
-  Future<void> _refreshPriceProposal() async {
-    if (_activeOrderStatus != null && _activeOrderStatus != 'PENDING') {
-      if (mounted && _pendingPriceProposal != null) {
-        setState(() => _pendingPriceProposal = null);
-      }
-      return;
-    }
-    try {
-      final res = await _api.get('/orders/${widget.orderId}/price-proposal');
-      if (!mounted || (res.statusCode != 200 && res.statusCode != 201)) return;
-      final data = jsonDecode(res.body);
-      setState(() {
-        _pendingPriceProposal = data is Map
-            ? Map<String, dynamic>.from(data)
-            : null;
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _respondToPriceProposal(bool accept) async {
-    final proposalId = _pendingPriceProposal?['id']?.toString();
-    if (proposalId == null || _respondingToPrice) return;
-    setState(() => _respondingToPrice = true);
-    try {
-      final res = await _api.patch(
-        '/orders/${widget.orderId}/price-proposal/$proposalId',
-        body: {'accept': accept},
-      );
-      if (res.statusCode != 200 && res.statusCode != 201) {
-        throw Exception(_extractApiError(res.statusCode, res.body));
-      }
-      if (!mounted) return;
-      setState(() => _pendingPriceProposal = null);
-      showAdaptiveSnack(
-        context,
-        accept
-            ? 'Prix accepté. Le livreur vous est attribué.'
-            : 'Prix refusé. Recherche d’un autre livreur relancée.',
-      );
-      await _refreshDetails();
-    } catch (e) {
-      if (!mounted) return;
-      showAdaptiveSnack(
-        context,
-        e.toString().replaceFirst('Exception: ', ''),
-        isError: true,
-      );
-      await _refreshPriceProposal();
-    } finally {
-      if (mounted) setState(() => _respondingToPrice = false);
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // ETA polling
   // ---------------------------------------------------------------------------
@@ -435,6 +369,24 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     final livreurName = livreur != null
         ? '${livreur['firstName'] ?? ''} ${livreur['lastName'] ?? ''}'.trim()
         : 'Livreur';
+    final order = _store.findById(widget.orderId);
+    final livreurId = livreur?['id']?.toString() ?? '';
+    final isGroupConversation = order?.raw['merchant'] is Map;
+    if (!isGroupConversation && livreurId.isNotEmpty) {
+      pushAdaptive<bool>(
+        context,
+        DirectThreadScreen(
+          contact: DirectContact(
+            id: livreurId,
+            name: livreurName.isEmpty ? 'Livreur' : livreurName,
+            role: 'LIVREUR',
+            phone: livreur?['phone']?.toString(),
+          ),
+          initialOrderId: widget.orderId,
+        ),
+      );
+      return;
+    }
     pushAdaptive<void>(
       context,
       ChatScreen(
@@ -772,8 +724,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
     _paymentSub?.cancel();
     _chatMsgSub?.cancel();
     _realtimeReconnectSub?.cancel();
-    _priceProposalSub?.cancel();
-    _proposalTimer?.cancel();
     _etaTimer?.cancel();
     _estimateSvc.dispose();
     // NB : on ne dispose PAS le socket — il appartient à `ClientServices`
@@ -808,7 +758,10 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 12,
-            right: 12,
+            // Le bouton de thème appartient à OrderMapWidget (right: 12).
+            // On réserve aussi la place du profil (right: 64) afin que
+            // l'en-tête ne recouvre jamais ces deux cibles tactiles.
+            right: 124,
             child: _TrackingHeader(
               shortId: widget.orderId.length < 6
                   ? widget.orderId
@@ -816,6 +769,13 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
               status: _activeOrderStatus,
               onBack: () => context.pop(),
               onReport: _reportProblem,
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 8,
+            right: 64,
+            child: MapProfileButton(
+              onPressed: () => context.go(AppRoutes.clientProfile),
             ),
           ),
           OrderBottomSheet(
@@ -826,15 +786,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
                 if (_activeOrderStatus != null) ...[
                   StatusTimeline(status: _activeOrderStatus),
                   const SizedBox(height: 18),
-                ],
-                if (_pendingPriceProposal != null) ...[
-                  _PriceProposalCard(
-                    proposal: _pendingPriceProposal!,
-                    loading: _respondingToPrice,
-                    onAccept: () => _respondToPriceProposal(true),
-                    onReject: () => _respondToPriceProposal(false),
-                  ),
-                  const SizedBox(height: 16),
                 ],
                 OrderAcceptedSection(
                   assignedLivreur: _assignedLivreur,
@@ -854,73 +805,6 @@ class _OrderTrackingScreenState extends State<OrderTrackingScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PriceProposalCard extends StatelessWidget {
-  final Map<String, dynamic> proposal;
-  final bool loading;
-  final VoidCallback onAccept;
-  final VoidCallback onReject;
-
-  const _PriceProposalCard({
-    required this.proposal,
-    required this.loading,
-    required this.onAccept,
-    required this.onReject,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final driver = proposal['livreur'] is Map
-        ? proposal['livreur'] as Map
-        : null;
-    final name = driver == null
-        ? 'Un livreur'
-        : '${driver['firstName'] ?? ''} ${driver['lastName'] ?? ''}'.trim();
-    final price = (proposal['priceFcfa'] as num?)?.toInt();
-    return Card(
-      color: const Color(0xFF173447),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              '$name propose ${price ?? '—'} FCFA',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'La course ne lui sera attribuée qu’après votre accord.',
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: loading ? null : onReject,
-                    child: const Text('Refuser'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: loading ? null : onAccept,
-                    child: Text(loading ? 'Traitement…' : 'Accepter'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -12,6 +12,7 @@ import '../../services/conversation_service.dart';
 import '../../services/estimate_service.dart';
 import '../../services/eta_service.dart';
 import '../../services/merchant_orders_service.dart';
+import '../../services/realtime_services.dart';
 import '../../utils/order_status_utils.dart';
 import '../../utils/platform_adapter.dart';
 import '../../widgets/order_map_widget.dart';
@@ -30,7 +31,10 @@ class MerchantOrdersScreen extends StatefulWidget {
 class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
   final MerchantOrdersService _service = MerchantOrdersService();
   final AuthService _auth = AuthService();
-  final OrderSocketController _socketCtrl = OrderSocketController();
+  final OrderSocketController _socketCtrl = RealtimeServices.socket;
+  StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
+  StreamSubscription<OrderStatusUpdate>? _statusSub;
+  StreamSubscription<OrderPaymentUpdate>? _paymentSub;
 
   bool _loading = true;
   bool _hasError = false;
@@ -43,11 +47,11 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
   void initState() {
     super.initState();
     _socketCtrl.init();
-    _socketCtrl.orderAccepted$.listen((evt) {
+    _orderAcceptedSub = _socketCtrl.orderAccepted$.listen((evt) {
       if (!mounted || !_orders.any((item) => item.id == evt.orderId)) return;
       _load();
     });
-    _socketCtrl.statusUpdates$.listen((evt) {
+    _statusSub = _socketCtrl.statusUpdates$.listen((evt) {
       final idx = _orders.indexWhere((item) => item.id == evt.orderId);
       if (!mounted || idx < 0) return;
       final current = _orders[idx];
@@ -63,7 +67,7 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
     });
     // P1 : reflète en direct un changement de statut de paiement fait par
     // une autre partie (client, livreur, admin) sur une de SES livraisons.
-    _socketCtrl.paymentUpdates$.listen((evt) {
+    _paymentSub = _socketCtrl.paymentUpdates$.listen((evt) {
       final idx = _orders.indexWhere((item) => item.id == evt.orderId);
       if (!mounted || idx < 0) return;
       final current = _orders[idx];
@@ -97,7 +101,9 @@ class _MerchantOrdersScreenState extends State<MerchantOrdersScreen> {
 
   @override
   void dispose() {
-    _socketCtrl.dispose();
+    _orderAcceptedSub?.cancel();
+    _statusSub?.cancel();
+    _paymentSub?.cancel();
     super.dispose();
   }
 

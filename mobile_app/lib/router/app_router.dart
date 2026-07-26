@@ -131,7 +131,7 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // -----------------------------------------------------------------------
-    // CLIENT shell — bottom-nav 5 onglets (StatefulShellRoute).
+    // CLIENT shell — 4 onglets visibles + profil accessible depuis l'accueil.
     // -----------------------------------------------------------------------
     StatefulShellRoute.indexedStack(
       builder: (context, state, navigationShell) {

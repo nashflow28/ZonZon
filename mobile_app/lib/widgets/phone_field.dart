@@ -67,6 +67,52 @@ class PhoneField extends StatefulWidget {
   State<PhoneField> createState() => _PhoneFieldState();
 }
 
+/// Affichage cohérent d'un numéro déjà enregistré dans les profils et les
+/// cartes de contact. Les numéros historiques locaux sont normalisés visuellement
+/// avec l'indicatif du Togo lorsqu'aucun indicatif n'est fourni.
+class PhoneDisplay extends StatelessWidget {
+  final String phone;
+  final Color accentColor;
+
+  const PhoneDisplay({
+    super.key,
+    required this.phone,
+    this.accentColor = const Color(0xFF2E90FA),
+  });
+
+  static String format(String phone) {
+    final (code, local) = PhoneField.split(phone);
+    final digits = local.replaceAll(RegExp(r'[^0-9]'), '');
+    final groups = <String>[];
+    for (var i = 0; i < digits.length; i += 2) {
+      final end = i + 2 > digits.length ? digits.length : i + 2;
+      groups.add(digits.substring(i, end));
+    }
+    return groups.isEmpty ? code : '$code ${groups.join(' ')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InputDecorator(
+      decoration: InputDecoration(
+        labelText: 'Téléphone',
+        labelStyle: const TextStyle(color: Colors.white54),
+        prefixIcon: Icon(Icons.phone_outlined, color: accentColor),
+        filled: true,
+        fillColor: const Color(0xFF0C1A22),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+      child: Text(
+        format(phone),
+        style: const TextStyle(color: Colors.white, fontSize: 16),
+      ),
+    );
+  }
+}
+
 class _PhoneFieldState extends State<PhoneField> {
   late String _code;
 

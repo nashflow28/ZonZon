@@ -15,6 +15,8 @@ import '../services/notifications_service.dart';
 import '../screens/order_history_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../utils/platform_adapter.dart';
+import '../widgets/change_password_dialog.dart';
+import '../widgets/phone_field.dart';
 
 class ClientProfileScreen extends StatefulWidget {
   const ClientProfileScreen({super.key});
@@ -173,6 +175,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF122530),
         foregroundColor: Colors.white,
+        leading: IconButton(
+          tooltip: 'Retour à l’accueil',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go(AppRoutes.clientHome),
+        ),
         title: const Text(
           'Mon profil',
           style: TextStyle(fontWeight: FontWeight.bold),
@@ -242,6 +249,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                       'Informations personnelles',
                       _buildProfileFields(),
                     ),
+                    const SizedBox(height: 16),
+                    _buildSection('Sécurité du compte', _buildSecurityTile()),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
@@ -390,12 +399,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         const SizedBox(height: 12),
         _field('Nom', _lastNameCtrl, Icons.person_outline),
         const SizedBox(height: 12),
-        _field(
-          'Téléphone',
-          TextEditingController(text: _user?.phone ?? ''),
-          Icons.phone_outlined,
-          readOnly: true,
-        ),
+        if (_user != null) PhoneDisplay(phone: _user!.phone),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
@@ -418,6 +422,28 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSecurityTile() {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.lock_outline, color: Color(0xFF2E90FA)),
+      title: const Text(
+        'Modifier le mot de passe',
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+      ),
+      subtitle: const Text(
+        'Protégez votre compte avec un nouveau mot de passe',
+        style: TextStyle(color: Colors.white60, fontSize: 12),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+      onTap: () async {
+        final changed = await showChangePasswordDialog(context);
+        if (changed == true && mounted) {
+          showAdaptiveSnack(context, 'Mot de passe modifié');
+        }
+      },
     );
   }
 

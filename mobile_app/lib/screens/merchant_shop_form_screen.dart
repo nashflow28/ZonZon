@@ -5,6 +5,7 @@ import '../models/shop.dart';
 import '../services/shops_service.dart';
 import 'location_picker_screen.dart';
 import '../utils/platform_adapter.dart';
+import '../widgets/phone_field.dart';
 
 class MerchantShopFormScreen extends StatefulWidget {
   final Shop? initial;
@@ -21,6 +22,8 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
   final _phone = TextEditingController();
   final _hours = TextEditingController();
   String _category = 'OTHER';
+  String _phoneCode = '+228';
+  String _fullPhone = '';
   String _address = '';
   LatLng? _location;
 
@@ -35,7 +38,10 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
     if (i != null) {
       _name.text = i.name;
       _description.text = i.description ?? '';
-      _phone.text = i.phone ?? '';
+      final (code, local) = PhoneField.split(i.phone ?? '');
+      _phoneCode = code;
+      _phone.text = local;
+      _fullPhone = i.phone ?? '';
       _hours.text = i.hours ?? '';
       _category = i.category;
       _address = i.address;
@@ -97,7 +103,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
         lat: _location!.latitude,
         lng: _location!.longitude,
         description: _description.text.trim(),
-        phone: _phone.text.trim(),
+        phone: _phone.text.trim().isEmpty ? '' : _fullPhone,
         hours: _hours.text.trim(),
       );
     } else {
@@ -108,7 +114,7 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
         'lat': _location!.latitude,
         'lng': _location!.longitude,
         'description': _description.text.trim(),
-        'phone': _phone.text.trim(),
+        'phone': _phone.text.trim().isEmpty ? '' : _fullPhone,
         'hours': _hours.text.trim(),
       });
     }
@@ -149,11 +155,11 @@ class _MerchantShopFormScreenState extends State<MerchantShopFormScreen> {
                 const SizedBox(height: 12),
                 _addressTile(),
                 const SizedBox(height: 12),
-                _input(
-                  'Téléphone (optionnel)',
-                  _phone,
-                  icon: Icons.phone_outlined,
-                  keyboard: TextInputType.phone,
+                PhoneField(
+                  controller: _phone,
+                  initialCode: _phoneCode,
+                  hint: 'Téléphone de la boutique (optionnel)',
+                  onFullNumberChanged: (full) => _fullPhone = full,
                 ),
                 const SizedBox(height: 12),
                 _input(

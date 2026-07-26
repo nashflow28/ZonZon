@@ -1,6 +1,6 @@
 const String apiUrl = String.fromEnvironment(
   'API_URL',
-  defaultValue: 'https://zonzon-backend.fly.dev',
+  defaultValue: 'https://api.kore-innov.com',
 );
 
 /// Préfixe d'API HTTP. Concaténé à `apiUrl` par les clients HTTP REST.

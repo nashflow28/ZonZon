@@ -273,7 +273,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // Carte (double couche dark : base sans labels + labels nets par-dessus)
+            // Carte détaillée en mode clair, double couche CARTO en sombre.
             Positioned.fill(
               child: FlutterMap(
                 mapController: _mapCtrl,
@@ -283,7 +283,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   minZoom: 5,
                   maxZoom: 19,
                 ),
-                children: [const MapTileLayers()],
+                children: const [MapTileLayers(), MapAttribution()],
               ),
             ),
             // Crosshair central
@@ -305,7 +305,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _SearchField(
+                        child: LocationSearchField(
                           controller: _searchCtrl,
                           focusNode: _searchFocus,
                           hint: widget.hint ?? widget.title,
@@ -428,14 +428,15 @@ class _CircleIconButton extends StatelessWidget {
   }
 }
 
-class _SearchField extends StatelessWidget {
+class LocationSearchField extends StatelessWidget {
   final TextEditingController controller;
   final FocusNode focusNode;
   final String hint;
   final ValueChanged<String> onChanged;
   final VoidCallback? onClear;
 
-  const _SearchField({
+  const LocationSearchField({
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.hint,
@@ -455,7 +456,12 @@ class _SearchField extends StatelessWidget {
         focusNode: focusNode,
         onChanged: onChanged,
         textInputAction: TextInputAction.search,
-        style: const TextStyle(color: Colors.white, fontSize: 15),
+        // Le champ est posé au-dessus de la carte : fixer explicitement la
+        // couleur du texte, du curseur et de la sélection évite que le thème
+        // de la page ou celui du clavier ne le rende transparent.
+        style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.25),
+        cursorColor: const Color(0xFF2E90FA),
+        textCapitalization: TextCapitalization.words,
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: Colors.white60),
@@ -466,6 +472,8 @@ class _SearchField extends StatelessWidget {
                   onPressed: onClear,
                 )
               : null,
+          filled: true,
+          fillColor: const Color(0xFF122530),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(
             horizontal: 16,

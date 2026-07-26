@@ -105,7 +105,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final result = await AuthService().register(
+      final auth = AuthService();
+      String? verificationToken;
+      if (await auth.isWhatsappOtpEnabled()) {
+        await auth.requestWhatsappOtp(_fullPhone);
+        if (!mounted) return;
+        verificationToken = await _showWhatsappOtpDialog(auth);
+        if (verificationToken == null) return;
+      }
+
+      final result = await auth.register(
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
         phone: _fullPhone,
@@ -113,6 +122,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         role: _role,
         vehicleType: _role == 'LIVREUR' ? _vehicleType : null,
         persistSession: false,
+        verificationToken: verificationToken,
       );
 
       if (_profilePhoto != null) {
@@ -181,6 +191,89 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<String?> _showWhatsappOtpDialog(AuthService auth) async {
+    final codeController = TextEditingController();
+    String? error;
+    var verifying = false;
+    final result = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Vérifiez votre numéro'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Un code à 6 chiffres a été envoyé sur WhatsApp à $_fullPhone.',
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: codeController,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                autofillHints: const [AutofillHints.oneTimeCode],
+                decoration: InputDecoration(
+                  labelText: 'Code WhatsApp',
+                  errorText: error,
+                  prefixIcon: const Icon(Icons.verified_user_outlined),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: verifying ? null : () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: verifying
+                  ? null
+                  : () async {
+                      final code = codeController.text.trim();
+                      if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+                        setDialogState(
+                          () => error = 'Saisissez les 6 chiffres',
+                        );
+                        return;
+                      }
+                      setDialogState(() {
+                        verifying = true;
+                        error = null;
+                      });
+                      try {
+                        final token = await auth.verifyWhatsappOtp(
+                          _fullPhone,
+                          code,
+                        );
+                        if (context.mounted) Navigator.pop(context, token);
+                      } catch (_) {
+                        if (context.mounted) {
+                          setDialogState(() {
+                            verifying = false;
+                            error = 'Code incorrect ou expiré';
+                          });
+                        }
+                      }
+                    },
+              child: verifying
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Vérifier'),
+            ),
+          ],
+        ),
+      ),
+    );
+    codeController.dispose();
+    return result;
   }
 
   @override

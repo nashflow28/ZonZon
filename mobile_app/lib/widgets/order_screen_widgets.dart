@@ -404,9 +404,7 @@ class EstimatePreview extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      showPrice
-                          ? 'Prix estimé'
-                          : 'Le livreur proposera son prix',
+                      'Prix estimé',
                       style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.6),
                         fontSize: 11,

@@ -1,8 +1,41 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
+
 import '../config/env.dart';
 import 'auth_service.dart';
+
+class ApiNetworkException implements Exception {
+  final String message;
+
+  const ApiNetworkException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+bool isDnsLookupError(Object error) {
+  if (error is SocketException) {
+    return error.osError?.errorCode == 7 ||
+        error.message.toLowerCase().contains('failed host lookup');
+  }
+  final message = error.toString().toLowerCase();
+  return message.contains('failed host lookup') ||
+      message.contains('no address associated with hostname');
+}
+
+String apiErrorMessage(Object error) {
+  if (error is ApiNetworkException) return error.message;
+  if (error is TimeoutException) {
+    return 'La connexion est trop lente. Vérifiez vos commandes avant de réessayer.';
+  }
+  if (isDnsLookupError(error) || error is SocketException) {
+    return 'Connexion internet indisponible. Vérifiez le Wi-Fi ou les données mobiles, puis réessayez.';
+  }
+  return 'Une erreur est survenue. Veuillez réessayer.';
+}
 
 class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
@@ -66,10 +99,24 @@ class ApiClient {
   }
 
   Future<http.Response> _send(Future<http.Response> Function() request) async {
-    final response = await request().timeout(_requestTimeout);
-    if (response.statusCode == 401) {
-      await _authService.handleUnauthorized();
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final response = await request().timeout(_requestTimeout);
+        if (response.statusCode == 401) {
+          await _authService.handleUnauthorized();
+        }
+        return response;
+      } catch (error) {
+        if (!isDnsLookupError(error)) rethrow;
+        if (attempt == 0) {
+          await Future<void>.delayed(const Duration(milliseconds: 800));
+          continue;
+        }
+        throw const ApiNetworkException(
+          'Connexion internet indisponible. Vérifiez le Wi-Fi ou les données mobiles, puis réessayez.',
+        );
+      }
     }
-    return response;
+    throw const ApiNetworkException('Connexion internet indisponible.');
   }
 }

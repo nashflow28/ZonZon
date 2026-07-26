@@ -19,6 +19,7 @@ import '../../services/geocoding_service.dart';
 import '../../services/zones_service.dart';
 import '../../utils/platform_adapter.dart';
 import '../../widgets/order_map_widget.dart';
+import '../../widgets/map_appearance_controls.dart';
 import '../../widgets/order_screen_widgets.dart';
 import '../location_picker_screen.dart';
 import '../shop_list_screen.dart';
@@ -384,7 +385,7 @@ class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
     } catch (e) {
       if (mounted) {
         hapticError();
-        showAdaptiveSnack(context, 'Erreur : $e', isError: true);
+        showAdaptiveSnack(context, apiErrorMessage(e), isError: true);
       }
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -526,8 +527,16 @@ class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 20,
-            right: 20,
+            // Laisse la place aux boutons Profil et clair/sombre.
+            right: 124,
             child: const _HomeHeader(),
+          ),
+          Positioned(
+            top: MediaQuery.paddingOf(context).top + 8,
+            right: 64,
+            child: MapProfileButton(
+              onPressed: () => context.go(AppRoutes.clientProfile),
+            ),
           ),
           OrderBottomSheet(
             child: OrderFormSection(
@@ -539,7 +548,7 @@ class _HomeTabState extends State<HomeTab> with AutomaticKeepAliveClientMixin {
               estimateLoading: _estimateLoading,
               estimateKm: _estimateKm,
               estimatePrice: _estimatePrice,
-              showEstimatedPrice: false,
+              showEstimatedPrice: true,
               submitLoading: isLoading,
               extraSection: _buildZoneSelectors(),
               onOpenShops: _openShops,

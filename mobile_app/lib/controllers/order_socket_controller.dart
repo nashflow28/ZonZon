@@ -84,23 +84,6 @@ class NewOrderEvent {
   NewOrderEvent({required this.orderId, required this.raw});
 }
 
-class OrderPriceProposalEvent {
-  final String orderId;
-  final Map<String, dynamic> raw;
-
-  OrderPriceProposalEvent({required this.orderId, required this.raw});
-}
-
-class OrderPriceProposalResponseEvent {
-  final String orderId;
-  final bool accepted;
-
-  OrderPriceProposalResponseEvent({
-    required this.orderId,
-    required this.accepted,
-  });
-}
-
 enum SocketLifecycleState {
   skipped,
   connecting,
@@ -132,33 +115,30 @@ class SocketLifecycleEvent {
 /// typé pour chacun. Un consommateur appelle [init] dans `initState`, lit
 /// les streams puis [dispose] dans `dispose`.
 ///
-/// **Filtrage par orderId** : trois modes selon l'usage.
-/// - Set vide (par défaut) → tous les events passent. C'est le mode **livreur**
-///   où on a besoin de voir toutes les acceptations pour retirer une course
-///   du radar dès qu'un autre livreur la prend.
-/// - Set non-vide → les events sont filtrés sur les orderIds présents dans
-///   [watchedOrderIds]. C'est le mode **client multi-commandes**.
-/// - [activeOrderId] (legacy single-id) reste fonctionnel via un setter qui
-///   remplace le contenu du set. Conservé pour rétro-compat le temps de la
-///   bascule des écrans.
+/// Le contrôleur partagé propage tous les événements autorisés par le serveur.
+/// Chaque consommateur filtre ensuite son propre `orderId`; un écran ne peut
+/// ainsi plus masquer les événements d'un autre écran en modifiant un filtre
+/// global. [watchedOrderIds] reste disponible pour le suivi local des courses
+/// actives et la rétrocompatibilité.
 class OrderSocketController {
   OrderSocketController({AuthService? auth}) : _auth = auth ?? AuthService();
 
   final AuthService _auth;
   io.Socket? _socket;
+  Future<void>? _initializing;
 
-  /// Set des orderIds dont les events doivent passer. Vide = pas de filtre.
+  /// Set local des orderIds suivis, sans effet sur les streams partagés.
   final Set<String> _watchedOrderIds = <String>{};
 
   /// Vue immutable de l'ensemble des orderIds suivis (utile pour debug/tests).
   Set<String> get watchedOrderIds => Set.unmodifiable(_watchedOrderIds);
 
-  /// Ajoute un orderId à filtrer. Idempotent.
+  /// Ajoute un orderId au registre local. Idempotent.
   void watchOrder(String orderId) {
     _watchedOrderIds.add(orderId);
   }
 
-  /// Retire un orderId du filtre. No-op s'il n'est pas présent.
+  /// Retire un orderId du registre local. No-op s'il n'est pas présent.
   void unwatchOrder(String orderId) {
     _watchedOrderIds.remove(orderId);
   }
@@ -180,13 +160,6 @@ class OrderSocketController {
     if (value != null) _watchedOrderIds.add(value);
   }
 
-  /// Retourne true si l'event pour [orderId] doit être propagé
-  /// aux streams (set vide = tout passe, sinon filtre sur le set).
-  bool _shouldEmit(String orderId) {
-    if (_watchedOrderIds.isEmpty) return true;
-    return _watchedOrderIds.contains(orderId);
-  }
-
   final _driverPositionCtrl = StreamController<DriverPosition>.broadcast();
   final _orderAcceptedCtrl = StreamController<OrderAcceptedEvent>.broadcast();
   final _statusUpdatesCtrl = StreamController<OrderStatusUpdate>.broadcast();
@@ -194,10 +167,6 @@ class OrderSocketController {
   final _newChatMessageCtrl = StreamController<NewChatMessageEvent>.broadcast();
   final _directMessageCtrl = StreamController<DirectMessageEvent>.broadcast();
   final _newOrderAvailableCtrl = StreamController<NewOrderEvent>.broadcast();
-  final _priceProposalCtrl =
-      StreamController<OrderPriceProposalEvent>.broadcast();
-  final _priceProposalResponseCtrl =
-      StreamController<OrderPriceProposalResponseEvent>.broadcast();
   final _connectedCtrl = StreamController<void>.broadcast();
   final _lifecycleCtrl = StreamController<SocketLifecycleEvent>.broadcast();
 
@@ -230,10 +199,6 @@ class OrderSocketController {
   /// uniquement). Pas de filtrage sur [activeOrderId] — toutes les nouvelles
   /// courses doivent apparaître dans le radar.
   Stream<NewOrderEvent> get newOrderAvailable$ => _newOrderAvailableCtrl.stream;
-  Stream<OrderPriceProposalEvent> get priceProposals$ =>
-      _priceProposalCtrl.stream;
-  Stream<OrderPriceProposalResponseEvent> get priceProposalResponses$ =>
-      _priceProposalResponseCtrl.stream;
 
   /// Stream qui émet une fois à chaque (re)connexion du socket. Utilisé
   /// côté livreur pour amorcer le tracking GPS au moment où le socket est
@@ -288,8 +253,16 @@ class OrderSocketController {
     );
   }
 
-  /// Connecte le socket et abonne les listeners. À appeler une seule fois.
-  Future<void> init() async {
+  /// Connecte le socket et abonne les listeners. Les appels concurrents
+  /// partagent la même initialisation pour garantir un seul transport.
+  Future<void> init() {
+    if (_socket != null || _disposed) return Future.value();
+    return _initializing ??= _initialize().whenComplete(() {
+      _initializing = null;
+    });
+  }
+
+  Future<void> _initialize() async {
     if (_socket != null || _disposed) return;
     final token = await _auth.getToken();
     if (_disposed) return; // dispose() est passé pendant l'await du token
@@ -394,35 +367,10 @@ class OrderSocketController {
       if (data is! Map) return;
       final orderId = data['orderId']?.toString();
       if (orderId == null) return;
-      if (!_shouldEmit(orderId)) return;
       _orderAcceptedCtrl.add(
         OrderAcceptedEvent(
           orderId: orderId,
           raw: Map<String, dynamic>.from(data),
-        ),
-      );
-    });
-
-    socket.on('orderPriceProposed', (data) {
-      if (data is! Map) return;
-      final orderId = data['orderId']?.toString();
-      if (orderId == null || !_shouldEmit(orderId)) return;
-      _priceProposalCtrl.add(
-        OrderPriceProposalEvent(
-          orderId: orderId,
-          raw: Map<String, dynamic>.from(data),
-        ),
-      );
-    });
-
-    socket.on('orderPriceProposalResponded', (data) {
-      if (data is! Map) return;
-      final orderId = data['orderId']?.toString();
-      if (orderId == null) return;
-      _priceProposalResponseCtrl.add(
-        OrderPriceProposalResponseEvent(
-          orderId: orderId,
-          accepted: data['accepted'] == true,
         ),
       );
     });
@@ -432,7 +380,6 @@ class OrderSocketController {
       final orderId = data['orderId']?.toString();
       final status = data['status']?.toString();
       if (orderId == null || status == null) return;
-      if (!_shouldEmit(orderId)) return;
       _statusUpdatesCtrl.add(
         OrderStatusUpdate(orderId: orderId, status: status),
       );
@@ -443,7 +390,6 @@ class OrderSocketController {
       final orderId = data['orderId']?.toString();
       final paymentStatus = data['paymentStatus']?.toString();
       if (orderId == null || paymentStatus == null) return;
-      if (!_shouldEmit(orderId)) return;
       _paymentUpdatesCtrl.add(
         OrderPaymentUpdate(orderId: orderId, paymentStatus: paymentStatus),
       );
@@ -455,7 +401,6 @@ class OrderSocketController {
       final lat = (data['lat'] as num?)?.toDouble();
       final lng = (data['lng'] as num?)?.toDouble();
       if (orderId == null || lat == null || lng == null) return;
-      if (!_shouldEmit(orderId)) return;
       _driverPositionCtrl.add(
         DriverPosition(
           orderId: orderId,
@@ -470,7 +415,6 @@ class OrderSocketController {
       if (data is! Map) return;
       final orderId = data['orderId']?.toString();
       if (orderId == null) return;
-      if (!_shouldEmit(orderId)) return;
       _newChatMessageCtrl.add(
         NewChatMessageEvent(
           orderId: orderId,
@@ -511,6 +455,23 @@ class OrderSocketController {
     _socket?.emit('driver:location', payload);
   }
 
+  /// Rattrape les événements potentiellement manqués pendant que
+  /// l'application était en arrière-plan. Si le transport est encore actif,
+  /// les consommateurs déclenchent immédiatement leur resynchronisation HTTP;
+  /// sinon Socket.IO relance le handshake puis émettra le même signal.
+  Future<void> resynchronize() async {
+    if (_disposed) return;
+    if (_socket == null) {
+      await init();
+      return;
+    }
+    if (_socket!.connected) {
+      if (!_connectedCtrl.isClosed) _connectedCtrl.add(null);
+      return;
+    }
+    _socket!.connect();
+  }
+
   Future<void> dispose() async {
     _disposed = true;
     _socket?.dispose();
@@ -522,8 +483,6 @@ class OrderSocketController {
     await _newChatMessageCtrl.close();
     await _directMessageCtrl.close();
     await _newOrderAvailableCtrl.close();
-    await _priceProposalCtrl.close();
-    await _priceProposalResponseCtrl.close();
     await _connectedCtrl.close();
     await _lifecycleCtrl.close();
   }

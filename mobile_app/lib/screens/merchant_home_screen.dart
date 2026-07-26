@@ -11,6 +11,7 @@ import '../models/shop.dart';
 import '../router/app_router.dart';
 import '../services/auth_service.dart';
 import '../services/merchant_orders_service.dart';
+import '../services/realtime_services.dart';
 import '../services/shops_service.dart';
 import 'merchant/create_delivery_screen.dart';
 import 'merchant/merchant_drivers_screen.dart';
@@ -31,12 +32,14 @@ class MerchantHomeScreen extends StatefulWidget {
 class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   final ShopsService _shops = ShopsService();
   final MerchantOrdersService _merchantOrders = MerchantOrdersService();
-  final OrderSocketController _socketCtrl = OrderSocketController();
+  final OrderSocketController _socketCtrl = RealtimeServices.socket;
   Shop? _shop;
   List<Product> _products = [];
   List<OrderHistoryItem> _orders = const [];
   bool _loading = true;
   StreamSubscription<void>? _realtimeReconnectSub;
+  StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
+  StreamSubscription<OrderStatusUpdate>? _statusSub;
 
   @override
   void initState() {
@@ -44,15 +47,15 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
     _socketCtrl.init();
     _realtimeReconnectSub = _socketCtrl.connected$.listen((_) {
       // Rattrape les transitions de livraison manquées hors ligne.
-      if (mounted) _refresh();
+      if (mounted) _refreshOrders();
     });
-    _socketCtrl.orderAccepted$.listen((evt) {
+    _orderAcceptedSub = _socketCtrl.orderAccepted$.listen((evt) {
       if (!mounted || !_orders.any((order) => order.id == evt.orderId)) return;
-      _refresh();
+      _refreshOrders();
     });
-    _socketCtrl.statusUpdates$.listen((evt) {
+    _statusSub = _socketCtrl.statusUpdates$.listen((evt) {
       if (!mounted || !_orders.any((order) => order.id == evt.orderId)) return;
-      _refresh();
+      _refreshOrders();
     });
     _refresh();
   }
@@ -60,7 +63,8 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
   @override
   void dispose() {
     _realtimeReconnectSub?.cancel();
-    _socketCtrl.dispose();
+    _orderAcceptedSub?.cancel();
+    _statusSub?.cancel();
     super.dispose();
   }
 
@@ -79,9 +83,15 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       _orders = orders;
       _loading = false;
     });
-    _socketCtrl.clearWatchedOrders();
-    for (final order in orders) {
-      _socketCtrl.watchOrder(order.id);
+  }
+
+  Future<void> _refreshOrders() async {
+    try {
+      final orders = await _merchantOrders.getMyMerchantOrders();
+      if (!mounted) return;
+      setState(() => _orders = orders);
+    } catch (_) {
+      // La prochaine reconnexion ou le rafraîchissement manuel retentera.
     }
   }
 

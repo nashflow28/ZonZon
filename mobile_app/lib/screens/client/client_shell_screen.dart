@@ -8,7 +8,7 @@ import '../../services/active_orders_store.dart';
 import '../../services/client_services.dart';
 import '../../utils/platform_adapter.dart';
 
-/// Coquille du client avec bottom-nav 5 onglets.
+/// Coquille du client avec bottom-nav 4 onglets.
 ///
 /// Hôte du [StatefulNavigationShell] de go_router : préserve l'état de
 /// chaque onglet (carte, formulaire, scroll de liste, etc.) et bascule
@@ -69,6 +69,11 @@ class _ClientShellScreenState extends State<ClientShellScreen> {
       bottomNavigationBar: AnimatedBuilder(
         animation: ClientServices.activeOrders,
         builder: (context, _) {
+          // Le profil reste une branche du shell pour préserver son état, mais
+          // il s'ouvre depuis le bouton supérieur de l'accueil.
+          if (widget.navigationShell.currentIndex == 4) {
+            return const SizedBox.shrink();
+          }
           return SafeArea(
             top: false,
             child: _ClientBottomNav(
@@ -105,27 +110,27 @@ class _ClientBottomNav extends StatelessWidget {
         inactiveColor: CupertinoColors.inactiveGray,
         items: [
           const BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.home),
-            label: 'Accueil',
+            icon: Icon(CupertinoIcons.home, size: 30),
+            label: null,
+            tooltip: 'Accueil',
           ),
           BottomNavigationBarItem(
             icon: _BadgedIcon(
               icon: CupertinoIcons.doc_text,
               count: ordersBadgeCount,
             ),
-            label: 'Commandes',
+            label: null,
+            tooltip: 'Commandes',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.chat_bubble_2),
-            label: 'Messages',
+            icon: Icon(CupertinoIcons.chat_bubble_2, size: 30),
+            label: null,
+            tooltip: 'Messages',
           ),
           const BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.bag),
-            label: 'Boutiques',
-          ),
-          const BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.person),
-            label: 'Profil',
+            icon: Icon(CupertinoIcons.bag, size: 30),
+            label: null,
+            tooltip: 'Boutiques',
           ),
         ],
       );
@@ -134,12 +139,12 @@ class _ClientBottomNav extends StatelessWidget {
     return NavigationBar(
       selectedIndex: currentIndex,
       onDestinationSelected: onTap,
-      height: 72,
-      labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+      height: 64,
+      labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
       destinations: [
         const NavigationDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home),
+          icon: Icon(Icons.home_outlined, size: 30),
+          selectedIcon: Icon(Icons.home, size: 32),
           label: 'Accueil',
         ),
         NavigationDestination(
@@ -155,19 +160,14 @@ class _ClientBottomNav extends StatelessWidget {
           label: 'Commandes',
         ),
         const NavigationDestination(
-          icon: Icon(Icons.chat_bubble_outline),
-          selectedIcon: Icon(Icons.chat_bubble),
+          icon: Icon(Icons.chat_bubble_outline, size: 30),
+          selectedIcon: Icon(Icons.chat_bubble, size: 32),
           label: 'Messages',
         ),
         const NavigationDestination(
-          icon: Icon(Icons.storefront_outlined),
-          selectedIcon: Icon(Icons.storefront),
+          icon: Icon(Icons.storefront_outlined, size: 30),
+          selectedIcon: Icon(Icons.storefront, size: 32),
           label: 'Boutiques',
-        ),
-        const NavigationDestination(
-          icon: Icon(Icons.person_outline),
-          selectedIcon: Icon(Icons.person),
-          label: 'Profil',
         ),
       ],
     );
@@ -187,12 +187,12 @@ class _BadgedIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (count <= 0) return Icon(icon);
+    if (count <= 0) return Icon(icon, size: 30);
     final isAtLimit = count >= ActiveOrdersStore.maxActiveOrders;
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Icon(icon),
+        Icon(icon, size: 30),
         Positioned(
           top: -4,
           right: -8,

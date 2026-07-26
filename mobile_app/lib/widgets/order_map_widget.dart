@@ -113,9 +113,14 @@ class _OrderMapWidgetState extends State<OrderMapWidget> {
                   ),
               ],
             ),
+            const MapAttribution(),
           ],
         ),
-        const Positioned(top: 12, right: 12, child: MapAppearanceButton()),
+        Positioned(
+          top: MediaQuery.paddingOf(context).top + 8,
+          right: 12,
+          child: const MapAppearanceButton(),
+        ),
       ],
     );
   }

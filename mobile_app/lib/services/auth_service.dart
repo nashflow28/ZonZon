@@ -44,6 +44,7 @@ class AuthService {
     required String role,
     String? vehicleType,
     bool persistSession = true,
+    String? verificationToken,
   }) async {
     final body = <String, dynamic>{
       'firstName': firstName,
@@ -53,6 +54,9 @@ class AuthService {
       'role': role,
     };
     if (vehicleType != null) body['vehicleType'] = vehicleType;
+    if (verificationToken != null) {
+      body['verificationToken'] = verificationToken;
+    }
 
     final res = await http.post(
       Uri.parse('$apiUrl$apiPrefix/auth/register'),
@@ -69,6 +73,44 @@ class AuthService {
       return result;
     }
     throw Exception(_extractError(res));
+  }
+
+  Future<bool> isWhatsappOtpEnabled() async {
+    final res = await http.get(
+      Uri.parse('$apiUrl$apiPrefix/auth/otp/whatsapp/status'),
+    );
+    // Compatibilité de déploiement progressif : une APK récente continue de
+    // fonctionner avec un backend antérieur qui ne connaît pas encore l'OTP.
+    if (res.statusCode == 404) return false;
+    if (res.statusCode != 200) throw Exception(_extractError(res));
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return data['enabled'] == true;
+  }
+
+  Future<int> requestWhatsappOtp(String phone) async {
+    final res = await http.post(
+      Uri.parse('$apiUrl$apiPrefix/auth/otp/whatsapp/request'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': phone}),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception(_extractError(res));
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return (data['expiresInSeconds'] as num?)?.toInt() ?? 300;
+  }
+
+  Future<String> verifyWhatsappOtp(String phone, String code) async {
+    final res = await http.post(
+      Uri.parse('$apiUrl$apiPrefix/auth/otp/whatsapp/verify'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': phone, 'code': code}),
+    );
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception(_extractError(res));
+    }
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    return data['verificationToken'] as String;
   }
 
   Future<void> persistSession(AuthResult result) => _persist(result);

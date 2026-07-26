@@ -6,6 +6,7 @@ import 'router/app_router.dart';
 import 'services/auth_service.dart';
 import 'services/notification_navigation_service.dart';
 import 'services/push_service.dart';
+import 'services/realtime_services.dart';
 
 Future<void> main() async {
   if (sentryDsn.isNotEmpty) {
@@ -41,12 +42,13 @@ class ZonZonApp extends StatefulWidget {
   State<ZonZonApp> createState() => _ZonZonAppState();
 }
 
-class _ZonZonAppState extends State<ZonZonApp> {
+class _ZonZonAppState extends State<ZonZonApp> with WidgetsBindingObserver {
   final AuthService _auth = AuthService();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _auth.sessionListenable.addListener(_syncPushState);
     PushService.instance.onTap$.listen(
       NotificationNavigationService.openFromPayload,
@@ -56,14 +58,24 @@ class _ZonZonAppState extends State<ZonZonApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _auth.sessionListenable.removeListener(_syncPushState);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      RealtimeServices.resynchronize();
+    }
   }
 
   Future<void> _syncPushState() async {
     final token = await _auth.getToken();
     if (token != null && token.isNotEmpty) {
       await PushService.instance.init();
+    } else {
+      await RealtimeServices.reset();
     }
   }
 

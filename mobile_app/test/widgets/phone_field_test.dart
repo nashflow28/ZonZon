@@ -33,4 +33,16 @@ void main() {
     await tester.pump();
     expect(submittedValue, '90123456');
   });
+
+  testWidgets('PhoneDisplay formate un numéro local avec l’indicatif du Togo', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: PhoneDisplay(phone: '+22890123456')),
+      ),
+    );
+
+    expect(find.text('+228 90 12 34 56'), findsOneWidget);
+  });
 }

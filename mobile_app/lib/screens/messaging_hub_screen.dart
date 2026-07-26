@@ -1,55 +1,74 @@
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
+
 import '../controllers/order_socket_controller.dart';
 import '../models/order_history_item.dart';
 import '../services/api_client.dart';
 import '../services/auth_service.dart';
 import '../services/direct_messages_service.dart';
+import '../services/realtime_services.dart';
 import '../utils/platform_adapter.dart';
 import 'chat_screen.dart';
+import 'direct_thread_screen.dart';
 
 class MessagingHubScreen extends StatefulWidget {
   const MessagingHubScreen({super.key});
+
   @override
   State<MessagingHubScreen> createState() => _MessagingHubScreenState();
 }
 
-class _MessagingHubScreenState extends State<MessagingHubScreen>
-    with SingleTickerProviderStateMixin {
-  final _direct = DirectMessagesService();
-  final _api = ApiClient();
-  final _auth = AuthService();
-  final _socketCtrl = OrderSocketController();
-  late final TabController _tabs;
-  List<DirectContact> _contacts = [];
-  List<OrderHistoryItem> _orders = [];
+class _MessagingHubScreenState extends State<MessagingHubScreen> {
+  final DirectMessagesService _direct = DirectMessagesService();
+  final ApiClient _api = ApiClient();
+  final AuthService _auth = AuthService();
+  final OrderSocketController _socket = RealtimeServices.socket;
+
+  List<DirectContact> _contacts = const [];
+  List<OrderHistoryItem> _orders = const [];
   String _role = '';
   bool _loading = true;
+  StreamSubscription<DirectMessageEvent>? _directMessageSub;
+  StreamSubscription<void>? _reconnectSub;
+
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
-    _socketCtrl.init();
+    _socket.init();
+    _directMessageSub = _socket.directMessages$.listen((_) {
+      _load(showLoader: false);
+    });
+    _reconnectSub = _socket.connected$.listen((_) {
+      _load(showLoader: false);
+    });
     _load();
   }
 
   @override
   void dispose() {
-    _tabs.dispose();
-    _socketCtrl.dispose();
+    _directMessageSub?.cancel();
+    _reconnectSub?.cancel();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  String _shortId(String id) => id.length <= 6 ? id : id.substring(0, 6);
+
+  List<OrderHistoryItem> get _groupOrders => _orders
+      .where((order) => order.raw['merchant'] is Map)
+      .toList(growable: false);
+
+  Future<void> _load({bool showLoader = true}) async {
+    if (showLoader && mounted) setState(() => _loading = true);
     try {
       final user = await _auth.getCurrentUser();
       final results = await Future.wait([
         _direct.contacts(),
         _api.get('/orders/mine'),
       ]);
-      final raw = jsonDecode((results[1] as dynamic).body);
+      final response = results[1] as dynamic;
+      final raw = jsonDecode(response.body as String);
       if (!mounted) return;
       setState(() {
         _role = user?.role ?? '';
@@ -58,11 +77,12 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
             ? raw
                   .whereType<Map>()
                   .map(
-                    (m) =>
-                        OrderHistoryItem.fromJson(Map<String, dynamic>.from(m)),
+                    (item) => OrderHistoryItem.fromJson(
+                      Map<String, dynamic>.from(item),
+                    ),
                   )
                   .toList()
-            : [];
+            : const [];
         _loading = false;
       });
     } catch (_) {
@@ -70,358 +90,189 @@ class _MessagingHubScreenState extends State<MessagingHubScreen>
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF0C1A22),
-    appBar: AppBar(
-      backgroundColor: const Color(0xFF122530),
-      foregroundColor: Colors.white,
-      title: const Text('Messagerie'),
-      bottom: TabBar(
-        controller: _tabs,
-        tabs: const [
-          Tab(text: 'Général'),
-          Tab(text: 'Courses'),
-        ],
-      ),
-    ),
-    body: _loading
-        ? Center(child: adaptiveLoader())
-        : TabBarView(controller: _tabs, children: [_general(), _courses()]),
-  );
-
-  Widget _general() => RefreshIndicator(
-    onRefresh: _load,
-    child: ListView(
-      children: _contacts.isEmpty
-          ? [
-              adaptiveConstrainedContent(
-                child: const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text(
-                    'Aucun contact disponible. Les contacts apparaissent après une course partagée ou une affiliation active.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white60),
-                  ),
-                ),
-              ),
-            ]
-          : _contacts
-                .map(
-                  (c) => adaptiveConstrainedContent(
-                    child: ListTile(
-                      onTap: () => pushAdaptive(
-                        context,
-                        _DirectThread(
-                          contact: c,
-                          orders: _orders,
-                          socketController: _socketCtrl,
-                        ),
-                      ),
-                      leading: const CircleAvatar(child: Icon(Icons.person)),
-                      title: Text(
-                        c.name.isEmpty ? 'Contact' : c.name,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        c.role,
-                        style: const TextStyle(color: Colors.white60),
-                      ),
-                      trailing: const Icon(
-                        Icons.chevron_right,
-                        color: Colors.white54,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-    ),
-  );
-
-  Widget _courses() => RefreshIndicator(
-    onRefresh: _load,
-    child: ListView.separated(
-      itemCount: _orders.length,
-      itemBuilder: (_, i) {
-        final o = _orders[i];
-        return adaptiveConstrainedContent(
-          child: ListTile(
-            onTap: () => pushAdaptive(
-              context,
-              ChatScreen(
-                orderId: o.id,
-                otherPartyName: 'Course #${o.id.substring(0, 6)}',
-                otherPartyRole: _role == 'LIVREUR' ? 'CLIENT' : 'LIVREUR',
-                orderStatus: o.status,
-              ),
-            ),
-            leading: const Icon(
-              Icons.local_shipping_outlined,
-              color: Color(0xFF2E90FA),
-            ),
-            title: Text(
-              'Course #${o.id.substring(0, 6)}',
-              style: const TextStyle(color: Colors.white),
-            ),
-            subtitle: Text(
-              '${o.pickupAddress} → ${o.deliveryAddress}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: Colors.white60),
-            ),
-            trailing: Text(
-              o.status,
-              style: const TextStyle(color: Color(0xFF0FB271), fontSize: 11),
-            ),
-          ),
-        );
-      },
-      separatorBuilder: (_, __) => const Divider(color: Colors.white12),
-    ),
-  );
-}
-
-class _DirectThread extends StatefulWidget {
-  const _DirectThread({
-    required this.contact,
-    required this.orders,
-    required this.socketController,
-  });
-  final DirectContact contact;
-  final List<OrderHistoryItem> orders;
-  final OrderSocketController socketController;
-  @override
-  State<_DirectThread> createState() => _DirectThreadState();
-}
-
-class _DirectThreadState extends State<_DirectThread> {
-  final _service = DirectMessagesService();
-  final _auth = AuthService();
-  final _ctrl = TextEditingController();
-  List<DirectMessageItem> _items = [];
-  String _me = '';
-  String? _linkedOrderId;
-  StreamSubscription<DirectMessageEvent>? _directMessageSub;
-  @override
-  void initState() {
-    super.initState();
-    _directMessageSub = widget.socketController.directMessages$
-        .where(
-          (event) =>
-              event.senderId == widget.contact.id ||
-              event.recipientId == widget.contact.id,
-        )
-        .listen(_onDirectMessage);
-    _load();
+  Future<void> _openContact(DirectContact contact) async {
+    await pushAdaptive<bool>(context, DirectThreadScreen(contact: contact));
+    await _load(showLoader: false);
   }
 
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    _directMessageSub?.cancel();
-    super.dispose();
-  }
-
-  void _onDirectMessage(DirectMessageEvent event) {
-    final item = DirectMessageItem.fromJson(event.raw);
-    if (!mounted || item.id.isEmpty || _items.any((m) => m.id == item.id)) {
-      return;
-    }
-    setState(() => _items = [..._items, item]);
-  }
-
-  Future<void> _load() async {
-    final u = await _auth.getCurrentUser();
-    final items = await _service.thread(widget.contact.id);
-    if (mounted) {
-      setState(() {
-        _me = u?.id ?? '';
-        _items = items;
-      });
-    }
-  }
-
-  Future<void> _send() async {
-    final text = _ctrl.text.trim();
-    if (text.isEmpty) return;
+  Future<void> _hideContact(DirectContact contact) async {
+    final confirmed = await showAdaptiveConfirmDialog(
+      context,
+      title: 'Supprimer la conversation ?',
+      message:
+          'Elle sera masquée uniquement pour vous. Un nouveau message la fera réapparaître.',
+      confirmLabel: 'Supprimer pour moi',
+      cancelLabel: 'Annuler',
+      isDestructive: true,
+    );
+    if (confirmed != true) return;
     try {
-      await _service.send(widget.contact.id, text, orderId: _linkedOrderId);
-      _ctrl.clear();
-      setState(() => _linkedOrderId = null);
-      await _load();
-    } catch (e) {
+      await _direct.hideThread(contact.id);
+      if (!mounted) return;
+      setState(() {
+        _contacts = _contacts.where((item) => item.id != contact.id).toList();
+      });
+    } catch (error) {
       if (mounted) {
         showAdaptiveSnack(
           context,
-          e.toString().replaceFirst('Exception: ', ''),
+          error.toString().replaceFirst('Exception: ', ''),
           isError: true,
         );
       }
     }
   }
 
-  Future<void> _pickOrderContext() async {
-    final selected = await showModalBottomSheet<String?>(
-      context: context,
-      backgroundColor: const Color(0xFF122530),
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.clear, color: Colors.white70),
-              title: const Text(
-                'Message général',
-                style: TextStyle(color: Colors.white),
+  @override
+  Widget build(BuildContext context) {
+    final groups = _groupOrders;
+    return Scaffold(
+      backgroundColor: const Color(0xFF0C1A22),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF122530),
+        foregroundColor: Colors.white,
+        title: const Text('Messagerie'),
+      ),
+      body: _loading
+          ? Center(child: adaptiveLoader())
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  if (_contacts.isEmpty && groups.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text(
+                        'Aucune conversation. Vos contacts apparaîtront après une course partagée ou une affiliation active.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.white60),
+                      ),
+                    ),
+                  if (_contacts.isNotEmpty) ...[
+                    const _SectionTitle('Conversations'),
+                    ..._contacts.map(_contactTile),
+                  ],
+                  if (groups.isNotEmpty) ...[
+                    const _SectionTitle('Discussions de course'),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+                      child: Text(
+                        'Conversations de groupe avec client, livreur et commerçant.',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                    ),
+                    ...groups.map(_groupTile),
+                  ],
+                ],
               ),
-              onTap: () => Navigator.pop(ctx),
             ),
-            ..._sharedOrders().map(
-              (order) => ListTile(
-                leading: const Icon(
-                  Icons.local_shipping_outlined,
-                  color: Color(0xFF2E90FA),
+    );
+  }
+
+  Widget _contactTile(DirectContact contact) {
+    final subtitle = (contact.lastMessage ?? '').trim().isNotEmpty
+        ? contact.lastMessage!
+        : _roleLabel(contact.role);
+    return adaptiveConstrainedContent(
+      child: ListTile(
+        onTap: () => _openContact(contact),
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFF2E90FA).withValues(alpha: 0.16),
+          child: const Icon(Icons.person_outline, color: Color(0xFF2E90FA)),
+        ),
+        title: Text(
+          contact.name.isEmpty ? 'Contact' : contact.name,
+          style: const TextStyle(color: Colors.white),
+        ),
+        subtitle: Text(
+          subtitle,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: Colors.white60),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (contact.unreadCount > 0)
+              Badge(label: Text('${contact.unreadCount}')),
+            PopupMenuButton<String>(
+              tooltip: 'Options',
+              iconColor: Colors.white54,
+              onSelected: (value) {
+                if (value == 'delete') _hideContact(contact);
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.delete_outline, color: Color(0xFFF0453D)),
+                      SizedBox(width: 10),
+                      Text('Supprimer pour moi'),
+                    ],
+                  ),
                 ),
-                title: Text(
-                  'Course #${order.id.substring(0, 6)}',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                subtitle: Text(
-                  order.deliveryAddress,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.white60),
-                ),
-                onTap: () => Navigator.pop(ctx, order.id),
-              ),
+              ],
             ),
           ],
         ),
       ),
     );
-    if (mounted) setState(() => _linkedOrderId = selected);
   }
 
-  List<OrderHistoryItem> _sharedOrders() => widget.orders.where((order) {
-    final partyIds = <String>{
-      order.client?['id']?.toString() ?? '',
-      order.livreur?['id']?.toString() ?? '',
-      order.raw['merchant'] is Map
-          ? (order.raw['merchant'] as Map)['id']?.toString() ?? ''
-          : '',
-    };
-    return partyIds.contains(widget.contact.id);
-  }).toList();
+  Widget _groupTile(OrderHistoryItem order) => adaptiveConstrainedContent(
+    child: ListTile(
+      onTap: () => pushAdaptive<void>(
+        context,
+        ChatScreen(
+          orderId: order.id,
+          otherPartyName: 'Course #${_shortId(order.id)}',
+          otherPartyRole: _role == 'LIVREUR' ? 'CLIENT' : 'LIVREUR',
+          orderStatus: order.status,
+        ),
+      ),
+      leading: const Icon(Icons.groups_outlined, color: Color(0xFF0FB271)),
+      title: Text(
+        'Course #${_shortId(order.id)}',
+        style: const TextStyle(color: Colors.white),
+      ),
+      subtitle: Text(
+        '${order.pickupAddress} → ${order.deliveryAddress}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: Colors.white60),
+      ),
+      trailing: Text(
+        order.status,
+        style: const TextStyle(color: Color(0xFF0FB271), fontSize: 11),
+      ),
+    ),
+  );
+
+  String _roleLabel(String role) => switch (role) {
+    'LIVREUR' => 'Livreur',
+    'CLIENT' => 'Client',
+    'COMMERCANT' => 'Commerçant',
+    _ => role,
+  };
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.label);
+
+  final String label;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF0C1A22),
-    appBar: AppBar(
-      backgroundColor: const Color(0xFF122530),
-      foregroundColor: Colors.white,
-      title: Text(widget.contact.name),
-    ),
-    body: Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(12),
-            itemCount: _items.length,
-            itemBuilder: (_, i) {
-              final m = _items[i];
-              final mine = m.senderId == _me;
-              return adaptiveConstrainedContent(
-                maxWidth: 760,
-                child: Align(
-                  alignment: mine
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: mine
-                          ? const Color(0xFF2E90FA)
-                          : const Color(0xFF122530),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          m.content,
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                        if ((m.orderId ?? '').isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 5),
-                            child: Text(
-                              'Lié à la course #${m.orderId!.substring(0, 6)}',
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_linkedOrderId != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Chip(
-                      label: Text('Course #${_linkedOrderId!.substring(0, 6)}'),
-                      onDeleted: () => setState(() => _linkedOrderId = null),
-                    ),
-                  ),
-                Row(
-                  children: [
-                    IconButton(
-                      onPressed: _pickOrderContext,
-                      icon: const Icon(Icons.link, color: Color(0xFF2E90FA)),
-                      tooltip: 'Lier à une course',
-                    ),
-                    Expanded(
-                      child: adaptiveConstrainedContent(
-                        maxWidth: 760,
-                        child: TextField(
-                          controller: _ctrl,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: const InputDecoration(
-                            hintText: 'Message général',
-                            hintStyle: TextStyle(color: Colors.white54),
-                            filled: true,
-                            fillColor: Color(0xFF122530),
-                            border: OutlineInputBorder(
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: _send,
-                      icon: const Icon(Icons.send, color: Color(0xFF2E90FA)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 22, 20, 10),
+    child: Text(
+      label,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+      ),
     ),
   );
 }
