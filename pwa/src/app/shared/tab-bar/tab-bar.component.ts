@@ -34,10 +34,17 @@ export interface ZzTab {
   `,
   styles: [
     `
+      /* La safe-area doit s'AJOUTER à la hauteur, pas s'y soustraire :
+         box-sizing border-box est global, donc une hauteur fixe de 50px
+         incluait le padding-bottom de la classe .zz-safe-bottom.
+         Sur un iPhone à home indicator (34px), il ne restait que 15px de
+         contenu — icônes et libellés débordaient sur la barre d'accueil et la
+         cible tactile tombait très en dessous des 44px des HIG. */
       .tab-bar {
         display: flex;
         align-items: stretch;
-        height: 50px;
+        min-height: 50px;
+        height: calc(50px + var(--zz-safe-bottom));
         background: var(--zz-card);
         border-top: 1px solid var(--zz-line);
       }
@@ -48,6 +55,8 @@ export interface ZzTab {
         flex-direction: column;
         align-items: center;
         justify-content: center;
+        /* Garantit la cible tactile même sans safe-area (49px + 1px de bordure). */
+        min-height: 49px;
         gap: 2px;
         text-decoration: none;
         color: var(--zz-text-mut);

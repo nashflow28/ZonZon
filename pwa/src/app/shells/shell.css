@@ -8,9 +8,14 @@
   overflow: hidden;
 }
 
+/* La safe-area haute doit être intégrée ici : la classe utilitaire globale
+   `.zz-safe-top` (spécificité 0-1-0) est écrasée par cette règle de composant
+   (0-2-0), dont le `padding` raccourci réinitialise `padding-top`. Sans cela,
+   en mode standalone avec `viewport-fit=cover`, le grand titre passe sous la
+   barre d'état et la Dynamic Island. */
 .shell-header {
   flex: 0 0 auto;
-  padding: 8px 20px 12px;
+  padding: calc(8px + var(--zz-safe-top)) 20px 12px;
   background: var(--zz-bg);
   transition: padding-top 0.15s ease;
 }
