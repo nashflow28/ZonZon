@@ -92,32 +92,33 @@
 ### 🔴 Revue complète (2026-07-26) — voir `REVUE_COMPLETE_2026-07-26.md`
 
 **Bloquants avant tout nouveau déploiement**
-- [ ] Sentry admin : `maskAllText: true` + `blockAllMedia: true` (`admin-dashboard/src/main.ts:13`) — les CNI des livreurs sont capturées
-- [ ] Charger les CNI à la demande au lieu du préchargement (`driver-validation.component.ts:186`)
-- [ ] Ajouter `ACCEPTED` à `LIVREUR_ONLY_STATUSES` (`orders.service.ts:106`) — un client peut geler sa commande
-- [ ] Retirer `UserRole.LIVREUR` de `GET /orders` (`orders.controller.ts:87`) — aucun front ne l'appelle
-- [ ] Réduire le payload `orderAccepted` vers `role:LIVREUR` à `{orderId, taken}` (`orders.gateway.ts:328`)
+- [x] Sentry admin : `maskAllText: true` + `blockAllMedia: true` (`admin-dashboard/src/main.ts:13`) — les CNI des livreurs sont capturées
+- [x] Charger les CNI à la demande au lieu du préchargement (`driver-validation.component.ts:186`)
+- [x] Ajouter `ACCEPTED` à `LIVREUR_ONLY_STATUSES` (`orders.service.ts:106`) — un client peut geler sa commande
+- [x] Retirer `UserRole.LIVREUR` de `GET /orders` (`orders.controller.ts:87`) — aucun front ne l'appelle
+- [x] Réduire le payload `orderAccepted` vers `role:LIVREUR` à `{orderId, taken}` (`orders.gateway.ts:328`)
 - [ ] Vérifier en prod : `SHOW COLUMNS FROM delivery_orders LIKE 'status';` (enum inséré au milieu, TiDB)
 - [ ] Sauvegarder TiDB avant déploiement (3 migrations non idempotentes en attente)
 
 **Correctifs d'une ligne**
-- [ ] `@Type(() => Number)` sur `limit` (`search-merchant-clients-query.dto.ts:19`) — la recherche client commerçant renvoie 400 en permanence
-- [ ] Retirer `--dart-define=API_URL` de `.github/workflows/flutter-ci.yml:39` — la CI build contre le backend de secours
+- [x] `@Type(() => Number)` sur `limit` (`search-merchant-clients-query.dto.ts:19`) — la recherche client commerçant renvoie 400 en permanence
+- [x] Retirer `--dart-define=API_URL` de `.github/workflows/flutter-ci.yml:39` — la CI build contre le backend de secours
 
 **Avant d'activer `WHATSAPP_OTP_ENABLED` — les deux ensemble**
-- [ ] Secret dédié + `audience` pour le jeton de preuve OTP, et garde sur `payload.sub` dans `jwt.strategy.ts:21`
+- [x] Secret dédié + `audience` pour le jeton de preuve OTP, et garde sur `payload.sub` dans `jwt.strategy.ts:21`
 - [ ] Implémenter le flux OTP dans la PWA (sinon 100 % des inscriptions iOS tombent le jour de la bascule)
 
 **Fort rapport valeur/effort**
-- [ ] `UsersService.findOne` : garde `if (!id)` + `invalidWhereValuesBehavior: 'throw'`
-- [ ] `JwtStrategy.validate` : refuser les comptes `SUSPENDED`
-- [ ] Backend : 403 au lieu de 401 pour un mot de passe actuel invalide (déconnecte l'utilisateur aujourd'hui)
-- [ ] Mobile : `setReconnectionAttempts(double.infinity)` + garde `connected` avant l'emit GPS
-- [ ] Admin : ajouter `CASH_ON_DELIVERY` et `REFUNDED` (4 emplacements) + les 4 statuts de commande manquants
-- [ ] PWA : `height: calc(50px + var(--zz-safe-bottom))` sur la tab bar + `--zz-safe-top` dans les headers
-- [ ] Helper `_initials()` unique — 3 écrans crashent sur un prénom vide
-- [ ] `.catch()` sur tous les `void sendToUser(...)` — une rejection non gérée tue le process
-- [ ] Scoper `deleteByToken` sur `userId` (IDOR notifications)
+- [x] `UsersService.findOne` : garde `if (!id)` + `invalidWhereValuesBehavior: 'throw'`
+- [x] `JwtStrategy.validate` : refuser les comptes `SUSPENDED`
+- [x] Backend : 403 au lieu de 401 pour un mot de passe actuel invalide (déconnecte l'utilisateur aujourd'hui)
+- [x] Mobile : `setReconnectionAttempts(double.infinity)` + garde `connected` avant l'emit GPS
+- [x] Admin : ajouter `CASH_ON_DELIVERY` et `REFUNDED` (4 emplacements)
+- [x] Admin : les 4 statuts de commande manquants (filtre archives, couleurs dashboard, timeline détail) — une course FAILED reste en « courses en direct », une course NEAR_CLIENT affiche une timeline vide
+- [x] PWA : `height: calc(50px + var(--zz-safe-bottom))` sur la tab bar + `--zz-safe-top` dans les headers
+- [x] Helper `_initials()` unique — 3 écrans crashent sur un prénom vide
+- [x] `.catch()` sur tous les `void sendToUser(...)` — une rejection non gérée tue le process
+- [x] Scoper `deleteByToken` sur `userId` (IDOR notifications)
 - [ ] Auditer les CNI legacy : `SELECT id, idCardPhotoUrl FROM users WHERE idCardPhotoUrl NOT LIKE 'identity/%';`
 - [ ] Nettoyer les résidus de la négociation de prix (entité + migration `AddOrderPriceProposals`)
 - [ ] Aligner `ngsw-config.json`, `pwa/environments/environment.ts` et `CLAUDE.md` sur `api.kore-innov.com`

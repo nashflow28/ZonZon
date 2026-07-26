@@ -36,7 +36,11 @@ jobs:
 
       - name: Build APK (release)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: flutter build apk --release --dart-define=API_URL=https://zonzon-backend.fly.dev
+        # Pas de --dart-define=API_URL : la valeur par défaut de
+        # mobile_app/lib/config/env.dart pointe déjà sur le backend de
+        # production. Forcer une URL ici avait produit un APK compilé contre le
+        # backend de secours, en retard de plusieurs déploiements.
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
