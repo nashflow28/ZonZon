@@ -1761,3 +1761,33 @@ danger immédiat), `WHATSAPP_PHONE_NUMBER_ID` et `WHATSAPP_ACCESS_TOKEN` sont ab
 
 **Aucun impact sur la production actuelle** : `isEnabled()` teste `=== 'true'`, l'OTP reste
 inactif et l'inscription fonctionne normalement sur les trois clients.
+
+### Session 89 (2026-07-27) — Confirmation terrain : notifications push FCM opérationnelles
+
+Test d'envoi réel effectué directement depuis le conteneur backend (script Node ad hoc utilisant
+`firebase-admin/app` + `firebase-admin/messaging`, mêmes imports que
+`notifications.service.ts`), vers le token FCM le plus récent en base.
+
+**Premier essai : échec `NotRegistered`, diagnostiqué et non un bug.** Le token enregistré à
+06:22:35 UTC provenait d'une installation antérieure aux cycles de désinstallation/réinstallation
+effectués pendant les tests de signature (debug → release). Une réinstallation efface les données
+locales et Firebase invalide l'ancien token ; l'app ne réenregistre un token qu'après connexion
+(`push_service.dart`), et la réinstallation la plus récente n'avait pas encore de session active.
+Le token périmé a été supprimé de `device_tokens` — comportement identique à celui que
+`notifications.service.ts` applique automatiquement sur une erreur `NotRegistered`/
+`invalid-registration-token` en production.
+
+**PO reconnecté sur l'app** → nouveau token enregistré (15:33:10 UTC, 142 caractères).
+
+**Second envoi : succès.**
+```
+messageId: projects/zonzon-4eb31/messages/0:1785166505475913%1c044b201c044b20
+```
+**Notification reçue et confirmée visuellement par le PO sur l'appareil.**
+
+**Conclusion** : la chaîne complète est prouvée en conditions réelles — plugin Gradle
+`google-services` → initialisation Firebase → génération du token → enregistrement backend →
+`firebase-admin` → serveurs FCM → réception et affichage sur l'appareil. L'APK
+`com.zonzon.app` signée release (SHA-256 `dd33c0cfcf8202dd059ee509e8a83fc97eaaa1051284bc94a883a5ab40eae670`)
+est donc confirmée pleinement fonctionnelle pour les notifications push, au-delà du seul test
+d'initialisation de la session 87.
