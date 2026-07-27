@@ -1881,3 +1881,77 @@ audit log) est jugée suffisante pour ce chemin.
   promu sur `https://zonzon-admin.pages.dev`. Vérifié : `/` et `/forgot-password` → 200, rendu de
   la page confirmé visuellement (aucune erreur console).
 - Rollback backend si besoin : `sudo docker tag zonzon-backend:rollback-20260727 zonzon-backend:working && sudo docker compose up -d --no-build`.
+
+### Session 92 (2026-07-27) — Audit externe réfuté + 3 correctifs de fond
+
+**Un rapport d'audit externe a été soumis. Vérification faite contre le code : 1 point sur 5 tient.**
+Le rapport cite même des noms d'événements (`ORDER_CLAIMED`, `ORDER_REMOVE`) qui n'existent nulle
+part — la convention du projet est `orderAccepted`. À ne pas reprendre tel quel.
+
+| Affirmation du rapport | Verdict |
+|---|---|
+| Le backend n'émet rien au radar quand une course est acceptée | **Faux** — verrou `pessimistic_write` + UPDATE conditionnel atomique (`orders.service.ts:1387`), puis `emit('orderAccepted')` vers `role:LIVREUR` sauf le gagnant (`orders.gateway.ts:336`). Flutter et PWA retirent la carte. |
+| Le client ne peut pas annuler sa commande | **Faux** — `PATCH /orders/:id/status` vers `CANCELLED` de PENDING à NEAR_CLIENT, `cancelledBy` + `cancellationReason`, boutons avec motif sur Flutter et PWA, tests inclus. |
+| Package `com.example.mobile_app` | **Faux** — `com.zonzon.app` partout côté Android, et `google-services.json` contient déjà ce package : aucun risque FCM. Reliquats `com.example` seulement sur iOS/desktop, non utilisés. |
+| Builds release signés avec la clé de debug | **Faux** — `signingConfigs.create("release")` + `key.properties` + keystore présents. Nuance réelle : repli silencieux si `key.properties` manque → **corrigé cette session**. |
+| Pas de suppression de compte in-app | **EXACT** — seul vrai bloquant Play Store. **Corrigé cette session.** |
+
+**1. Suppression de compte en self-service** (`DELETE /users/me`, tous rôles, ré-auth par mot de
+passe). Exigence Google Play obligatoire depuis 2024. Choix : **anonymisation + soft-delete**, pas
+de suppression SQL — les commandes livrées doivent rester (compta, litiges) et un hard delete
+casserait les FK de `delivery_orders`. Transaction unique : purge `device_tokens`, anonymisation
+(nom, `phone` brouillé en `deleted-<uuid>` pour libérer le vrai numéro, photos, `fcmToken`), puis
+`softDelete`. Refus **409** si une course est active (les 3 rattachements sont testés : un
+commerçant commande aussi en tant que client). Audit log `ACCOUNT_SELF_DELETE` (colonne `action`
+en varchar libre, donc aucune migration). Blocage de connexion **vérifié dans TypeORM**, pas
+supposé : tout SELECT ajoute `deletedAt IS NULL`, et `withDeleted` n'apparaît nulle part dans `src/`.
+
+⚠️ **Correctif ajouté par-dessus le travail de l'agent** : il n'effaçait que les références en base,
+les fichiers survivaient sur les volumes `zonzon_uploads` / `zonzon_identity` — alors que l'app
+annonce à l'utilisateur que sa pièce d'identité est supprimée. Ajout d'une méthode `remove` sur
+`ObjectStorageService` et `IdentityStorageService` (S3 + disque local), appelée **après** le commit.
+Piège rencontré : `idCardPhotoUrl` est `select: false`, donc absent de `findByIdWithPassword` — sans
+lecture explicite, la purge de la pièce d'identité échouait **en silence**.
+
+**2. Retrait du radar d'une course annulée avant acceptation.** Le seul écart temps réel réel
+trouvé (le rapport l'avait mal diagnostiqué). Une course PENDING est affichée à tous les livreurs
+éligibles, mais son annulation ne diffusait rien. Nouvel événement `orderUnavailable`, payload
+réduit au seul `orderId` (même raison que `orderAccepted` : ne pas exposer l'adresse ni l'identité
+du client). Ajout au PWA de la réconciliation périodique qui n'existait que sur Flutter — son
+socket abandonne après 8 tentatives et le radar restait alors figé indéfiniment. Bug latent corrigé
+au passage : le handler `orderAccepted` de Flutter comparait uniquement la clé `id`, laissant
+survivre les cartes indexées sur la clé `orderId` des payloads `newOrderAvailable`.
+
+**3. Signature release Android durcie.** Le repli silencieux sur la clé de debug est remplacé par
+une tâche `verifierSignatureRelease` qui échoue à l'**exécution** (pas à la configuration, sinon
+debug et l'IDE casseraient aussi), avec un message actionnable. Vérifié concrètement : le SHA-256
+du certificat de l'APK produit est identique à celui du keystore, le garde-fou se déclenche quand
+`key.properties` manque, et le build debug reste intact dans ce même cas. Le commentaire devenu
+faux de `.github/workflows/flutter-ci.yml` est corrigé — ⚠️ **si les secrets `ANDROID_KEYSTORE_*`
+ne sont pas configurés sur le dépôt, le job Flutter CI échouera désormais** au lieu de produire un
+APK inutilisable. C'est voulu, mais autant le savoir.
+
+**Script de création d'un compte ADMIN** (`backend/scripts/create-admin.js`) : `/auth/register`
+interdit ce rôle par conception, il n'existait donc aucun chemin documenté. Saisie interactive
+masquée, validations alignées sur `RegisterDto`, refus si le numéro est pris (comptes soft-deleted
+inclus). Le Dockerfile embarque désormais `scripts/` dans l'image runtime.
+Usage : `ssh -t ovh-ubuntu 'sudo docker exec -it zonzon-backend-ovh node scripts/create-admin.js'`
+⚠️ **Il n'y a qu'UN seul compte ADMIN en base** (Malik ATCHA) : le bouton de réinitialisation de la
+session 91 ne s'affiche que sur les lignes ADMIN et refuse l'auto-ciblage, donc **le filet de
+secours ne protège personne tant qu'un second admin n'existe pas**.
+
+**Tests** : backend 417 unitaires + 83 e2e, `nest build` OK, `flutter analyze` sans avertissement,
+`flutter test` 57/57, build PWA OK. **Rien n'est déployé** — les 4 lots sont committés et poussés.
+
+**Dette identifiée, non traitée (à arbitrer)** :
+- `delivery_orders.clientPhone` / `clientName` ne sont pas anonymisés : ces colonnes dénormalisées
+  gardent le vrai numéro et le vrai nom du client sur ses commandes passées.
+- Autres tables porteuses de données personnelles non purgées : `direct_messages`,
+  `driver_positions`, signalements, ratings.
+- Une course PENDING réservée (`preferredLivreurId`) à un livreur qui supprime son compte devient
+  inacceptable par quiconque et reste en attente jusqu'à annulation manuelle.
+- Les écrans admin affichant le nom du client verront un vide sur les commandes de comptes
+  supprimés (TypeORM applique `deletedAt IS NULL` aussi sur les JOIN).
+- Composant PWA `change-password` : ses classes CSS sont définies chez les parents et ne franchissent
+  pas l'encapsulation Angular, donc le formulaire s'affiche sans style. Bug préexistant, sorti en
+  tâche à part.

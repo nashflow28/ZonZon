@@ -89,6 +89,15 @@
 
 ## 🔥 BUGS CRITIQUES (à corriger en priorité)
 
+### Audit externe du 2026-07-27 — 4 affirmations sur 5 RÉFUTÉES
+> ⚠️ Un rapport d'audit externe circulait avec 5 constats. Vérification faite contre le code :
+> **seul le point « suppression de compte » était exact**. Ne pas rouvrir les autres. Détail et
+> preuves fichier:ligne dans PROGRESS.md session 92.
+- [x] **Suppression de compte in-app** *(2026-07-27)* — seul vrai bloquant Play Store. `DELETE /users/me` (ré-auth par mot de passe, anonymisation + soft-delete, 409 si course active, purge des fichiers du stockage) + bouton « Zone de danger » sur les 3 profils Flutter et PWA.
+- [x] **Course annulée qui reste sur le radar livreur** *(2026-07-27)* — événement `orderUnavailable` sur transition PENDING → terminal + réconciliation périodique ajoutée au PWA. C'est le vrai bug que le rapport avait mal diagnostiqué.
+- [x] **Signature release Android** *(2026-07-27)* — plus de repli silencieux sur la clé de debug, le build release échoue avec un message actionnable. ⚠️ Le job Flutter CI échouera si les secrets `ANDROID_KEYSTORE_*` ne sont pas configurés.
+- [ ] **Dette RGPD restante après la suppression de compte** — `delivery_orders.clientPhone`/`clientName` non anonymisés ; `direct_messages`, `driver_positions`, signalements et ratings non purgés ; course PENDING réservée à un livreur supprimé qui reste bloquée. Voir PROGRESS.md session 92.
+
 ### 🔴 Revue complète (2026-07-26) — voir `REVUE_COMPLETE_2026-07-26.md`
 
 **Bloquants avant tout nouveau déploiement**
@@ -463,6 +472,7 @@
   - Dropdown avec recherche par nom/code, drapeau emoji + code, ~22 pays (12 africains prioritaires + diaspora). Soft warning visuel si longueur hors min/max du pays sélectionné. Default `+228` (Togo).
   - **Intégré dans** : `auth/login/login.component.html` (champ téléphone admin). Les composants `users` et `shops` n'ont pas de formulaire de création/édition de téléphone côté admin → pas d'autres intégrations possibles aujourd'hui. À réutiliser dès qu'un formulaire d'édition de profil/boutique est ajouté.
   - Build prod OK. Pas de tests dédiés (sortie de scope, voir 🟡 ADMIN tests).
+- [ ] **Créer un SECOND compte ADMIN** — bloquant pour que le bouton de réinitialisation serve à quelque chose (il refuse l'auto-ciblage et ne s'affiche que sur les lignes ADMIN ; il n'y a qu'un seul admin en base). `ssh -t ovh-ubuntu 'sudo docker exec -it zonzon-backend-ovh node scripts/create-admin.js'` — nécessite le redéploiement backend de la session 92, sinon passer par `docker cp`.
 - [x] **Réinitialisation de mot de passe admin** *(2026-07-27, session 91)* — deux canaux : OTP WhatsApp self-service (`/forgot-password`, dormant tant que WhatsApp n'est pas actif) + filet de secours admin-à-admin (`PATCH /users/:id/reset-password`, bouton sur `/users` pour les comptes ADMIN). Détail complet : voir PROGRESS.md session 91. **Déployé en production** (backend OVH + admin Cloudflare Pages), routes vérifiées en conditions réelles.
 
 ---
