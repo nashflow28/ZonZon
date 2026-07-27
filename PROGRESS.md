@@ -1692,3 +1692,72 @@ ANDROID_KEY_PASSWORD        # identique au storePassword
 ```
 
 **Les deux blocages Play Store identifiés par la revue sont levés.**
+
+### Session 88 (2026-07-27) — WhatsApp Cloud API : configuration partielle, bloquée sur le template
+
+**Contexte** : le code OTP WhatsApp est implémenté et déployé depuis la session 81 (backend,
+mobile et PWA). Il ne manquait que la configuration Meta. Le PO disposant désormais d'un compte
+WhatsApp Business, la configuration a été entamée via le navigateur (Claude in Chrome, sur
+autorisation explicite).
+
+**Distinction importante établie** : le PO possédait l'**application mobile** WhatsApp Business,
+qui ne permet aucun envoi programmatique. Le backend appelle `graph.facebook.com/.../messages`,
+c'est-à-dire la **WhatsApp Business Platform (Cloud API)** — un produit distinct nécessitant une
+app Meta, un WABA et un numéro enregistré sur la plateforme.
+
+**Réalisé :**
+| Élément | Valeur |
+|---|---|
+| App Meta « ZonZon » | `1643671951095041` |
+| Portefeuille business | Kore Innovation (`1747845583065738`, non vérifié) |
+| WhatsApp Business Account | `1527332121746828` (compte de test) |
+| Numéro de test Meta | `+1 555 154 1885` (gratuit 90 jours, 5 destinataires max) |
+| **`WHATSAPP_PHONE_NUMBER_ID`** | **`1162448583626720`** |
+| Conditions Meta | acceptées par le PO (confirmation explicite en conversation) |
+
+**🔴 Blocage — création du template impossible.** La soumission de `zonzon_verification_code`
+(catégorie Authentification, langue French, bouton « Copier le code ») échoue avec :
+> Ce compte WhatsApp Business n'a pas l'autorisation de créer un modèle de message
+
+Cause : la vue d'ensemble indique **« Numéros de téléphone : 0 sur 2 ajoutés »**. Le numéro de
+test appartient à Meta et ne compte pas comme numéro du WABA ; Meta n'autorise la création de
+templates personnalisés que sur un compte disposant d'un **vrai numéro enregistré**.
+
+> ⚠️ **Erreur d'analyse à noter** : la stratégie « valider d'abord avec le numéro de test » avait
+> été recommandée pour éviter d'engager le numéro professionnel. Elle permet bien d'envoyer des
+> messages avec les templates existants (`hello_world`), mais **pas d'en créer de nouveaux**.
+> Un vrai numéro est indispensable dès le départ pour un template personnalisé.
+
+**Choix technique retenu pour le template** (à refaire à l'identique) : mode **« Copier le
+code »** plutôt que « Saisie automatique en un seul appui ». L'autofill exige de déclarer le nom
+du package Android **et** le hash de signature, et ne fonctionne pas depuis la PWA iOS. Le
+« Copier le code » est universel (Android, iOS, PWA, Desktop) et reste compatible avec le
+payload envoyé par le backend (`sub_type: 'url'`, index 0).
+
+**Reste à faire :**
+1. Enregistrer un **vrai numéro** sur le WABA — il ne doit PAS être déjà utilisé dans
+   l'application mobile WhatsApp Business, sous peine d'en perdre définitivement l'usage mobile.
+   Le WABA accepte 2 numéros gratuitement.
+2. Recréer et soumettre le template `zonzon_verification_code` (Authentification / French /
+   Copier le code). Validation Meta : quelques minutes à quelques heures.
+3. Générer un **token permanent** via un utilisateur système (Business Settings), permissions
+   `whatsapp_business_messaging` et `whatsapp_business_management`. Le token affiché par défaut
+   dans la console expire en 24 h.
+4. Nettoyer les 6 lignes WhatsApp corrompues du `.env` de production (cf. ci-dessous) et y
+   injecter `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`, puis
+   `WHATSAPP_OTP_ENABLED=true`.
+5. Redéployer et tester l'envoi réel.
+
+**🔴 `.env` de production corrompu (à corriger avant activation).** Sur le VPS OVH, la ligne 31
+de `/opt/zonzon/backend/.env` contient 164 caractères : plusieurs variables ont été écrasées sur
+une seule ligne avec un séparateur littéral `__K__`, probablement une injection PowerShell mal
+échappée lors d'une session antérieure.
+```
+WHATSAPP_OTP_ENABLED=__K__WHATSAPP_OTP_TEMPLATE_NAME=__K__WHATSAPP_OTP_TEMPLATE_LANGUAGE=__K__...
+```
+Conséquences : `WHATSAPP_OTP_ENABLED` ne vaut pas `'true'` (l'OTP reste donc désactivé, sans
+danger immédiat), `WHATSAPP_PHONE_NUMBER_ID` et `WHATSAPP_ACCESS_TOKEN` sont absentes, et les
+5 autres variables sont vides. **Les 6 lignes sont à réécrire proprement.**
+
+**Aucun impact sur la production actuelle** : `isEnabled()` teste `=== 'true'`, l'OTP reste
+inactif et l'inscription fonctionne normalement sur les trois clients.
