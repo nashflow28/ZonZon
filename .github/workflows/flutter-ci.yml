@@ -40,10 +40,12 @@ jobs:
       - name: Decode google-services.json
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > android/app/google-services.json
 
-      # Signature de release. Sans ces secrets, le build retombe sur la clé de
-      # debug (avec avertissement) et produit un APK NON distribuable : le Play
-      # Store le refuse, et il ne pourra jamais être mis à jour par un APK signé
-      # en release.
+      # Signature de release. Sans ces secrets, le build release ÉCHOUE
+      # explicitement (tâche `verifierSignatureRelease` dans
+      # android/app/build.gradle.kts). C'est délibéré : l'ancien comportement
+      # retombait sur la clé de debug et produisait un APK d'apparence valide
+      # que le Play Store refuse — et qui, une fois publié, ne peut plus jamais
+      # être mis à jour par un APK signé en release.
       # Secrets à définir dans le dépôt :
       #   ANDROID_KEYSTORE_BASE64  : base64 -w0 zonzon-release.jks
       #   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD

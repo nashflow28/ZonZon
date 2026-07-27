@@ -11,9 +11,20 @@
 # Store, définitivement. À sauvegarder hors du poste de développement
 # (gestionnaire de mots de passe, coffre chiffré).
 #
-# Tant que `key.properties` est absent, le build retombe sur la clé de debug et
-# affiche un avertissement — pratique en local et en CI, mais un tel APK n'est
-# pas distribuable.
+# Les quatre clés ci-dessous sont TOUTES obligatoires et doivent être non vides,
+# et `storeFile` doit désigner un fichier .jks réellement présent sur le disque.
+# Si l'une de ces conditions n'est pas remplie, un build release
+# (`flutter build apk --release`, `flutter build appbundle`) ÉCHOUE avec un
+# message explicite : il n'y a volontairement plus de repli silencieux sur la
+# clé de debug, qui produisait un APK refusé par le Play Store et détecté
+# seulement à l'upload.
+#
+# Les builds debug et profile (`flutter run`, `flutter build apk --debug`,
+# `flutter test`) n'ont pas besoin de ce fichier et continuent de fonctionner
+# sans lui.
+#
+# En CI : écrire ce fichier à la volée depuis des secrets avant le build release
+# (cf. .github/workflows/flutter-ci.yml).
 
 storeFile=/chemin/absolu/vers/zonzon-release.jks
 storePassword=<mot de passe du keystore>
