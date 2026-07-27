@@ -20,7 +20,11 @@ export type AuditAction =
   | 'DRIVER_REJECT'
   | 'USER_SUSPEND'
   | 'USER_REACTIVATE'
-  | 'ADMIN_PASSWORD_RESET';
+  | 'ADMIN_PASSWORD_RESET'
+  // Suppression de compte demandée par l'utilisateur lui-même (exigence
+  // Google Play). Seule action de cette liste dont l'acteur n'est PAS un
+  // admin : `adminId` reste `null`, l'utilisateur concerné est en `targetId`.
+  | 'ACCOUNT_SELF_DELETE';
 
 @Entity('admin_audit_logs')
 @Index(['adminId', 'createdAt'])

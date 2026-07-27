@@ -1,5 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
 
@@ -11,9 +15,12 @@ import {
   UserStatus,
 } from '../entities/user.entity';
 import { Vehicle } from '../entities/vehicle.entity';
+import { DeliveryOrder, OrderStatus } from '../entities/delivery-order.entity';
+import { DeviceToken } from '../entities/device-token.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { IdentityStorageService } from '../storage/identity-storage.service';
+import { ObjectStorageService } from '../storage/object-storage.service';
 import { Readable } from 'stream';
 
 const mockUsersRepo = () => ({
@@ -24,11 +31,26 @@ const mockUsersRepo = () => ({
   update: jest.fn(),
   softDelete: jest.fn(),
   restore: jest.fn(),
+  createQueryBuilder: jest.fn(),
+  // `deleteOwnAccount` travaille dans une transaction : on la rend
+  // passthrough et on route chaque entité vers son mock de repo, pour que les
+  // assertions portent sur les mêmes objets que hors transaction.
+  manager: {
+    transaction: jest.fn(),
+  },
 });
 
 const mockVehiclesRepo = () => ({
   create: jest.fn(),
   save: jest.fn(),
+});
+
+const mockOrdersRepo = () => ({
+  count: jest.fn().mockResolvedValue(0),
+});
+
+const mockDeviceTokensRepo = () => ({
+  delete: jest.fn().mockResolvedValue({ affected: 1 }),
 });
 
 const mockIdentityStorage = () => ({
@@ -39,16 +61,32 @@ const mockIdentityStorage = () => ({
 describe('UsersService', () => {
   let service: UsersService;
   let usersRepository: ReturnType<typeof mockUsersRepo>;
+  let ordersRepository: ReturnType<typeof mockOrdersRepo>;
+  let deviceTokensRepository: ReturnType<typeof mockDeviceTokensRepo>;
 
   beforeEach(async () => {
     usersRepository = mockUsersRepo();
+    ordersRepository = mockOrdersRepo();
+    deviceTokensRepository = mockDeviceTokensRepo();
     const vehiclesRepository = mockVehiclesRepo();
+
+    usersRepository.manager.transaction.mockImplementation(
+      async (cb: (em: any) => Promise<any>) =>
+        cb({
+          getRepository: (entity: any) =>
+            entity === DeviceToken ? deviceTokensRepository : usersRepository,
+        }),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
         { provide: getRepositoryToken(User), useValue: usersRepository },
         { provide: getRepositoryToken(Vehicle), useValue: vehiclesRepository },
+        {
+          provide: getRepositoryToken(DeliveryOrder),
+          useValue: ordersRepository,
+        },
       ],
     }).compile();
 
@@ -191,6 +229,10 @@ describe('UsersService', () => {
             provide: getRepositoryToken(Vehicle),
             useValue: mockVehiclesRepo(),
           },
+          {
+            provide: getRepositoryToken(DeliveryOrder),
+            useValue: ordersRepository,
+          },
           { provide: AuditLogService, useValue: auditLog },
         ],
       }).compile();
@@ -226,6 +268,10 @@ describe('UsersService', () => {
             provide: getRepositoryToken(Vehicle),
             useValue: mockVehiclesRepo(),
           },
+          {
+            provide: getRepositoryToken(DeliveryOrder),
+            useValue: ordersRepository,
+          },
           { provide: NotificationsService, useValue: notifications },
         ],
       }).compile();
@@ -258,6 +304,10 @@ describe('UsersService', () => {
           {
             provide: getRepositoryToken(Vehicle),
             useValue: mockVehiclesRepo(),
+          },
+          {
+            provide: getRepositoryToken(DeliveryOrder),
+            useValue: ordersRepository,
           },
           { provide: NotificationsService, useValue: notifications },
         ],
@@ -391,6 +441,10 @@ describe('UsersService', () => {
           {
             provide: getRepositoryToken(Vehicle),
             useValue: mockVehiclesRepo(),
+          },
+          {
+            provide: getRepositoryToken(DeliveryOrder),
+            useValue: ordersRepository,
           },
           { provide: IdentityStorageService, useValue: identityStorage },
         ],
@@ -539,6 +593,10 @@ describe('UsersService', () => {
             provide: getRepositoryToken(Vehicle),
             useValue: mockVehiclesRepo(),
           },
+          {
+            provide: getRepositoryToken(DeliveryOrder),
+            useValue: ordersRepository,
+          },
           { provide: AuditLogService, useValue: auditLog },
         ],
       }).compile();
@@ -598,6 +656,10 @@ describe('UsersService', () => {
           {
             provide: getRepositoryToken(Vehicle),
             useValue: mockVehiclesRepo(),
+          },
+          {
+            provide: getRepositoryToken(DeliveryOrder),
+            useValue: ordersRepository,
           },
           { provide: AuditLogService, useValue: auditLog },
         ],
@@ -660,6 +722,10 @@ describe('UsersService', () => {
             provide: getRepositoryToken(Vehicle),
             useValue: mockVehiclesRepo(),
           },
+          {
+            provide: getRepositoryToken(DeliveryOrder),
+            useValue: ordersRepository,
+          },
           { provide: AuditLogService, useValue: auditLog },
         ],
       }).compile();
@@ -679,6 +745,305 @@ describe('UsersService', () => {
           targetId: 'user-1',
         }),
       );
+    });
+  });
+
+  // ── Conformité Google Play : suppression de compte en self-service ────────
+
+  describe('deleteOwnAccount', () => {
+    const MOT_DE_PASSE = 'motdepasse123';
+    const HASH = bcrypt.hashSync(MOT_DE_PASSE, 4);
+
+    /**
+     * `findByIdWithPassword` passe par le query builder (la colonne `password`
+     * est `select: false`) : on mocke la chaîne addSelect→where→getOne.
+     */
+    const mockLoadWithPassword = (user: any) => {
+      usersRepository.createQueryBuilder.mockReturnValue({
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getOne: jest.fn().mockResolvedValue(user),
+      } as any);
+    };
+
+    const compte = (overrides: Record<string, unknown> = {}) => ({
+      id: 'user-1',
+      role: UserRole.CLIENT,
+      phone: '+22890000001',
+      password: HASH,
+      ...overrides,
+    });
+
+    it('refuse un mot de passe invalide sans rien modifier', async () => {
+      mockLoadWithPassword(compte());
+
+      await expect(
+        service.deleteOwnAccount('user-1', 'mauvais-mot-de-passe'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(ordersRepository.count).not.toHaveBeenCalled();
+      expect(usersRepository.update).not.toHaveBeenCalled();
+      expect(usersRepository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('refuse un compte sans mot de passe local, avec le même message', async () => {
+      mockLoadWithPassword(compte({ password: undefined }));
+
+      await expect(
+        service.deleteOwnAccount('user-1', MOT_DE_PASSE),
+      ).rejects.toMatchObject({ message: 'Mot de passe incorrect' });
+      expect(usersRepository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('refuse (409) si une course est encore en cours', async () => {
+      mockLoadWithPassword(compte());
+      ordersRepository.count.mockResolvedValue(1);
+
+      await expect(
+        service.deleteOwnAccount('user-1', MOT_DE_PASSE),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(usersRepository.softDelete).not.toHaveBeenCalled();
+    });
+
+    it('cherche les courses actives sur les 3 rattachements (client, livreur, commerçant)', async () => {
+      mockLoadWithPassword(compte({ role: UserRole.LIVREUR }));
+
+      await service.deleteOwnAccount('user-1', MOT_DE_PASSE);
+
+      const where = ordersRepository.count.mock.calls[0][0].where;
+      expect(where.map((clause: any) => Object.keys(clause)[0])).toEqual([
+        'client',
+        'livreur',
+        'merchant',
+      ]);
+      // Les statuts terminaux (COMPLETED / CANCELLED / FAILED) ne doivent pas
+      // bloquer : une commande livrée l'an dernier n'est plus « en cours ».
+      const statuts = where[0].status.value;
+      expect(statuts).toEqual([
+        OrderStatus.PENDING,
+        OrderStatus.ACCEPTED,
+        OrderStatus.EN_ROUTE_PICKUP,
+        OrderStatus.AT_PICKUP,
+        OrderStatus.IN_PROGRESS,
+        OrderStatus.NEAR_CLIENT,
+      ]);
+    });
+
+    it('anonymise, purge les device tokens et soft-delete dans une transaction', async () => {
+      mockLoadWithPassword(compte());
+      usersRepository.update.mockResolvedValue({ affected: 1 } as any);
+      usersRepository.softDelete.mockResolvedValue({ affected: 1 } as any);
+
+      await expect(
+        service.deleteOwnAccount('user-1', MOT_DE_PASSE),
+      ).resolves.toEqual({ ok: true });
+
+      expect(usersRepository.manager.transaction).toHaveBeenCalledTimes(1);
+      expect(deviceTokensRepository.delete).toHaveBeenCalledWith({
+        userId: 'user-1',
+      });
+
+      const [id, patch] = usersRepository.update.mock.calls[0];
+      expect(id).toBe('user-1');
+      expect(patch).toEqual(
+        expect.objectContaining({
+          firstName: 'Compte',
+          lastName: 'supprimé',
+          password: null,
+          profilePhotoUrl: null,
+          idCardPhotoUrl: null,
+          fcmToken: null,
+          isAvailable: false,
+          isPublic: false,
+        }),
+      );
+      // Le numéro réel doit être libéré ET rendu inutilisable pour un login.
+      expect(patch.phone).not.toBe('+22890000001');
+      expect(patch.phone).toMatch(/^deleted-[0-9a-f-]{36}$/);
+      expect(String(patch.phone).length).toBeLessThanOrEqual(255);
+
+      expect(usersRepository.softDelete).toHaveBeenCalledWith('user-1');
+    });
+
+    it('journalise ACCOUNT_SELF_DELETE sans adminId ni donnée personnelle', async () => {
+      const auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getRepositoryToken(User), useValue: usersRepository },
+          {
+            provide: getRepositoryToken(Vehicle),
+            useValue: mockVehiclesRepo(),
+          },
+          {
+            provide: getRepositoryToken(DeliveryOrder),
+            useValue: ordersRepository,
+          },
+          { provide: AuditLogService, useValue: auditLog },
+        ],
+      }).compile();
+      const svc = module.get<UsersService>(UsersService);
+
+      mockLoadWithPassword(compte({ role: UserRole.COMMERCANT }));
+
+      await svc.deleteOwnAccount('user-1', MOT_DE_PASSE);
+      await new Promise((r) => setImmediate(r));
+
+      expect(auditLog.log).toHaveBeenCalledWith({
+        adminId: null,
+        action: 'ACCOUNT_SELF_DELETE',
+        targetType: 'User',
+        targetId: 'user-1',
+        metadata: { role: UserRole.COMMERCANT },
+      });
+    });
+
+    it('ne casse pas si auditLog est absent (non injecté)', async () => {
+      mockLoadWithPassword(compte());
+
+      await expect(
+        service.deleteOwnAccount('user-1', MOT_DE_PASSE),
+      ).resolves.toEqual({ ok: true });
+    });
+
+    /**
+     * Purge des fichiers : l'application annonce à l'utilisateur que sa photo
+     * et sa pièce d'identité sont supprimées. Remettre les colonnes à NULL ne
+     * suffit pas — les binaires resteraient lisibles sur les volumes.
+     */
+    describe('purge des fichiers', () => {
+      const buildWithStorage = async (
+        objectStorage: any,
+        identityStorage: any,
+      ) => {
+        const module: TestingModule = await Test.createTestingModule({
+          providers: [
+            UsersService,
+            { provide: getRepositoryToken(User), useValue: usersRepository },
+            {
+              provide: getRepositoryToken(Vehicle),
+              useValue: mockVehiclesRepo(),
+            },
+            {
+              provide: getRepositoryToken(DeliveryOrder),
+              useValue: ordersRepository,
+            },
+            {
+              provide: getRepositoryToken(DeviceToken),
+              useValue: deviceTokensRepository,
+            },
+            { provide: ObjectStorageService, useValue: objectStorage },
+            { provide: IdentityStorageService, useValue: identityStorage },
+          ],
+        }).compile();
+        return module.get<UsersService>(UsersService);
+      };
+
+      it('supprime la photo de profil et la pièce d’identité du stockage', async () => {
+        const objectStorage = { remove: jest.fn().mockResolvedValue(true) };
+        const identityStorage = { remove: jest.fn().mockResolvedValue(true) };
+        const svc = await buildWithStorage(objectStorage, identityStorage);
+
+        mockLoadWithPassword(
+          compte({
+            role: UserRole.LIVREUR,
+            profilePhotoUrl: '/uploads/photo-1.jpg',
+          }),
+        );
+        // `idCardPhotoUrl` est `select: false` : le service doit le relire
+        // explicitement, sinon la pièce d'identité resterait sur disque.
+        usersRepository.findOne.mockResolvedValue({
+          id: 'user-1',
+          idCardPhotoUrl: 'identity/piece-1.jpg',
+        } as any);
+
+        await expect(
+          svc.deleteOwnAccount('user-1', MOT_DE_PASSE),
+        ).resolves.toEqual({ ok: true });
+
+        expect(objectStorage.remove).toHaveBeenCalledWith('/uploads/photo-1.jpg');
+        expect(identityStorage.remove).toHaveBeenCalledWith(
+          'identity/piece-1.jpg',
+        );
+      });
+
+      it('n’appelle pas le stockage quand le compte n’a aucun fichier', async () => {
+        const objectStorage = { remove: jest.fn().mockResolvedValue(true) };
+        const identityStorage = { remove: jest.fn().mockResolvedValue(true) };
+        const svc = await buildWithStorage(objectStorage, identityStorage);
+
+        mockLoadWithPassword(compte({ profilePhotoUrl: null }));
+        usersRepository.findOne.mockResolvedValue({
+          id: 'user-1',
+          idCardPhotoUrl: null,
+        } as any);
+
+        await svc.deleteOwnAccount('user-1', MOT_DE_PASSE);
+
+        expect(objectStorage.remove).not.toHaveBeenCalled();
+        expect(identityStorage.remove).not.toHaveBeenCalled();
+      });
+
+      it('ne fait pas échouer la suppression si le stockage refuse', async () => {
+        // Le compte est déjà supprimé et committé à ce stade : renvoyer une
+        // erreur laisserait croire le contraire à l'utilisateur.
+        const objectStorage = { remove: jest.fn().mockResolvedValue(false) };
+        const identityStorage = {
+          remove: jest.fn().mockRejectedValue(new Error('storage HS')),
+        };
+        const svc = await buildWithStorage(objectStorage, identityStorage);
+
+        mockLoadWithPassword(
+          compte({ profilePhotoUrl: '/uploads/photo-1.jpg' }),
+        );
+        usersRepository.findOne.mockResolvedValue({
+          id: 'user-1',
+          idCardPhotoUrl: 'identity/piece-1.jpg',
+        } as any);
+
+        await expect(
+          svc.deleteOwnAccount('user-1', MOT_DE_PASSE),
+        ).resolves.toEqual({ ok: true });
+        expect(usersRepository.softDelete).toHaveBeenCalledWith('user-1');
+      });
+
+      it('purge les fichiers APRÈS le commit, jamais avant', async () => {
+        const ordre: string[] = [];
+        const objectStorage = {
+          remove: jest.fn().mockImplementation(() => {
+            ordre.push('purge');
+            return Promise.resolve(true);
+          }),
+        };
+        const svc = await buildWithStorage(objectStorage, {
+          remove: jest.fn().mockResolvedValue(true),
+        });
+
+        usersRepository.manager.transaction.mockImplementation(
+          async (cb: any) => {
+            const res = await cb({
+              getRepository: (entity: any) =>
+                entity === DeviceToken
+                  ? deviceTokensRepository
+                  : usersRepository,
+            });
+            ordre.push('commit');
+            return res;
+          },
+        );
+
+        mockLoadWithPassword(
+          compte({ profilePhotoUrl: '/uploads/photo-1.jpg' }),
+        );
+        usersRepository.findOne.mockResolvedValue({
+          id: 'user-1',
+          idCardPhotoUrl: null,
+        } as any);
+
+        await svc.deleteOwnAccount('user-1', MOT_DE_PASSE);
+
+        expect(ordre).toEqual(['commit', 'purge']);
+      });
     });
   });
 });

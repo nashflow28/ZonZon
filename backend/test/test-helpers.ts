@@ -130,6 +130,16 @@ export function makeInMemoryRepo<T extends { id?: string }>() {
     });
   };
 
+  /**
+   * Reproduit le filtre soft-delete de TypeORM : une ligne dont `deletedAt`
+   * est renseigné est invisible pour `find/findOne/count/getOne`, sauf
+   * `withDeleted: true`. Sans ça, un test ne pourrait pas distinguer « compte
+   * supprimé » de « compte intact » (le repo in-memory renvoyait la ligne
+   * comme si de rien n'était).
+   */
+  const isVisible = (entity: any, opts?: any): boolean =>
+    opts?.withDeleted === true || entity?.deletedAt == null;
+
   const repo = {
     _store: store,
     create: jest.fn((data: Partial<T>) => ({ ...(data as any) })),
@@ -147,14 +157,14 @@ export function makeInMemoryRepo<T extends { id?: string }>() {
     }),
     findOne: jest.fn(async (opts: any) => {
       for (const v of store.values()) {
-        if (matches(v, opts?.where)) return v;
+        if (isVisible(v, opts) && matches(v, opts?.where)) return v;
       }
       return null;
     }),
     find: jest.fn(async (opts: any) => {
       const out: any[] = [];
       for (const v of store.values()) {
-        if (matches(v, opts?.where)) out.push(v);
+        if (isVisible(v, opts) && matches(v, opts?.where)) out.push(v);
       }
       if (opts?.order?.createdAt === 'DESC') {
         out.sort(
@@ -168,7 +178,7 @@ export function makeInMemoryRepo<T extends { id?: string }>() {
     findAndCount: jest.fn(async (opts: any) => {
       const out: any[] = [];
       for (const v of store.values()) {
-        if (matches(v, opts?.where)) out.push(v);
+        if (isVisible(v, opts) && matches(v, opts?.where)) out.push(v);
       }
       if (opts?.order?.createdAt === 'DESC') {
         out.sort(
@@ -199,7 +209,7 @@ export function makeInMemoryRepo<T extends { id?: string }>() {
     count: jest.fn(async (opts: any) => {
       let n = 0;
       for (const v of store.values()) {
-        if (matches(v, opts?.where)) n++;
+        if (isVisible(v, opts) && matches(v, opts?.where)) n++;
       }
       return n;
     }),
@@ -248,7 +258,20 @@ export function makeInMemoryRepo<T extends { id?: string }>() {
             {},
             ...conditions.map((condition) => condition.params ?? {}),
           );
+          // `UsersService.findByIdWithPassword` : where('user.id = :userId').
+          // Sans ce cas, toute lecture du hash bcrypt renvoyait `null` — donc
+          // un 404 sur les routes qui vérifient un mot de passe.
+          const byId = conditions.find((condition) =>
+            /(^|\.)id = :/.test(condition.sql),
+          );
+          if (byId) {
+            const row = store.get(byId.params?.userId ?? byId.params?.id);
+            return row && isVisible(row) ? row : null;
+          }
           for (const row of store.values()) {
+            // Comme TypeORM : un SELECT via query builder ignore les lignes
+            // soft-deleted tant que `.withDeleted()` n'est pas appelé.
+            if (!isVisible(row)) continue;
             const phone = String((row as any).phone ?? '');
             const digits = phone.replace(/[^0-9]/g, '');
             if (params.raw && phone === params.raw) return row;
@@ -319,6 +342,7 @@ export interface TestAppBundle {
   usersRepo: ReturnType<typeof makeInMemoryRepo<User>>;
   vehiclesRepo: ReturnType<typeof makeInMemoryRepo<Vehicle>>;
   ordersRepo: ReturnType<typeof makeInMemoryRepo<DeliveryOrder>>;
+  deviceTokensRepo: ReturnType<typeof makeInMemoryRepo<DeviceToken>>;
   deliveryRunsRepo: ReturnType<typeof makeInMemoryRepo<DeliveryRun>>;
   merchantDriversRepo: ReturnType<typeof makeInMemoryRepo<MerchantDriver>>;
   statusHistoryRepo: ReturnType<typeof makeInMemoryRepo<DeliveryStatusHistory>>;
@@ -329,6 +353,7 @@ export interface TestAppBundle {
     broadcastNewOrder: jest.Mock;
     broadcastOrderAccepted: jest.Mock;
     broadcastStatusUpdate: jest.Mock;
+    broadcastOrderUnavailable: jest.Mock;
     broadcastPaymentUpdate: jest.Mock;
     isUserConnected: jest.Mock;
   };
@@ -395,6 +420,7 @@ export async function buildTestApp(): Promise<TestAppBundle> {
     broadcastNewOrder: jest.fn(),
     broadcastOrderAccepted: jest.fn(),
     broadcastStatusUpdate: jest.fn(),
+    broadcastOrderUnavailable: jest.fn(),
     broadcastPaymentUpdate: jest.fn(),
     isUserConnected: jest.fn().mockReturnValue(false),
   };
@@ -412,6 +438,21 @@ export async function buildTestApp(): Promise<TestAppBundle> {
           if (entity === User) return usersRepo;
           if (entity === DeliveryRun) return deliveryRunsRepo;
           return ordersRepo;
+        },
+      }),
+  };
+
+  // `UsersService.deleteOwnAccount` anonymise + soft-delete + purge les device
+  // tokens dans une seule transaction. Même approche passthrough que
+  // ci-dessus : pas de vrai EntityManager en in-memory, on route chaque
+  // entité vers son repo.
+  (usersRepo as any).manager = {
+    transaction: async (cb: (em: any) => Promise<any>) =>
+      cb({
+        getRepository: (entity: any) => {
+          if (entity === DeviceToken) return deviceTokensRepo;
+          if (entity === DeliveryOrder) return ordersRepo;
+          return usersRepo;
         },
       }),
   };
@@ -527,6 +568,7 @@ export async function buildTestApp(): Promise<TestAppBundle> {
     usersRepo,
     vehiclesRepo,
     ordersRepo,
+    deviceTokensRepo,
     deliveryRunsRepo,
     merchantDriversRepo,
     statusHistoryRepo,

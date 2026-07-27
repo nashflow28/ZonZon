@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -107,6 +108,38 @@ export class IdentityStorageService {
       throw new ServiceUnavailableException(
         `Échec du stockage privé de la pièce d'identité: ${(error as Error).message}`,
       );
+    }
+  }
+
+  /**
+   * Supprime définitivement une pièce d'identité (S3 ou disque local).
+   *
+   * Appelée lors de la suppression d'un compte : effacer la seule référence en
+   * base laisserait le fichier orphelin mais toujours lisible sur le volume
+   * `zonzon_identity`, ce qui contredirait ce qu'on annonce à l'utilisateur.
+   *
+   * Ne lève JAMAIS : la suppression du compte a déjà été committée quand on
+   * arrive ici, et un incident de stockage ne doit pas faire échouer une
+   * requête déjà réussie. Retourne `false` si le fichier n'a pas pu être
+   * supprimé, pour que l'appelant puisse le journaliser.
+   */
+  async remove(reference: string): Promise<boolean> {
+    if (!reference || !reference.trim()) return true;
+    const key = this.normalizeKey(reference);
+
+    try {
+      if (this.isConfigured) {
+        await this.client!.send(
+          new DeleteObjectCommand({ Bucket: this.bucket!, Key: key }),
+        );
+        return true;
+      }
+      await fs.unlink(join(process.cwd(), this.localRoot, basename(key)));
+      return true;
+    } catch (error) {
+      // Fichier déjà absent : l'objectif (il n'existe plus) est atteint.
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return true;
+      return false;
     }
   }
 

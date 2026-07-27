@@ -1,14 +1,17 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { In, IsNull, Not, QueryDeepPartialEntity, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import {
   DriverApprovalStatus,
@@ -16,6 +19,11 @@ import {
   UserRole,
   UserStatus,
 } from '../entities/user.entity';
+import {
+  DeliveryOrder,
+  OrderStatus,
+} from '../entities/delivery-order.entity';
+import { DeviceToken } from '../entities/device-token.entity';
 import { Vehicle, VehicleType } from '../entities/vehicle.entity';
 import { AuditLogService } from '../audit-log/audit-log.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -26,13 +34,36 @@ import { Readable } from 'stream';
 import { createReadStream, promises as fsPromises } from 'fs';
 import type { AuthenticatedUser } from '../auth/types';
 
+/**
+ * Statuts d'une course encore « vivante » : tant qu'une livraison est dans
+ * l'un d'eux, elle engage encore son client, son livreur et/ou son commerçant.
+ * Les états terminaux (COMPLETED, CANCELLED, FAILED) n'empêchent donc pas la
+ * suppression d'un compte.
+ */
+const ACTIVE_ORDER_STATUSES = [
+  OrderStatus.PENDING,
+  OrderStatus.ACCEPTED,
+  OrderStatus.EN_ROUTE_PICKUP,
+  OrderStatus.AT_PICKUP,
+  OrderStatus.IN_PROGRESS,
+  OrderStatus.NEAR_CLIENT,
+];
+
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
     @InjectRepository(Vehicle)
     private vehiclesRepository: Repository<Vehicle>,
+    // Lecture seule, uniquement pour vérifier qu'un compte n'a pas de course
+    // en cours avant de le supprimer (`deleteOwnAccount`). On injecte le repo
+    // plutôt que `OrdersService` : ce dernier dépend déjà de `UsersService`,
+    // le passer en dépendance créerait un cycle DI de plus.
+    @InjectRepository(DeliveryOrder)
+    private ordersRepository: Repository<DeliveryOrder>,
     @Optional() private auditLog?: AuditLogService,
     // Cycle DI (NotificationsModule ↔ UsersModule) résolu par forwardRef
     // (cf. UsersModule/NotificationsModule) + @Optional() pour ne pas
@@ -489,6 +520,171 @@ export class UsersService {
    */
   async restore(id: string) {
     await this.usersRepository.restore(id);
+    return { ok: true };
+  }
+
+  /**
+   * Suppression de compte en self-service (`DELETE /users/me`) — exigence
+   * obligatoire Google Play depuis 2024, tous rôles confondus.
+   *
+   * On ANONYMISE + soft-delete plutôt que de faire un DELETE SQL : les
+   * livraisons terminées doivent rester lisibles (comptabilité, litiges,
+   * commissions) et référencent `users.id` par clé étrangère. Ce que la
+   * réglementation impose de faire disparaître, ce sont les DONNÉES
+   * PERSONNELLES — pas la trace transactionnelle.
+   *
+   * L'ensemble est transactionnel : une anonymisation appliquée à moitié
+   * (téléphone brouillé mais compte encore actif, ou l'inverse) serait pire
+   * que pas de suppression du tout.
+   */
+  /**
+   * Efface du stockage la photo de profil et la pièce d'identité d'un compte
+   * supprimé. Sans ça, remettre les colonnes à NULL laisserait les fichiers
+   * lisibles sur les volumes `zonzon_uploads` / `zonzon_identity`, alors que
+   * l'application annonce à l'utilisateur qu'ils sont supprimés.
+   */
+  private async purgeAccountFiles(
+    userId: string,
+    profilePhotoUrl?: string | null,
+    idCardPhotoUrl?: string | null,
+  ): Promise<void> {
+    // `remove()` est écrit pour ne jamais lever, mais on ne s'en remet pas à
+    // cette promesse : une exception inattendue ici renverrait un 500 alors que
+    // le compte est DÉJÀ supprimé et committé — l'utilisateur croirait à un
+    // échec et réessaierait dans le vide.
+    const purge = async (
+      label: string,
+      run: () => Promise<boolean>,
+    ): Promise<void> => {
+      let ok = false;
+      try {
+        ok = await run();
+      } catch (error) {
+        ok = false;
+        this.logger.error(
+          `Échec inattendu de la purge (${label}) : ${(error as Error)?.message}`,
+        );
+      }
+      if (!ok) {
+        this.logger.error(
+          `${label} non supprimée pour le compte ${userId} — fichier orphelin à purger manuellement`,
+        );
+      }
+    };
+
+    if (profilePhotoUrl && this.objectStorage) {
+      await purge('Photo de profil', () =>
+        this.objectStorage!.remove(profilePhotoUrl),
+      );
+    }
+    if (idCardPhotoUrl && this.identityStorage) {
+      await purge("Pièce d'identité", () =>
+        this.identityStorage!.remove(idCardPhotoUrl),
+      );
+    }
+  }
+
+  async deleteOwnAccount(
+    userId: string,
+    password: string,
+  ): Promise<{ ok: true }> {
+    const user = await this.findByIdWithPassword(userId);
+
+    // Un compte sans mot de passe local (créé directement en base, ou futur
+    // login par OTP seul) ne peut rien prouver par ce canal. On renvoie le
+    // MÊME 403 que pour un mot de passe faux : un message distinct
+    // indiquerait au porteur d'un jeton volé qu'il suffit d'envoyer n'importe
+    // quoi. Ces comptes restent supprimables par un admin (`DELETE /users/:id`).
+    if (!user.password || !(await bcrypt.compare(password, user.password))) {
+      throw new ForbiddenException('Mot de passe incorrect');
+    }
+
+    // Le rôle ne suffit pas à décider quel champ regarder : un COMMERCANT peut
+    // aussi commander en tant que client, un LIVREUR aussi. On teste donc les
+    // trois rattachements pour tout le monde.
+    // NB volontaire : `preferredLivreur` n'est PAS testé. Une course PENDING
+    // simplement réservée à un livreur qui ne l'a jamais acceptée le
+    // bloquerait sans qu'il ait le moindre moyen de s'en défaire — donc sans
+    // aucune issue pour supprimer son compte.
+    const activeOrders = await this.ordersRepository.count({
+      where: [
+        { client: { id: userId }, status: In(ACTIVE_ORDER_STATUSES) },
+        { livreur: { id: userId }, status: In(ACTIVE_ORDER_STATUSES) },
+        { merchant: { id: userId }, status: In(ACTIVE_ORDER_STATUSES) },
+      ],
+    });
+    if (activeOrders > 0) {
+      throw new ConflictException(
+        'Vous avez une livraison en cours. Terminez-la ou annulez-la avant de supprimer votre compte.',
+      );
+    }
+
+    // Double cast assumé : ces colonnes sont NULLABLE en base (cf. migrations)
+    // mais typées non-nulles sur l'entité, parce qu'elles sont toujours
+    // renseignées sur un compte vivant. L'anonymisation est justement le seul
+    // chemin qui les remet à NULL — assouplir le type de l'entité ferait
+    // apparaître des `| null` dans tout le code qui les lit légitimement.
+    const anonymized = {
+      firstName: 'Compte',
+      lastName: 'supprimé',
+      // `phone` est UNIQUE et sert d'identifiant de connexion. Le brouiller
+      // (a) rend toute reconnexion impossible même si le filtre soft-delete
+      // venait à sauter, (b) libère le vrai numéro pour une réinscription
+      // ultérieure. La colonne est un varchar(255) : `deleted-<uuid>`
+      // (44 caractères) tient très largement.
+      phone: `deleted-${randomUUID()}`,
+      password: null,
+      profilePhotoUrl: null,
+      idCardPhotoUrl: null,
+      fcmToken: null,
+      // Filet supplémentaire pour un livreur : même si une requête oubliait le
+      // filtre soft-delete, il ne serait plus ni disponible ni public.
+      isAvailable: false,
+      isPublic: false,
+    } as unknown as QueryDeepPartialEntity<User>;
+
+    // Références conservées avant l'anonymisation : une fois les colonnes
+    // remises à NULL, plus aucun moyen de retrouver les fichiers à purger.
+    // `idCardPhotoUrl` est `select: false` sur l'entité et n'est donc PAS
+    // renseigné par `findByIdWithPassword` — il faut une lecture explicite,
+    // sinon la pièce d'identité resterait sur disque en silence.
+    const photoToPurge = user.profilePhotoUrl;
+    const withIdCard = await this.usersRepository.findOne({
+      where: { id: userId },
+      select: { id: true, idCardPhotoUrl: true } as any,
+    });
+    const idCardToPurge = withIdCard?.idCardPhotoUrl ?? null;
+
+    await this.usersRepository.manager.transaction(async (manager) => {
+      // Purge des device tokens : sans elle, les appareils continueraient de
+      // recevoir des notifications push après la suppression du compte.
+      await manager.getRepository(DeviceToken).delete({ userId });
+      await manager.getRepository(User).update(userId, anonymized);
+      await manager.getRepository(User).softDelete(userId);
+    });
+
+    // Suppression des fichiers APRÈS le commit : les effacer avant exposerait
+    // à les perdre pour rien si la transaction échouait ensuite.
+    //
+    // On n'échoue pas la requête si le stockage refuse : le compte est déjà
+    // supprimé, renvoyer une erreur laisserait croire au contraire. Un échec
+    // est journalisé en `error` — c'est une donnée personnelle qui survit,
+    // ça doit être visible dans les logs, pas silencieux.
+    await this.purgeAccountFiles(userId, photoToPurge, idCardToPurge);
+
+    // Traçabilité (fire-and-forget, comme les autres actions sensibles) sans
+    // aucune donnée personnelle. `adminId` reste `null` : l'acteur n'est pas
+    // un administrateur, et le faire pointer sur la ligne qu'on vient
+    // d'anonymiser n'apporterait rien — la relation `admin` est de toute façon
+    // filtrée par le soft-delete à la relecture.
+    void this.auditLog?.log({
+      adminId: null,
+      action: 'ACCOUNT_SELF_DELETE',
+      targetType: 'User',
+      targetId: userId,
+      metadata: { role: user.role },
+    });
+
     return { ok: true };
   }
 

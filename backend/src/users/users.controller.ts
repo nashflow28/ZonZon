@@ -27,6 +27,7 @@ import {
 } from './upload.config';
 import { UpdateFcmTokenDto } from './dto/update-fcm-token.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 import { AvailabilityDto } from './dto/availability.dto';
 import { DriverApprovalDto } from './dto/driver-approval.dto';
 import { SuspendUserDto } from './dto/suspend-user.dto';
@@ -55,6 +56,30 @@ export class UsersController {
     @Body() dto: UpdateProfileDto,
   ) {
     return this.usersService.updateProfile(user.id ?? user.sub, dto);
+  }
+
+  /**
+   * Suppression de compte en self-service (exigence Google Play). Ouverte à
+   * TOUS les rôles — pas de `@Roles(...)`, donc `RolesGuard` laisse passer
+   * tout porteur d'un JWT valide.
+   *
+   * DOIT rester déclarée AVANT `@Delete(':id')` : Nest résout les routes dans
+   * l'ordre de déclaration, et `/users/me` serait sinon capté par `:id` (puis
+   * rejeté en 400 par `ParseUUIDPipe`).
+   *
+   * Le mot de passe est demandé dans le corps : la suppression est
+   * irréversible pour l'utilisateur, un jeton volé ou un téléphone déverrouillé
+   * ne doit pas suffire à l'effacer.
+   */
+  @Delete('me')
+  deleteMyAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: DeleteAccountDto,
+  ) {
+    return this.usersService.deleteOwnAccount(
+      user.id ?? user.sub,
+      dto.password,
+    );
   }
 
   /**

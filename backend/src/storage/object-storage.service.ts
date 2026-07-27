@@ -1,6 +1,11 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { createReadStream, promises as fs } from 'fs';
+import { basename, join } from 'path';
 
 type UploadedFile = Pick<Express.Multer.File, 'filename' | 'mimetype' | 'path'>;
 
@@ -67,6 +72,42 @@ export class ObjectStorageService {
       throw new ServiceUnavailableException(
         `Échec du stockage persistant de l'image: ${(error as Error).message}`,
       );
+    }
+  }
+
+  /**
+   * Supprime définitivement une image à partir de l'URL stockée en base
+   * (photo de profil notamment). Accepte les deux formes produites par
+   * `store()` : une URL publique R2 (`<publicUrl>/<key>`) ou un chemin local
+   * (`/uploads/<fichier>`).
+   *
+   * Ne lève JAMAIS, pour la même raison que `IdentityStorageService.remove` :
+   * elle est appelée après une suppression de compte déjà committée.
+   * Retourne `false` si le fichier n'a pas pu être supprimé.
+   */
+  async remove(url: string): Promise<boolean> {
+    if (!url || !url.trim()) return true;
+
+    try {
+      if (this.isConfigured && url.startsWith(`${this.publicUrl}/`)) {
+        const key = url.slice(this.publicUrl!.length + 1);
+        await this.client!.send(
+          new DeleteObjectCommand({ Bucket: this.bucket!, Key: key }),
+        );
+        return true;
+      }
+
+      // Chemin local : on ne garde que le nom de fichier pour éviter toute
+      // traversée de répertoire à partir d'une valeur venue de la base.
+      const filename = basename(url.split('?')[0]);
+      if (!filename || filename === '.' || filename === '..') return false;
+      await fs.unlink(
+        join(process.cwd(), process.env.UPLOAD_DIR || 'uploads', filename),
+      );
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return true;
+      return false;
     }
   }
 }
