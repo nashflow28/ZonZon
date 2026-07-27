@@ -7,6 +7,20 @@ import '../models/user.dart';
 import 'client_services.dart';
 import 'push_service.dart';
 
+/// Échec « métier » de la suppression de compte : le [message] vient du
+/// backend (403 mot de passe incorrect, 409 course en cours) et doit être
+/// affiché tel quel à l'utilisateur — surtout le 409, sans quoi la personne
+/// croirait à un bug alors qu'elle a simplement une course en cours.
+class DeleteAccountException implements Exception {
+  final int statusCode;
+  final String message;
+
+  const DeleteAccountException(this.statusCode, this.message);
+
+  @override
+  String toString() => message;
+}
+
 class AuthService {
   static const _tokenKey = 'access_token';
   static const _userKey = 'current_user';
@@ -123,6 +137,39 @@ class AuthService {
     // l'état du précédent (fuite inter-session).
     await ClientServices.reset();
     await _clearLocalSession();
+  }
+
+  /// Suppression définitive du compte courant (`DELETE /users/me`), exigée par
+  /// Google Play : l'utilisateur doit pouvoir l'initier depuis l'application.
+  ///
+  /// Le [password] actuel est re-demandé côté UI et transmis au backend qui le
+  /// vérifie. En cas de succès, la session locale est purgée immédiatement
+  /// (token stocké + token FCM) : on ne rappelle PAS le serveur pour effacer le
+  /// token FCM, le JWT ne vaut plus rien une fois le compte supprimé.
+  ///
+  /// Lève une [DeleteAccountException] si le backend refuse (403 / 409), et
+  /// les exceptions réseau habituelles (timeout, DNS) sinon.
+  Future<void> deleteAccount(String password) async {
+    final token = await getToken();
+    final res = await http
+        .delete(
+          Uri.parse('$apiUrl$apiPrefix/users/me'),
+          headers: {
+            'Content-Type': 'application/json',
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'password': password}),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (res.statusCode == 200 || res.statusCode == 204) {
+      // `handleUnauthorized` correspond exactement au besoin : invalidation
+      // LOCALE du token FCM, libération des services de session et effacement
+      // du token/utilisateur stockés.
+      await handleUnauthorized();
+      return;
+    }
+    throw DeleteAccountException(res.statusCode, _extractError(res));
   }
 
   /// Session invalidée par le serveur (401 / token expiré). On ne peut plus

@@ -8,12 +8,21 @@ import { PushSettingsRowComponent } from '../../shared/components/push-settings-
 import { mediaUrl } from '../../shared/media-url';
 import { NotificationsService } from '../../shared/services/notifications.service';
 import { ChangePasswordComponent } from '../../shared/components/change-password/change-password.component';
+import { DeleteAccountComponent } from '../../shared/components/delete-account/delete-account.component';
 import { formatPhone } from '../../shared/phone-input/phone-display';
 
-/** Profil client : infos, édition, photo, accès notifications, déconnexion. */
+/**
+ * Profil client : infos, édition, photo, accès notifications, déconnexion et
+ * suppression définitive du compte.
+ */
 @Component({
   selector: 'app-client-profile',
-  imports: [FormsModule, PushSettingsRowComponent, ChangePasswordComponent],
+  imports: [
+    FormsModule,
+    PushSettingsRowComponent,
+    ChangePasswordComponent,
+    DeleteAccountComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',

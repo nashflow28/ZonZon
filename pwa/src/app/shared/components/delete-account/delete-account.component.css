@@ -1,0 +1,173 @@
+/* Bloc « Zone de danger » : styles auto-portants (l'encapsulation Angular
+   empêche de réutiliser les .row-btn / .btn-danger définis dans les CSS des
+   composants de profil parents). */
+
+.danger-zone {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--zz-line);
+}
+
+.danger-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--zz-coral);
+}
+
+.danger-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: color-mix(in srgb, var(--zz-coral) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--zz-coral);
+  cursor: pointer;
+  text-align: left;
+}
+
+.danger-trigger-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.danger-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--zz-text-mut);
+}
+
+.danger-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--zz-card);
+  border: 1px solid color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.danger-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--zz-coral);
+}
+
+.danger-lead {
+  margin: 0;
+  font-size: 14px;
+  color: var(--zz-text-hi);
+}
+
+.danger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.danger-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--zz-text-mut);
+}
+
+.danger-list strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.danger-list .is-removed {
+  color: var(--zz-coral);
+}
+
+.danger-list .is-kept {
+  color: var(--zz-text-mut);
+}
+
+.danger-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.danger-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--zz-text-mut);
+}
+
+.danger-field input {
+  appearance: none;
+  background: var(--zz-bg);
+  border: 1px solid var(--zz-line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--zz-text-hi);
+  outline: none;
+}
+
+.danger-field input:focus {
+  border-color: var(--zz-coral);
+}
+
+.danger-field input:disabled {
+  opacity: 0.6;
+}
+
+.danger-error {
+  background: color-mix(in srgb, var(--zz-coral) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--zz-coral) 40%, transparent);
+  color: var(--zz-coral);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.danger-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.danger-btn-secondary,
+.danger-btn-danger {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.danger-btn-secondary {
+  background: transparent;
+  border: 1px solid var(--zz-line);
+  color: var(--zz-text-mut);
+}
+
+.danger-btn-danger {
+  background: var(--zz-coral);
+  color: #2b0a08;
+}
+
+.danger-btn-secondary:disabled,
+.danger-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

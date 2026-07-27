@@ -13,16 +13,23 @@ import { ZonesService } from '../../shared/services/zones.service';
 import { Affiliation, UpsertVehiclePayload, VehicleType } from '../driver.model';
 import { DriverService } from '../driver.service';
 import { ChangePasswordComponent } from '../../shared/components/change-password/change-password.component';
+import { DeleteAccountComponent } from '../../shared/components/delete-account/delete-account.component';
 import { formatPhone } from '../../shared/phone-input/phone-display';
 
 /**
  * Profil livreur : infos + statut de validation, dispo/visibilité, véhicule +
  * zone habituelle, photo de profil + pièce d'identité, invitations
- * d'affiliation commerçant, notifications, déconnexion.
+ * d'affiliation commerçant, notifications, déconnexion et suppression
+ * définitive du compte.
  */
 @Component({
   selector: 'app-driver-profile',
-  imports: [FormsModule, PushSettingsRowComponent, ChangePasswordComponent],
+  imports: [
+    FormsModule,
+    PushSettingsRowComponent,
+    ChangePasswordComponent,
+    DeleteAccountComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './profile.component.html',
   styleUrl: './profile.component.css',

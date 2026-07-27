@@ -17,6 +17,7 @@ import '../screens/notifications_screen.dart';
 import '../utils/platform_adapter.dart';
 import '../utils/user_initials.dart';
 import '../widgets/change_password_dialog.dart';
+import '../widgets/delete_account_section.dart';
 import '../widgets/phone_field.dart';
 
 class ClientProfileScreen extends StatefulWidget {
@@ -278,6 +279,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                         ),
                       ),
                     ),
+                    const DeleteAccountSection(),
                     const SizedBox(height: 32),
                   ],
                 ),

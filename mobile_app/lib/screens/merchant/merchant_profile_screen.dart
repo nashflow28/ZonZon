@@ -20,6 +20,7 @@ import 'merchant_orders_screen.dart';
 import '../notifications_screen.dart';
 import '../../utils/user_initials.dart';
 import '../../widgets/change_password_dialog.dart';
+import '../../widgets/delete_account_section.dart';
 import '../../widgets/phone_field.dart';
 
 class MerchantProfileScreen extends StatefulWidget {
@@ -300,6 +301,8 @@ class _MerchantProfileScreenState extends State<MerchantProfileScreen> {
                       ),
                     ),
                   ),
+                  const DeleteAccountSection(),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),

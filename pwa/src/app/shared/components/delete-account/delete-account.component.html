@@ -1,0 +1,84 @@
+<section class="danger-zone">
+  <p class="danger-title">ZONE DE DANGER</p>
+
+  @if (step() === 'idle') {
+    <button type="button" class="danger-trigger" (click)="openInfo()">
+      <span class="danger-trigger-icon" aria-hidden="true">🗑</span>
+      <span>Supprimer mon compte</span>
+    </button>
+    <p class="danger-hint">
+      Action définitive et irréversible. Vos données personnelles sont effacées ; l'historique de vos
+      livraisons est conservé de façon anonymisée.
+    </p>
+  }
+
+  @if (step() === 'info') {
+    <div class="danger-card">
+      <h3 class="danger-card-title">Supprimer mon compte</h3>
+      <p class="danger-lead">
+        Cette action est définitive et irréversible. Vous ne pourrez plus vous connecter avec ce
+        compte.
+      </p>
+      <ul class="danger-list">
+        <li>
+          <strong class="is-removed">Ce qui est supprimé</strong>
+          <span
+            >Vos données personnelles : prénom, nom, numéro de téléphone et photo de profil.</span
+          >
+        </li>
+        <li>
+          <strong class="is-kept">Ce qui est conservé</strong>
+          <span
+            >L'historique de vos livraisons, sous forme anonymisée, pour des raisons comptables et
+            légales.</span
+          >
+        </li>
+      </ul>
+      <div class="danger-actions">
+        <button type="button" class="danger-btn-secondary" (click)="cancel()">Annuler</button>
+        <button type="button" class="danger-btn-danger" (click)="goToConfirm()">Continuer</button>
+      </div>
+    </div>
+  }
+
+  @if (step() === 'confirm') {
+    <div class="danger-card">
+      <h3 class="danger-card-title">Confirmer la suppression</h3>
+      <p class="danger-lead">
+        Saisissez votre mot de passe actuel pour confirmer la suppression définitive de votre compte.
+      </p>
+      <div class="danger-field">
+        <label for="deleteAccountPassword">Mot de passe actuel</label>
+        <input
+          id="deleteAccountPassword"
+          type="password"
+          name="deleteAccountPassword"
+          autocomplete="current-password"
+          [(ngModel)]="password"
+          [disabled]="deleting()"
+        />
+      </div>
+      @if (errorMessage()) {
+        <div class="danger-error" role="alert">{{ errorMessage() }}</div>
+      }
+      <div class="danger-actions">
+        <button
+          type="button"
+          class="danger-btn-secondary"
+          [disabled]="deleting()"
+          (click)="back()"
+        >
+          Retour
+        </button>
+        <button
+          type="button"
+          class="danger-btn-danger"
+          [disabled]="deleting()"
+          (click)="confirmDelete()"
+        >
+          {{ deleting() ? 'Suppression…' : 'Supprimer définitivement' }}
+        </button>
+      </div>
+    </div>
+  }
+</section>

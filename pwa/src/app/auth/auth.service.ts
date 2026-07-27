@@ -160,6 +160,27 @@ export class AuthService {
   }
 
   /**
+   * Suppression définitive du compte courant (`DELETE /users/me`).
+   *
+   * Le mot de passe actuel est re-demandé par l'UI et vérifié par le backend.
+   * En cas de succès, la session locale est purgée et l'utilisateur est renvoyé
+   * vers l'écran de connexion : on ne le laisse jamais sur un écran
+   * authentifié avec un compte supprimé.
+   */
+  deleteAccount(password: string): Observable<{ ok: boolean }> {
+    return this.http
+      .delete<{ ok: boolean }>(`${environment.apiUrl}${environment.apiPrefix}/users/me`, {
+        body: { password },
+      })
+      .pipe(
+        tap(() => {
+          this.clearSession();
+          this.router.navigate(['/login']);
+        })
+      );
+  }
+
+  /**
    * Upload de la photo de profil (multipart). Le backend ne renvoie QUE
    * `{ profilePhotoUrl }` (pas l'utilisateur complet) — on fusionne dans
    * l'utilisateur courant plutôt que de le remplacer intégralement.
