@@ -1822,3 +1822,50 @@ elle n'est pas passée par un vrai admin, fabriquer une entrée d'audit aurait �
 `Mot2passe` réussit, et `GET /orders/available` avec le token obtenu répond **200** (un livreur
 non validé recevrait 403) — le compte livreur est donc réellement opérationnel, pas seulement
 correct sur le papier.
+
+### Session 91 (2026-07-27) — Réinitialisation de mot de passe pour les admins
+
+Suite à l'audit de la session 90 (aucun flux "mot de passe oublié" nulle part), demande explicite :
+ajouter ce flux pour les comptes **ADMIN** uniquement. Ambiguïté soulevée avant de coder (pas
+d'email sur `User`, OTP WhatsApp existant mais inactif en prod — cf. session 88) : question posée
+au PO, réponse **« les deux »**. Deux canaux livrés, tous deux strictement scopés `ADMIN` et
+anti-énumération (réponse identique que le compte/rôle existe ou non, pour ne pas révéler quels
+numéros correspondent à un admin) :
+
+**A. Self-service via OTP WhatsApp** (dormant tant que `WHATSAPP_OTP_ENABLED` n'est pas actif) :
+- `POST /auth/forgot-password/request` `{phone}` — Throttle 3/60s, `@Public()`
+- `POST /auth/forgot-password/reset` `{phone, code, newPassword}` — Throttle 5/60s, `@Public()`
+- `auth.service.ts` : `requestPasswordReset()` / `resetPasswordWithOtp()`, réutilisent
+  `WhatsappOtpService.request/verify` déjà en place depuis la session 88.
+
+**B. Filet de secours admin-à-admin** (utilisable dès aujourd'hui, indépendant de WhatsApp) :
+- `PATCH /users/:id/reset-password` `{newPassword}` — `@Roles(ADMIN)`
+- `users.service.ts` : `adminResetPassword()` — refuse l'auto-cible (message : utiliser
+  `PATCH /auth/password`), refuse une cible non-ADMIN, hash bcrypt + `admin_audit_logs`
+  (nouvelle action `ADMIN_PASSWORD_RESET`, pas de migration nécessaire — colonne `action` en
+  varchar libre).
+
+**Frontend admin-dashboard** :
+- Nouvelle page `/forgot-password` (3 étapes : téléphone → code+nouveau mot de passe → succès),
+  lien "Mot de passe oublié ?" sur `/login`. Message honnête si WhatsApp indisponible (503) :
+  redirige vers le filet de secours plutôt que de laisser croire à un bug.
+- Page `/users` : bouton "Réinitialiser le mot de passe" (icône `key-round`, ajoutée à
+  `shared/icons.ts`) visible uniquement sur les lignes `role === 'ADMIN'`, même pattern que le
+  panneau de suspension existant.
+- **Bug corrigé au passage** (`auth.interceptor.ts`) : un `401` était toujours traité comme "session
+  expirée" → `logout()` + redirection forcée, y compris pour une requête publique sans token (ex.
+  code OTP invalide sur `/forgot-password`). Ce bug était latent depuis toujours mais invisible
+  (le seul 401 public existant, `/auth/login`, vit déjà sur `/login`). Corrigé : logout uniquement
+  si la requête portait effectivement un token.
+
+**Tests** : 400/400 backend (23 suites, dont 7 nouveaux tests ciblés reset admin + OTP), build
+`nest build` et `ng build --configuration production` OK tous les deux. Pas de test end-to-end en
+production pour le succès du reset admin-à-admin : aurait nécessité de créer un 2ᵉ compte ADMIN de
+test (hors périmètre demandé) ou de toucher le vrai compte admin (Malik ATCHA) sans son accord —
+délibérément évité. La couverture unitaire (hash bcrypt vérifié, garde auto-cible, garde non-admin,
+audit log) est jugée suffisante pour ce chemin.
+
+**Non déployé** à la fin de cette session : code committé + poussé sur `origin/main`
+(`f53b3d6` backend, `84f958d` frontend), mais ni le backend OVH ni l'admin Cloudflare Pages n'ont
+été redéployés — décision de déploiement à confirmer avec le PO avant d'agir (action difficile à
+annuler sur l'infra de production).
