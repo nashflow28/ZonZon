@@ -19,7 +19,8 @@ import { DriverService } from '../driver.service';
 /**
  * Radar livreur : bandeau de validation (PENDING/REJECTED), toggles
  * disponibilité/visibilité, puis liste des courses PENDING mises à jour en
- * temps réel (`newOrderAvailable` ajoute, `orderAccepted` retire).
+ * temps réel (`newOrderAvailable` ajoute, `orderAccepted` et
+ * `orderUnavailable` retirent).
  */
 @Component({
   selector: 'app-driver-radar',
@@ -65,6 +66,18 @@ export class DriverRadarComponent implements OnInit, OnDestroy {
 
   private sub = new Subscription();
 
+  /**
+   * Réconciliation périodique du radar (filet de sécurité, équivalent du timer
+   * 15 s de l'app Flutter). Le temps réel seul ne suffit pas ici : le socket
+   * PWA abandonne définitivement après 8 tentatives de reconnexion
+   * (cf. SocketService), et une PWA iOS mise en arrière-plan est suspendue —
+   * dans les deux cas `connected$` ne réémet jamais et la liste resterait
+   * figée sur des courses déjà annulées ou déjà prises.
+   */
+  private radarRefreshTimer?: ReturnType<typeof setInterval>;
+  private static readonly RADAR_REFRESH_MS = 15_000;
+  private refreshInFlight = false;
+
   ngOnInit(): void {
     const u = this.user();
     this.isAvailable.set(!!u?.isAvailable);
@@ -73,11 +86,21 @@ export class DriverRadarComponent implements OnInit, OnDestroy {
     if (this.isApproved()) {
       this.loadIfAvailable();
       this.wireSocket();
+      this.radarRefreshTimer = setInterval(
+        () => this.reconcileAvailable(),
+        DriverRadarComponent.RADAR_REFRESH_MS,
+      );
     }
   }
 
   ngOnDestroy(): void {
     this.sub.unsubscribe();
+    // Sans ce clear, l'intervalle survit à la destruction du composant et
+    // continue d'interroger le backend (fuite mémoire + requêtes inutiles).
+    if (this.radarRefreshTimer !== undefined) {
+      clearInterval(this.radarRefreshTimer);
+      this.radarRefreshTimer = undefined;
+    }
   }
 
   private wireSocket(): void {
@@ -96,8 +119,37 @@ export class DriverRadarComponent implements OnInit, OnDestroy {
           this.orders.update((list) => list.filter((o) => o.id !== evt.orderId));
         }),
     );
+    // Course annulée avant d'avoir été acceptée : aucun livreur n'en est
+    // partie, donc `orderStatusUpdated` ne nous parvient pas. Sans cet
+    // événement, la carte restait affichée jusqu'au rechargement de la page et
+    // un livreur pouvait tenter d'accepter une course annulée.
+    this.sub.add(
+      this.socketService.on$<{ orderId: string }>('orderUnavailable').subscribe((evt) => {
+        this.orders.update((list) => list.filter((o) => o.id !== evt.orderId));
+      }),
+    );
     // Resynchronisation HTTP après coupure/reconnexion socket.
     this.sub.add(this.socketService.connected$.subscribe(() => this.loadIfAvailable()));
+  }
+
+  /**
+   * Resynchronisation silencieuse : contrairement à [loadIfAvailable], on ne
+   * bascule pas `loading` (sinon la liste serait remplacée par le message de
+   * chargement toutes les 15 s) et on n'efface pas la liste en cas d'erreur
+   * réseau ponctuelle — le snapshot courant reste plus utile qu'un écran vide.
+   */
+  private reconcileAvailable(): void {
+    if (!this.isAvailable() || this.refreshInFlight) return;
+    this.refreshInFlight = true;
+    this.ordersService.findAvailable().subscribe({
+      next: (orders) => {
+        this.refreshInFlight = false;
+        this.orders.set(orders);
+      },
+      error: () => {
+        this.refreshInFlight = false;
+      },
+    });
   }
 
   private loadIfAvailable(): void {

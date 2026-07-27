@@ -30,6 +30,19 @@ class OrderAcceptedEvent {
   OrderAcceptedEvent({required this.orderId, required this.raw});
 }
 
+/// Évènement `orderUnavailable` : la course [orderId] n'est plus proposable
+/// sur le radar (annulée alors qu'elle était encore PENDING, donc avant
+/// qu'un livreur ne l'accepte).
+///
+/// Le backend diffuse volontairement un payload réduit à l'identifiant à
+/// toute la room `role:LIVREUR` : aucune donnée client ne doit fuiter vers
+/// des livreurs qui ne sont pas partie à la course.
+class OrderUnavailableEvent {
+  final String orderId;
+
+  OrderUnavailableEvent({required this.orderId});
+}
+
 /// Mise à jour de statut `orderStatusUpdated`.
 class OrderStatusUpdate {
   final String orderId;
@@ -162,6 +175,8 @@ class OrderSocketController {
 
   final _driverPositionCtrl = StreamController<DriverPosition>.broadcast();
   final _orderAcceptedCtrl = StreamController<OrderAcceptedEvent>.broadcast();
+  final _orderUnavailableCtrl =
+      StreamController<OrderUnavailableEvent>.broadcast();
   final _statusUpdatesCtrl = StreamController<OrderStatusUpdate>.broadcast();
   final _paymentUpdatesCtrl = StreamController<OrderPaymentUpdate>.broadcast();
   final _newChatMessageCtrl = StreamController<NewChatMessageEvent>.broadcast();
@@ -178,6 +193,12 @@ class OrderSocketController {
   /// TOUTES les acceptations remontent — ce qui permet au radar de retirer
   /// une course dès qu'un autre livreur la prend.
   Stream<OrderAcceptedEvent> get orderAccepted$ => _orderAcceptedCtrl.stream;
+
+  /// Stream des évènements `orderUnavailable` (côté LIVREUR). Jamais filtré
+  /// par [watchedOrderIds] : une course retirée du radar n'est, par
+  /// définition, suivie par aucun livreur.
+  Stream<OrderUnavailableEvent> get orderUnavailable$ =>
+      _orderUnavailableCtrl.stream;
 
   /// Stream des nouveaux statuts (filtré par [watchedOrderIds]).
   Stream<OrderStatusUpdate> get statusUpdates$ => _statusUpdatesCtrl.stream;
@@ -380,6 +401,13 @@ class OrderSocketController {
       );
     });
 
+    socket.on('orderUnavailable', (data) {
+      if (data is! Map) return;
+      final orderId = data['orderId']?.toString();
+      if (orderId == null || orderId.isEmpty) return;
+      _orderUnavailableCtrl.add(OrderUnavailableEvent(orderId: orderId));
+    });
+
     socket.on('orderStatusUpdated', (data) {
       if (data is! Map) return;
       final orderId = data['orderId']?.toString();
@@ -490,6 +518,7 @@ class OrderSocketController {
     _socket = null;
     await _driverPositionCtrl.close();
     await _orderAcceptedCtrl.close();
+    await _orderUnavailableCtrl.close();
     await _statusUpdatesCtrl.close();
     await _paymentUpdatesCtrl.close();
     await _newChatMessageCtrl.close();

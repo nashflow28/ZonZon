@@ -1548,6 +1548,22 @@ export class OrdersService {
       order.merchant?.id,
     );
 
+    // Une course encore PENDING n'a pas de livreur assigné : elle est affichée
+    // sur le radar de TOUS les livreurs éligibles. Quand elle devient
+    // indisponible avant acceptation (annulation client/commerçant/admin —
+    // seule transition sortante autorisée aujourd'hui, mais on couvre tous les
+    // statuts terminaux au cas où la machine à états s'ouvrirait à FAILED), il
+    // faut la retirer de ces radars : `broadcastStatusUpdate` ci-dessus ne
+    // touche que les parties de la course, donc personne ici.
+    // Depuis un statut non-PENDING, le livreur assigné est déjà prévenu par
+    // `orderStatusUpdated` — inutile de polluer la room globale.
+    if (
+      previousStatus === OrderStatus.PENDING &&
+      TERMINAL_ORDER_STATUSES.has(status)
+    ) {
+      this.ordersGateway.broadcastOrderUnavailable(order.id);
+    }
+
     // Push au client pour les transitions importantes
     const clientId = order.client?.id;
     if (clientId && !this.ordersGateway.isUserConnected(clientId)) {

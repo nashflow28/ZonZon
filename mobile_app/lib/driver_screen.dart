@@ -204,6 +204,27 @@ List<Map<String, dynamic>> upsertRadarOrder(
   ];
 }
 
+/// Retire une course du radar par identifiant.
+///
+/// Utilisé quand le backend signale qu'une course n'est plus proposable :
+/// acceptée par un autre livreur (`orderAccepted`) ou annulée avant
+/// acceptation (`orderUnavailable`). On passe par [_radarOrderId] plutôt que
+/// par `order['id']` : les payloads temps réel peuvent porter l'identifiant
+/// sous la clé `orderId`, et une carte ainsi indexée ne doit pas survivre au
+/// retrait.
+@visibleForTesting
+List<Map<String, dynamic>> removeRadarOrder(
+  List<dynamic> currentOrders,
+  String? orderId,
+) {
+  final normalizedCurrent = normalizeRadarOrders(currentOrders);
+  if (orderId == null || orderId.isEmpty) return normalizedCurrent;
+  return <Map<String, dynamic>>[
+    for (final order in normalizedCurrent)
+      if (_radarOrderId(order) != orderId) order,
+  ];
+}
+
 class _DriverScreenState extends State<DriverScreen> {
   int _currentTab = 0;
   List<Map<String, dynamic>> availableOrders = [];
@@ -238,6 +259,7 @@ class _DriverScreenState extends State<DriverScreen> {
 
   StreamSubscription<NewOrderEvent>? _newOrderSub;
   StreamSubscription<OrderAcceptedEvent>? _orderAcceptedSub;
+  StreamSubscription<OrderUnavailableEvent>? _orderUnavailableSub;
   StreamSubscription<OrderStatusUpdate>? _statusSub;
   StreamSubscription<OrderPaymentUpdate>? _paymentSub;
   StreamSubscription<void>? _connectedSub;
@@ -609,9 +631,7 @@ class _DriverScreenState extends State<DriverScreen> {
       final isMine = evt.raw['livreurId']?.toString() == currentDriverId;
       final rawOrder = evt.raw['order'];
       setState(() {
-        availableOrders.removeWhere(
-          (order) => order['id']?.toString() == evt.orderId,
-        );
+        availableOrders = removeRadarOrder(availableOrders, evt.orderId);
         if (isMine && rawOrder is Map) {
           final acceptedOrder = Map<String, dynamic>.from(rawOrder);
           _activeRunOrders = upsertActiveOrder(_activeRunOrders, acceptedOrder);
@@ -626,6 +646,18 @@ class _DriverScreenState extends State<DriverScreen> {
           );
         }
       }
+    });
+
+    // Course annulée AVANT d'avoir été acceptée : elle est encore affichée sur
+    // le radar de tous les livreurs éligibles, et `orderStatusUpdated` ne nous
+    // parvient pas (on n'est partie à aucune course). Sans cette écoute, la
+    // carte survivait jusqu'au prochain passage du timer de réconciliation
+    // (15 s), pendant lesquelles un livreur pouvait tenter de l'accepter.
+    _orderUnavailableSub = _socketCtrl.orderUnavailable$.listen((evt) {
+      if (!mounted) return;
+      setState(() {
+        availableOrders = removeRadarOrder(availableOrders, evt.orderId);
+      });
     });
   }
 
@@ -1546,6 +1578,7 @@ class _DriverScreenState extends State<DriverScreen> {
     _heartbeatTimer?.cancel();
     _newOrderSub?.cancel();
     _orderAcceptedSub?.cancel();
+    _orderUnavailableSub?.cancel();
     _statusSub?.cancel();
     _paymentSub?.cancel();
     _connectedSub?.cancel();

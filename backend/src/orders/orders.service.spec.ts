@@ -155,6 +155,7 @@ describe('OrdersService', () => {
     broadcastNewOrder: jest.Mock;
     broadcastOrderAccepted: jest.Mock;
     broadcastStatusUpdate: jest.Mock;
+    broadcastOrderUnavailable: jest.Mock;
     broadcastPaymentUpdate: jest.Mock;
     isUserConnected: jest.Mock;
   };
@@ -218,6 +219,7 @@ describe('OrdersService', () => {
       broadcastNewOrder: jest.fn(),
       broadcastOrderAccepted: jest.fn(),
       broadcastStatusUpdate: jest.fn(),
+      broadcastOrderUnavailable: jest.fn(),
       broadcastPaymentUpdate: jest.fn(),
       isUserConnected: jest.fn().mockReturnValue(true),
     };
@@ -1505,6 +1507,57 @@ describe('OrdersService', () => {
           status: DeliveryRunStatus.CANCELLED,
         }),
       );
+    });
+
+    // ── Retrait du radar des livreurs (course annulée avant acceptation) ────
+
+    it('émet orderUnavailable quand une course PENDING est annulée (elle est encore sur le radar de tous les livreurs)', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildOrder(OrderStatus.PENDING),
+        livreur: null,
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      await service.updateStatus('o', OrderStatus.CANCELLED, clientUser);
+
+      expect(gateway.broadcastOrderUnavailable).toHaveBeenCalledWith('o');
+    });
+
+    it('émet orderUnavailable quand le commerçant créateur annule sa livraison encore PENDING', async () => {
+      ordersRepository.findOne.mockResolvedValue({
+        ...buildOrder(OrderStatus.PENDING),
+        client: null,
+        livreur: null,
+        merchant: { id: merchantUser.id },
+      });
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      await service.updateStatus('o', OrderStatus.CANCELLED, merchantUser);
+
+      expect(gateway.broadcastOrderUnavailable).toHaveBeenCalledWith('o');
+    });
+
+    it("n'émet PAS orderUnavailable quand une course déjà ACCEPTED est annulée (le livreur assigné est prévenu par orderStatusUpdated)", async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      await service.updateStatus('o', OrderStatus.CANCELLED, clientUser);
+
+      expect(gateway.broadcastOrderUnavailable).not.toHaveBeenCalled();
+      expect(gateway.broadcastStatusUpdate).toHaveBeenCalled();
+    });
+
+    it("n'émet PAS orderUnavailable pour une transition non terminale depuis ACCEPTED", async () => {
+      ordersRepository.findOne.mockResolvedValue(
+        buildOrder(OrderStatus.ACCEPTED),
+      );
+      ordersRepository.save.mockImplementation(async (o: any) => o);
+
+      await service.updateStatus('o', OrderStatus.IN_PROGRESS, livreurUser);
+
+      expect(gateway.broadcastOrderUnavailable).not.toHaveBeenCalled();
     });
 
     it('interdit une transition illégale (COMPLETED → PENDING) → BadRequest', async () => {

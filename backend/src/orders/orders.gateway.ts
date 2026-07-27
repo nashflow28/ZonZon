@@ -375,6 +375,27 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  /**
+   * Retire une course du radar de TOUS les livreurs.
+   *
+   * Une course encore `PENDING` n'a pas de livreur assigné : elle est affichée
+   * sur le radar de tous les livreurs éligibles. `broadcastStatusUpdate` ne
+   * cible que le client, le livreur et le commerçant — donc personne quand la
+   * course est annulée avant d'avoir été acceptée. La carte restait affichée
+   * jusqu'à la prochaine réconciliation HTTP, et un livreur pouvait tenter
+   * d'accepter une course déjà annulée.
+   *
+   * Payload volontairement réduit à l'identifiant, pour la même raison que le
+   * `radarPayload` de `broadcastOrderAccepted` : diffuser l'entité commande à
+   * toute la room `role:LIVREUR` exposerait les coordonnées et l'identité du
+   * client à des livreurs qui ne sont pas partie à la course.
+   */
+  broadcastOrderUnavailable(orderId: string) {
+    this.server
+      .to(`role:${UserRole.LIVREUR}`)
+      .emit('orderUnavailable', { orderId });
+  }
+
   broadcastStatusUpdate(
     orderId: string,
     status: string,

@@ -410,6 +410,34 @@ describe('OrdersGateway', () => {
     });
   });
 
+  describe('broadcastOrderUnavailable', () => {
+    it('émet orderUnavailable à toute la room role:LIVREUR', () => {
+      const { server, emitCalls } = buildMockServer([
+        { socketId: 's1', userId: 'driver-1' },
+        { socketId: 's2', userId: 'driver-2' },
+      ]);
+      gateway.server = server;
+
+      gateway.broadcastOrderUnavailable('ord-1');
+
+      const emits = emitCalls.filter((c) => c.event === 'orderUnavailable');
+      expect(emits).toHaveLength(1);
+      expect(emits[0].room).toBe(`role:${UserRole.LIVREUR}`);
+    });
+
+    it("ne diffuse QUE l'identifiant de la course (aucune donnée client)", () => {
+      const { server, emitCalls } = buildMockServer([]);
+      gateway.server = server;
+
+      gateway.broadcastOrderUnavailable('ord-1');
+
+      const emits = emitCalls.filter((c) => c.event === 'orderUnavailable');
+      // Égalité stricte : toute donnée ajoutée au payload (adresses, client…)
+      // serait exposée à tous les livreurs connectés.
+      expect(emits[0].payload).toEqual({ orderId: 'ord-1' });
+    });
+  });
+
   describe('broadcastPaymentUpdate (P1 — diffusion temps réel du paiement)', () => {
     it('émet orderPaymentUpdated au client, au livreur et au commerçant', () => {
       const { server, emitCalls } = buildMockServer([]);

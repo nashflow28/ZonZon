@@ -51,4 +51,34 @@ void main() {
       expect(merged.where((order) => order['id'] == 'order-1'), hasLength(1));
     });
   });
+
+  group('removeRadarOrder', () {
+    test('retire la course annulée et conserve les autres', () {
+      final remaining = removeRadarOrder([
+        {'id': 'order-1', 'pickupAddress': 'Tokoin'},
+        {'id': 'order-2', 'pickupAddress': 'Agoe'},
+      ], 'order-1');
+
+      expect(remaining.map((order) => order['id']).toList(), ['order-2']);
+    });
+
+    test('retire aussi une carte indexée sur la clé orderId', () {
+      final remaining = removeRadarOrder([
+        {'orderId': 'order-1', 'pickupAddress': 'Tokoin'},
+        {'id': 'order-2', 'pickupAddress': 'Agoe'},
+      ], 'order-1');
+
+      expect(remaining.map((order) => order['id']).toList(), ['order-2']);
+    });
+
+    test('ne touche à rien pour un identifiant inconnu ou vide', () {
+      const current = [
+        {'id': 'order-1', 'pickupAddress': 'Tokoin'},
+      ];
+
+      expect(removeRadarOrder(current, 'order-inconnue'), current);
+      expect(removeRadarOrder(current, ''), current);
+      expect(removeRadarOrder(current, null), current);
+    });
+  });
 }
