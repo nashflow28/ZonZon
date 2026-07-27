@@ -1647,3 +1647,48 @@ APK 58,7 Mo, SHA-256 `8e82611de753c05d749da7b99c968176666d3d0bdd72eb4f4b244ae1c5
 4. Pour que la CI produise des APK signés : ajouter le keystore (base64) et les mots de passe
    en secrets GitHub, puis les décoder dans le workflow comme c'est déjà fait pour
    `GOOGLE_SERVICES_JSON`.
+
+### Session 87 (2026-07-27) — Keystore de release et APK distribuable
+
+**Keystore généré** : `C:/Users/Kaled/zonzon-release.jks` (hors dépôt), alias `zonzon`, RSA 2048,
+validité 10 000 jours, `CN=ZonZon, OU=Mobile, O=Kore Innovation, L=Lome, ST=Maritime, C=TG`.
+Mot de passe aléatoire de 32 caractères, écrit uniquement dans `mobile_app/android/key.properties`
+(non versionné) — jamais affiché ni passé en argument visible.
+
+> ⚠️ **À sauvegarder hors du poste** (gestionnaire de mots de passe / coffre). Perdre le keystore
+> ou son mot de passe rend toute mise à jour Play Store impossible **définitivement** : aucune
+> procédure de récupération n'existe.
+
+**Signature vérifiée** avec `apksigner verify --print-certs` (`keytool -printcert` ne suffit pas :
+les APK modernes utilisent le schéma v2/v3, pas la signature JAR v1) :
+- `Signer #1 certificate DN: CN=ZonZon, OU=Mobile, O=Kore Innovation, L=Lome, ST=Maritime, C=TG`
+- SHA-256 : `a5e21f7e26db8bf8abbd003f946dc75e68a7ec41e47c7ae34de84447e5ada6a5`
+- SHA-1 : `8442d42f134423978304c1e37ff38794e25350a7` (à fournir si un jour Google Sign-In,
+  App Check ou les Dynamic Links sont activés)
+
+**Le problème annoncé par la revue s'est matérialisé en conditions réelles** : l'installation a
+d'abord échoué en `INSTALL_FAILED_UPDATE_INCOMPATIBLE` — la version posée quelques minutes plus
+tôt était signée debug, la nouvelle en release. Démonstration concrète qu'un APK signé debut ne
+peut jamais être mis à jour par un APK signé release. Résolu par désinstallation/réinstallation,
+sans conséquence ici (aucune donnée), mais qui aurait imposé le même geste à tous les
+utilisateurs si la distribution avait déjà eu lieu.
+
+**État de l'appareil** (Samsung SM-S918B) : seule `com.zonzon.app` reste installée, signée en
+release (`signatures version:2`), `FirebaseApp initialization successful`, 0 exception fatale.
+L'ancienne `com.example.mobile_app` a été désinstallée.
+
+**APK distribuable** : 58,7 Mo, SHA-256
+`dd33c0cfcf8202dd059ee509e8a83fc97eaaa1051284bc94a883a5ab40eae670`.
+
+**CI** : étape « Decode release keystore » ajoutée, conditionnée à la présence du secret
+`ANDROID_KEYSTORE_BASE64`. Tant que les secrets ne sont pas définis, la CI continue de
+fonctionner et retombe sur la clé de debug avec avertissement. Secrets à créer dans le dépôt
+GitHub :
+```
+ANDROID_KEYSTORE_BASE64     # base64 -w0 zonzon-release.jks
+ANDROID_KEYSTORE_PASSWORD   # cf. mobile_app/android/key.properties
+ANDROID_KEY_ALIAS           # zonzon
+ANDROID_KEY_PASSWORD        # identique au storePassword
+```
+
+**Les deux blocages Play Store identifiés par la revue sont levés.**
