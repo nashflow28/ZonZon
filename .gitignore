@@ -77,3 +77,7 @@ firebase-adminsdk.json
 # Artefacts d'outillage Codex (captures, pieces jointes) — pas du code source
 .codex/
 .codex-remote-attachments/
+
+# Secrets de signature Android (keystore + mots de passe) — jamais versionnes
+key.properties
+mobile_app/android/key.properties

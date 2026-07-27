@@ -1,0 +1,21 @@
+# Modèle de configuration de signature Android.
+#
+# Copier ce fichier en `android/key.properties` (jamais versionné) après avoir
+# généré le keystore de release :
+#
+#   keytool -genkey -v -keystore ~/zonzon-release.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias zonzon
+#
+# ⚠️ Le keystore et son mot de passe sont un actif critique et irremplaçable :
+# les perdre rend TOUTE mise à jour de l'application impossible sur le Play
+# Store, définitivement. À sauvegarder hors du poste de développement
+# (gestionnaire de mots de passe, coffre chiffré).
+#
+# Tant que `key.properties` est absent, le build retombe sur la clé de debug et
+# affiche un avertissement — pratique en local et en CI, mais un tel APK n'est
+# pas distribuable.
+
+storeFile=/chemin/absolu/vers/zonzon-release.jks
+storePassword=<mot de passe du keystore>
+keyAlias=zonzon
+keyPassword=<mot de passe de la clé>
