@@ -1,6 +1,13 @@
 name: Flutter CI
 
-# Le build APK est lancé manuellement pour éviter les coûts Actions.
+# Déclenchement manuel uniquement (Actions → Flutter CI → Run workflow), pour
+# maîtriser la consommation du quota GitHub Actions : 2 000 min/mois sur le plan
+# gratuit pour un dépôt privé. Un build Flutter coûte ~4 min sur Linux (×1).
+#
+# Ne pas remettre de condition `github.event_name == 'push'` sur les étapes :
+# en déclenchement manuel l'événement vaut `workflow_dispatch`, et toutes les
+# étapes de build seraient silencieusement ignorées — le job passerait au vert
+# sans produire d'APK.
 on:
   workflow_dispatch:
 
@@ -31,7 +38,6 @@ jobs:
         run: flutter test test/
 
       - name: Decode google-services.json
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > android/app/google-services.json
 
       # Signature de release. Sans ces secrets, le build retombe sur la clé de
@@ -42,7 +48,7 @@ jobs:
       #   ANDROID_KEYSTORE_BASE64  : base64 -w0 zonzon-release.jks
       #   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
       - name: Decode release keystore
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && env.KEYSTORE_B64 != ''
+        if: env.KEYSTORE_B64 != ''
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -55,7 +61,6 @@ jobs:
           EOF
 
       - name: Build APK (release)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         # Pas de --dart-define=API_URL : la valeur par défaut de
         # mobile_app/lib/config/env.dart pointe déjà sur le backend de
         # production. Forcer une URL ici avait produit un APK compilé contre le
@@ -63,7 +68,6 @@ jobs:
         run: flutter build apk --release
 
       - name: Upload APK artifact
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/upload-artifact@v4
         with:
           name: app-release
