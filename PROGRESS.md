@@ -1610,3 +1610,40 @@ porte l'applicationId `com.example.mobile_app` (cf. session 84).
 `resources.arsc` via `strings` a conclu à tort que le correctif était inopérant. Les ressources
 Android compilées n'y sont pas stockées en clair. La vérification fiable est le fichier généré
 par `processReleaseGoogleServices` **et** le log d'initialisation sur l'appareil.
+
+### Session 86 (2026-07-27) — applicationId définitif et signature de release
+
+**applicationId `com.example.mobile_app` → `com.zonzon.app`** (choix du PO ; déjà utilisé dans
+le code comme `userAgentPackageName` OSM). Le `namespace` et le package Kotlin de
+`MainActivity` suivent. Choix **irréversible** une fois publié sur le Play Store.
+
+**Signature de release** : `android/app/build.gradle.kts` lit désormais `android/key.properties`
+(non versionné, modèle dans `key.properties.example`). Repli volontaire sur la clé de debug avec
+avertissement journalisé si le fichier est absent — le build local et la CI fonctionnent donc
+sans keystore, mais un tel APK n'est pas distribuable. `key.properties` ajouté au `.gitignore`
+(`*.jks` et `*.keystore` y étaient déjà).
+
+**Firebase** : une app Android `com.zonzon.app` a été enregistrée dans le projet `zonzon-4eb31`
+via la console (navigateur interne, sur autorisation du PO). Le `google-services.json` régénéré
+couvre **les deux packages** — nouvel `app_id` `1:767758360586:android:2c92dd02d2927daaeb7ff3`,
+même `project_number`. Fichier non versionné.
+
+> Le plugin `google-services` **refuse de compiler** si le package ne figure pas dans
+> `google-services.json` (`No matching client found for package name`). Comportement sain : il
+> échoue plutôt que de produire un APK où FCM serait silencieusement inopérant.
+
+**Aucun changement backend** : il s'authentifie avec le service account au niveau projet, pas au
+niveau de l'app Android.
+
+**Vérifié sur appareil réel** (Samsung SM-S918B) : `com.zonzon.app` installée à côté de
+l'ancienne, `FirebaseApp initialization successful`, 0 exception fatale.
+APK 58,7 Mo, SHA-256 `8e82611de753c05d749da7b99c968176666d3d0bdd72eb4f4b244ae1c5a18caf`.
+
+**Reste à faire par le PO :**
+1. Générer le keystore et le sauvegarder hors du poste :
+   `keytool -genkey -v -keystore ~/zonzon-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias zonzon`
+2. Créer `mobile_app/android/key.properties` depuis le modèle.
+3. Désinstaller l'ancienne app `com.example.mobile_app` du téléphone (elle coexiste).
+4. Pour que la CI produise des APK signés : ajouter le keystore (base64) et les mots de passe
+   en secrets GitHub, puis les décoder dans le workflow comme c'est déjà fait pour
+   `GOOGLE_SERVICES_JSON`.
