@@ -30,6 +30,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { AvailabilityDto } from './dto/availability.dto';
 import { DriverApprovalDto } from './dto/driver-approval.dto';
 import { SuspendUserDto } from './dto/suspend-user.dto';
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 import { VisibilityDto } from './dto/visibility.dto';
 
 @Controller('users')
@@ -230,6 +231,25 @@ export class UsersController {
     @CurrentUser() admin: AuthenticatedUser,
   ) {
     return this.usersService.suspend(id, admin.id ?? admin.sub, dto.reason);
+  }
+
+  /**
+   * Réinitialise le mot de passe d'un autre compte ADMIN — filet de sécurité
+   * pour un admin bloqué dehors, en attendant que le reset self-service par
+   * WhatsApp OTP soit pleinement configuré (cf. PROGRESS.md session 88/91).
+   */
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/reset-password')
+  resetAdminPassword(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AdminResetPasswordDto,
+    @CurrentUser() admin: AuthenticatedUser,
+  ) {
+    return this.usersService.adminResetPassword(
+      id,
+      dto.newPassword,
+      admin.id ?? admin.sub,
+    );
   }
 
   /** Réactive un compte préalablement suspendu. */

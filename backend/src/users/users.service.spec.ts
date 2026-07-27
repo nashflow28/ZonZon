@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import * as bcrypt from 'bcrypt';
 
 import { UsersService } from './users.service';
 import {
@@ -487,6 +488,87 @@ describe('UsersService', () => {
   });
 
   // ── P0 sécurité (CDC V1) : suspension de compte ───────────────────────────
+
+  describe('adminResetPassword', () => {
+    const targetAdmin = () => ({ id: 'admin-2', role: UserRole.ADMIN });
+
+    it('refuse le self-target (doit passer par changePassword)', async () => {
+      await expect(
+        service.adminResetPassword('admin-1', 'new-password', 'admin-1'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(usersRepository.findOne).not.toHaveBeenCalled();
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it("refuse si la cible n'est pas un compte ADMIN", async () => {
+      usersRepository.findOne.mockResolvedValue({
+        id: 'user-1',
+        role: UserRole.CLIENT,
+      });
+      await expect(
+        service.adminResetPassword('user-1', 'new-password', 'admin-1'),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(usersRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('hash et enregistre le nouveau mot de passe pour une cible ADMIN', async () => {
+      usersRepository.findOne.mockResolvedValue(targetAdmin());
+      usersRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      await expect(
+        service.adminResetPassword('admin-2', 'new-password', 'admin-1'),
+      ).resolves.toEqual({ ok: true });
+
+      expect(usersRepository.update).toHaveBeenCalledTimes(1);
+      const [id, patch] = usersRepository.update.mock.calls[0];
+      expect(id).toBe('admin-2');
+      // Le mot de passe stocké doit être un hash bcrypt qui valide bien le
+      // mot de passe fourni — pas juste une chaîne quelconque.
+      await expect(
+        bcrypt.compare('new-password', patch.password),
+      ).resolves.toBe(true);
+    });
+
+    it('appelle auditLog.log en fire-and-forget (@Optional)', async () => {
+      const auditLog = { log: jest.fn().mockResolvedValue(undefined) };
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          UsersService,
+          { provide: getRepositoryToken(User), useValue: usersRepository },
+          {
+            provide: getRepositoryToken(Vehicle),
+            useValue: mockVehiclesRepo(),
+          },
+          { provide: AuditLogService, useValue: auditLog },
+        ],
+      }).compile();
+      const svc = module.get<UsersService>(UsersService);
+
+      usersRepository.findOne.mockResolvedValue(targetAdmin());
+      usersRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      await svc.adminResetPassword('admin-2', 'new-password', 'admin-1');
+      await new Promise((r) => setImmediate(r));
+
+      expect(auditLog.log).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminId: 'admin-1',
+          action: 'ADMIN_PASSWORD_RESET',
+          targetType: 'User',
+          targetId: 'admin-2',
+        }),
+      );
+    });
+
+    it("ne casse pas si auditLog est absent (non injecté)", async () => {
+      usersRepository.findOne.mockResolvedValue(targetAdmin());
+      usersRepository.update.mockResolvedValue({ affected: 1 } as any);
+
+      await expect(
+        service.adminResetPassword('admin-2', 'new-password', 'admin-1'),
+      ).resolves.toEqual({ ok: true });
+    });
+  });
 
   describe('suspend', () => {
     const activeUser = () => ({

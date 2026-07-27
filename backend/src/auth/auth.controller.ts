@@ -10,6 +10,8 @@ import { WhatsappOtpService } from './whatsapp-otp.service';
 import { RequestWhatsappOtpDto } from './dto/request-whatsapp-otp.dto';
 import { VerifyWhatsappOtpDto } from './dto/verify-whatsapp-otp.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { RequestPasswordResetDto } from './dto/request-password-reset.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -50,6 +52,30 @@ export class AuthController {
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
+  }
+
+  /**
+   * Reset de mot de passe self-service, réservé aux comptes ADMIN, via
+   * WhatsApp OTP. Inactif tant que `WHATSAPP_OTP_ENABLED` n'est pas à `true`
+   * (503 explicite) — voir PROGRESS.md session 88 pour l'état de la
+   * configuration Meta.
+   */
+  @Public()
+  @Throttle({ short: { limit: 3, ttl: 60_000 } })
+  @Post('forgot-password/request')
+  requestPasswordReset(@Body() dto: RequestPasswordResetDto) {
+    return this.authService.requestPasswordReset(dto.phone);
+  }
+
+  @Public()
+  @Throttle({ short: { limit: 5, ttl: 60_000 } })
+  @Post('forgot-password/reset')
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPasswordWithOtp(
+      dto.phone,
+      dto.code,
+      dto.newPassword,
+    );
   }
 
   @Patch('password')

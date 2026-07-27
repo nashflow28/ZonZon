@@ -172,6 +172,48 @@ export class UsersService {
    * (`AuthService.loginWithCredentials`) et sert de défense en profondeur
    * sur les actions sensibles (`OrdersService`).
    */
+  /**
+   * Reset de mot de passe d'un compte ADMIN par un autre admin déjà connecté
+   * — filet de sécurité utilisable dès aujourd'hui, sans dépendre du canal
+   * WhatsApp (cf. `AuthService.resetPasswordWithOtp`, encore inactif).
+   *
+   * Scopé aux cibles ADMIN : élargir à CLIENT/LIVREUR/COMMERCANT ferait de
+   * cet endpoint un outil de prise de contrôle de n'importe quel compte par
+   * un admin, sans le consentement du titulaire — hors du besoin exprimé.
+   *
+   * L'auto-ciblage est refusé : réinitialiser SON PROPRE mot de passe doit
+   * passer par `changePassword` (qui exige de connaître l'ancien), pas par
+   * ce contournement réservé au cas où le titulaire est bloqué dehors.
+   */
+  async adminResetPassword(
+    id: string,
+    newPassword: string,
+    adminId: string,
+  ): Promise<{ ok: true }> {
+    if (id === adminId) {
+      throw new BadRequestException(
+        'Utilisez « Modifier le mot de passe » pour réinitialiser le vôtre',
+      );
+    }
+    const user = await this.findOne(id);
+    if (user.role !== UserRole.ADMIN) {
+      throw new BadRequestException("Cet utilisateur n'est pas un administrateur");
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(newPassword, salt);
+    await this.usersRepository.update(id, { password: hash });
+
+    void this.auditLog?.log({
+      adminId,
+      action: 'ADMIN_PASSWORD_RESET',
+      targetType: 'User',
+      targetId: id,
+    });
+
+    return { ok: true };
+  }
+
   async suspend(id: string, adminId: string, reason?: string): Promise<User> {
     const user = await this.findOne(id);
     user.status = UserStatus.SUSPENDED;

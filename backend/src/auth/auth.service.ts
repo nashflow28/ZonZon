@@ -86,6 +86,54 @@ export class AuthService {
     return this.login(user);
   }
 
+  /**
+   * Étape 1 du reset de mot de passe admin (self-service, via WhatsApp OTP).
+   *
+   * Réponse volontairement IDENTIQUE que le numéro corresponde ou non à un
+   * compte ADMIN (anti-énumération, même principe que la revue avait relevé
+   * sur `register`) : on ne déclenche l'envoi WhatsApp — et donc la seule
+   * fuite d'information observable (un message reçu ou non) — que si le
+   * compte existe et est bien un ADMIN.
+   *
+   * Si `WHATSAPP_OTP_ENABLED` n'est pas activé, `whatsappOtp.request()` lève
+   * un 503 explicite : ce n'est PAS spécifique au compte visé (même échec
+   * pour n'importe quel admin tant que le canal n'est pas configuré), donc
+   * aucune fuite d'énumération supplémentaire.
+   */
+  async requestPasswordReset(phone: string): Promise<{ sent: true }> {
+    const user = await this.usersService.findByPhone(phone);
+    if (user && user.role === UserRole.ADMIN) {
+      await this.whatsappOtp.request(phone);
+    }
+    return { sent: true };
+  }
+
+  /**
+   * Étape 2 : vérifie le code WhatsApp et applique le nouveau mot de passe.
+   * Scopé aux comptes ADMIN — c'est le rôle demandé, et élargir résoudrait un
+   * problème plus large (canal de recovery pour tous les rôles) non posé ici.
+   */
+  async resetPasswordWithOtp(
+    phone: string,
+    code: string,
+    newPassword: string,
+  ): Promise<{ ok: true }> {
+    const user = await this.usersService.findByPhone(phone);
+    if (!user || user.role !== UserRole.ADMIN) {
+      // Même message que "code invalide" : ne pas distinguer un compte
+      // inexistant/non-admin d'un code erroné (anti-énumération).
+      throw new UnauthorizedException('Code invalide ou expiré');
+    }
+    // Lève UnauthorizedException (code invalide/expiré) ou 429 (trop de
+    // tentatives) — la garde anti-brute-force est déjà dans WhatsappOtpService.
+    await this.whatsappOtp.verify(phone, code);
+
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(newPassword, salt);
+    await this.usersService.updatePassword(user.id, hash);
+    return { ok: true };
+  }
+
   async changePassword(
     userId: string,
     currentPassword: string,

@@ -19,7 +19,8 @@ export type AuditAction =
   | 'DRIVER_APPROVE'
   | 'DRIVER_REJECT'
   | 'USER_SUSPEND'
-  | 'USER_REACTIVATE';
+  | 'USER_REACTIVATE'
+  | 'ADMIN_PASSWORD_RESET';
 
 @Entity('admin_audit_logs')
 @Index(['adminId', 'createdAt'])

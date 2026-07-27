@@ -29,7 +29,11 @@ describe('AuthService', () => {
     attachVehicle: jest.Mock;
   };
   let jwtService: { sign: jest.Mock };
-  let whatsappOtp: { assertProof: jest.Mock };
+  let whatsappOtp: {
+    assertProof: jest.Mock;
+    request: jest.Mock;
+    verify: jest.Mock;
+  };
 
   beforeEach(async () => {
     usersService = {
@@ -40,7 +44,11 @@ describe('AuthService', () => {
       attachVehicle: jest.fn(),
     };
     jwtService = { sign: jest.fn().mockReturnValue('fake.jwt.token') };
-    whatsappOtp = { assertProof: jest.fn() };
+    whatsappOtp = {
+      assertProof: jest.fn(),
+      request: jest.fn(),
+      verify: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -274,6 +282,93 @@ describe('AuthService', () => {
       expect(bcrypt.hash).toHaveBeenCalledWith('new-password', 'salt');
       expect(usersService.updatePassword).toHaveBeenCalledWith(
         'u',
+        'new-hash',
+      );
+    });
+  });
+
+  describe('requestPasswordReset', () => {
+    it("n'appelle pas WhatsApp si le compte n'existe pas (anti-énumération)", async () => {
+      usersService.findByPhone.mockResolvedValue(null);
+      await expect(
+        service.requestPasswordReset('+22890000001'),
+      ).resolves.toEqual({ sent: true });
+      expect(whatsappOtp.request).not.toHaveBeenCalled();
+    });
+
+    it("n'appelle pas WhatsApp si le compte n'est pas ADMIN (anti-énumération)", async () => {
+      usersService.findByPhone.mockResolvedValue({
+        id: 'u',
+        role: UserRole.CLIENT,
+      });
+      await expect(
+        service.requestPasswordReset('+22890000001'),
+      ).resolves.toEqual({ sent: true });
+      expect(whatsappOtp.request).not.toHaveBeenCalled();
+    });
+
+    it('appelle WhatsApp uniquement pour un compte ADMIN existant', async () => {
+      usersService.findByPhone.mockResolvedValue({
+        id: 'admin-1',
+        role: UserRole.ADMIN,
+      });
+      await expect(
+        service.requestPasswordReset('+22890000009'),
+      ).resolves.toEqual({ sent: true });
+      expect(whatsappOtp.request).toHaveBeenCalledWith('+22890000009');
+    });
+  });
+
+  describe('resetPasswordWithOtp', () => {
+    it("refuse si le compte n'existe pas, avec le même message qu'un code invalide", async () => {
+      usersService.findByPhone.mockResolvedValue(null);
+      await expect(
+        service.resetPasswordWithOtp('+228', '123456', 'new-password'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(whatsappOtp.verify).not.toHaveBeenCalled();
+      expect(usersService.updatePassword).not.toHaveBeenCalled();
+    });
+
+    it("refuse si le compte n'est pas ADMIN (anti-énumération)", async () => {
+      usersService.findByPhone.mockResolvedValue({
+        id: 'u',
+        role: UserRole.CLIENT,
+      });
+      await expect(
+        service.resetPasswordWithOtp('+228', '123456', 'new-password'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(whatsappOtp.verify).not.toHaveBeenCalled();
+    });
+
+    it('propage le rejet de whatsappOtp.verify (code invalide/expiré)', async () => {
+      usersService.findByPhone.mockResolvedValue({
+        id: 'admin-1',
+        role: UserRole.ADMIN,
+      });
+      whatsappOtp.verify.mockRejectedValue(
+        new UnauthorizedException('Code invalide ou expiré'),
+      );
+      await expect(
+        service.resetPasswordWithOtp('+228', '000000', 'new-password'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(usersService.updatePassword).not.toHaveBeenCalled();
+    });
+
+    it('hash et enregistre le nouveau mot de passe si le code est valide', async () => {
+      usersService.findByPhone.mockResolvedValue({
+        id: 'admin-1',
+        role: UserRole.ADMIN,
+      });
+      whatsappOtp.verify.mockResolvedValue({ verificationToken: 'proof.jwt' });
+      (bcrypt.genSalt as jest.Mock).mockResolvedValue('salt');
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+
+      await expect(
+        service.resetPasswordWithOtp('+228', '123456', 'new-password'),
+      ).resolves.toEqual({ ok: true });
+      expect(whatsappOtp.verify).toHaveBeenCalledWith('+228', '123456');
+      expect(usersService.updatePassword).toHaveBeenCalledWith(
+        'admin-1',
         'new-hash',
       );
     });
