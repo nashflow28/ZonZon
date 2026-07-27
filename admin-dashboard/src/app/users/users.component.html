@@ -153,42 +153,75 @@
                   <span class="text-xs text-slate-600 italic">Compte courant</span>
                 </ng-container>
                 <ng-template #actionButtons>
-                  <!-- Panneau motif de suspension -->
-                  <div *ngIf="suspendingId() === u.id; else defaultActions" class="space-y-2 max-w-xs">
-                    <textarea
-                      [ngModel]="suspensionReason()"
-                      (ngModelChange)="suspensionReason.set($event)"
-                      placeholder="Motif de suspension (optionnel)…"
-                      maxlength="255"
-                      rows="2"
-                      class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-500"></textarea>
+                  <!-- Panneau réinitialisation de mot de passe (ADMIN uniquement) -->
+                  <div *ngIf="resettingId() === u.id; else suspendOrDefault" class="space-y-2 max-w-xs">
+                    <input type="password"
+                           [ngModel]="resetPasswordValue()"
+                           (ngModelChange)="resetPasswordValue.set($event)"
+                           placeholder="Nouveau mot de passe (8 car. min)"
+                           class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <p *ngIf="resetError()" class="text-xs text-red-400">{{ resetError() }}</p>
                     <div class="grid grid-cols-2 gap-2">
-                      <button type="button" (click)="closeSuspend()"
+                      <button type="button" (click)="closeReset()"
                               [disabled]="isBusy(u.id)"
                               class="bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/50 text-slate-200 px-2 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50">
                         Annuler
                       </button>
-                      <button type="button" (click)="confirmSuspend(u)"
+                      <button type="button" (click)="confirmReset(u)"
                               [disabled]="isBusy(u.id)"
-                              class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-2 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
-                        <lucide-icon name="user-x" class="w-3.5 h-3.5"></lucide-icon>
+                              class="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-200 px-2 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
+                        <lucide-icon name="key-round" class="w-3.5 h-3.5"></lucide-icon>
                         Confirmer
                       </button>
                     </div>
                   </div>
-                  <ng-template #defaultActions>
-                    <button *ngIf="!isSuspended(u)" type="button" (click)="openSuspend(u)"
-                            [disabled]="isBusy(u.id)"
-                            class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
-                      <lucide-icon name="user-x" class="w-3.5 h-3.5"></lucide-icon>
-                      Suspendre
-                    </button>
-                    <button *ngIf="isSuspended(u)" type="button" (click)="reactivate(u)"
-                            [disabled]="isBusy(u.id)"
-                            class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
-                      <lucide-icon name="user-check" class="w-3.5 h-3.5"></lucide-icon>
-                      Réactiver
-                    </button>
+
+                  <ng-template #suspendOrDefault>
+                    <!-- Panneau motif de suspension -->
+                    <div *ngIf="suspendingId() === u.id; else defaultActions" class="space-y-2 max-w-xs">
+                      <textarea
+                        [ngModel]="suspensionReason()"
+                        (ngModelChange)="suspensionReason.set($event)"
+                        placeholder="Motif de suspension (optionnel)…"
+                        maxlength="255"
+                        rows="2"
+                        class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-red-500"></textarea>
+                      <div class="grid grid-cols-2 gap-2">
+                        <button type="button" (click)="closeSuspend()"
+                                [disabled]="isBusy(u.id)"
+                                class="bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/50 text-slate-200 px-2 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-50">
+                          Annuler
+                        </button>
+                        <button type="button" (click)="confirmSuspend(u)"
+                                [disabled]="isBusy(u.id)"
+                                class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-2 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
+                          <lucide-icon name="user-x" class="w-3.5 h-3.5"></lucide-icon>
+                          Confirmer
+                        </button>
+                      </div>
+                    </div>
+                    <ng-template #defaultActions>
+                      <div class="flex flex-col gap-1.5">
+                        <button *ngIf="!isSuspended(u)" type="button" (click)="openSuspend(u)"
+                                [disabled]="isBusy(u.id)"
+                                class="bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-red-200 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
+                          <lucide-icon name="user-x" class="w-3.5 h-3.5"></lucide-icon>
+                          Suspendre
+                        </button>
+                        <button *ngIf="isSuspended(u)" type="button" (click)="reactivate(u)"
+                                [disabled]="isBusy(u.id)"
+                                class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
+                          <lucide-icon name="user-check" class="w-3.5 h-3.5"></lucide-icon>
+                          Réactiver
+                        </button>
+                        <button *ngIf="u.role === 'ADMIN'" type="button" (click)="openReset(u)"
+                                [disabled]="isBusy(u.id)"
+                                class="bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-200 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition disabled:opacity-50">
+                          <lucide-icon name="key-round" class="w-3.5 h-3.5"></lucide-icon>
+                          Réinitialiser le mot de passe
+                        </button>
+                      </div>
+                    </ng-template>
                   </ng-template>
                 </ng-template>
               </td>

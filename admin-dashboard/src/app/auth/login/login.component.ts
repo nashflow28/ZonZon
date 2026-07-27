@@ -1,14 +1,14 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth.service';
 import { PhoneInputComponent } from '../../shared/phone-input/phone-input.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, PhoneInputComponent],
+  imports: [CommonModule, ReactiveFormsModule, RouterLink, PhoneInputComponent],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css'
 })

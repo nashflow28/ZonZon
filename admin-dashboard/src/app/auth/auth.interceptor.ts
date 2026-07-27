@@ -13,7 +13,12 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
 
   return next(authReq).pipe(
     catchError((err) => {
-      if (err?.status === 401) {
+      // Ne déclencher la déconnexion que si la requête portait un token :
+      // un 401 sur un appel non authentifié (login, mot de passe oublié) est
+      // un échec applicatif normal, pas une session expirée. Sans ce garde,
+      // un code de reset invalide sur /auth/forgot-password/reset renvoyait
+      // vers /login avant même que le message d'erreur soit visible.
+      if (err?.status === 401 && token) {
         authService.logout();
       }
       return throwError(() => err);

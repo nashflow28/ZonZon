@@ -80,4 +80,10 @@ export class UsersService {
   reactivateUser(id: string): Observable<User> {
     return this.http.patch<User>(`${this.baseUrl}/${id}/reactivate`, {});
   }
+
+  /// Réinitialise le mot de passe d'un autre compte ADMIN (filet de sécurité,
+  /// utilisable dès aujourd'hui sans dépendre du canal WhatsApp).
+  resetAdminPassword(id: string, newPassword: string): Observable<{ ok: boolean }> {
+    return this.http.patch<{ ok: boolean }>(`${this.baseUrl}/${id}/reset-password`, { newPassword });
+  }
 }

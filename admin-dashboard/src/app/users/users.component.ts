@@ -39,6 +39,13 @@ export class UsersComponent implements OnInit, OnDestroy {
   readonly suspendingId = signal<string | null>(null);
   readonly suspensionReason = signal<string>('');
 
+  /// Utilisateur ADMIN dont le panneau "réinitialiser le mot de passe" est
+  /// ouvert (null = aucun). Filet de sécurité utilisable dès aujourd'hui,
+  /// indépendant du reset self-service par WhatsApp OTP (encore inactif).
+  readonly resettingId = signal<string | null>(null);
+  readonly resetPasswordValue = signal<string>('');
+  readonly resetError = signal<string | null>(null);
+
   /// Cache des stats étendues par userId (chargées à la volée pour les livreurs).
   /// Pour les autres rôles on ne stocke que rating average/count via le même format.
   readonly extendedStats = signal<Record<string, UserExtendedStats>>({});
@@ -340,6 +347,46 @@ export class UsersComponent implements OnInit, OnDestroy {
         console.error('Erreur réactivation utilisateur', err);
         this.setBusy(u.id, false);
         alert("Impossible de réactiver ce compte. Réessayez.");
+      }
+    });
+  }
+
+  openReset(u: User): void {
+    this.resettingId.set(u.id);
+    this.resetPasswordValue.set('');
+    this.resetError.set(null);
+  }
+
+  closeReset(): void {
+    this.resettingId.set(null);
+    this.resetPasswordValue.set('');
+    this.resetError.set(null);
+  }
+
+  confirmReset(u: User): void {
+    if (this.isBusy(u.id)) return;
+    const newPassword = this.resetPasswordValue().trim();
+    if (newPassword.length < 8) {
+      this.resetError.set('8 caractères minimum.');
+      return;
+    }
+    if (!confirm(`Réinitialiser le mot de passe de ${u.firstName} ${u.lastName} ?`)) return;
+
+    this.setBusy(u.id, true);
+    this.resetError.set(null);
+    this.usersService.resetAdminPassword(u.id, newPassword).subscribe({
+      next: () => {
+        this.setBusy(u.id, false);
+        this.closeReset();
+        alert(`Mot de passe réinitialisé pour ${u.firstName} ${u.lastName}. Communiquez-le-lui directement.`);
+      },
+      error: (err) => {
+        console.error('Erreur réinitialisation mot de passe', err);
+        this.setBusy(u.id, false);
+        const msg = err?.error?.message;
+        this.resetError.set(
+          typeof msg === 'string' ? msg : 'Impossible de réinitialiser ce mot de passe.'
+        );
       }
     });
   }

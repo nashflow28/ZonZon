@@ -43,7 +43,8 @@ import {
   UserPlus,
   Navigation,
   Loader,
-  Flag
+  Flag,
+  KeyRound
 } from 'lucide-angular';
 
 export const appIcons = {
@@ -88,7 +89,8 @@ export const appIcons = {
   UserPlus,
   Navigation,
   Loader,
-  Flag
+  Flag,
+  KeyRound
 };
 
 export const provideLucideIcons = (): Provider => ({

@@ -41,6 +41,25 @@ export class AuthService {
       );
   }
 
+  /**
+   * Reset de mot de passe self-service (ADMIN uniquement, via WhatsApp OTP).
+   * Réponse `{ sent: true }` que le compte existe ou non — anti-énumération,
+   * cf. `AuthService.requestPasswordReset` côté backend.
+   */
+  requestPasswordReset(phone: string): Observable<{ sent: boolean }> {
+    return this.http.post<{ sent: boolean }>(
+      `${environment.apiUrl}${environment.apiPrefix}/auth/forgot-password/request`,
+      { phone }
+    );
+  }
+
+  resetPassword(phone: string, code: string, newPassword: string): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(
+      `${environment.apiUrl}${environment.apiPrefix}/auth/forgot-password/reset`,
+      { phone, code, newPassword }
+    );
+  }
+
   logout(): void {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
