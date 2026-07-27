@@ -463,7 +463,7 @@
   - Dropdown avec recherche par nom/code, drapeau emoji + code, ~22 pays (12 africains prioritaires + diaspora). Soft warning visuel si longueur hors min/max du pays sélectionné. Default `+228` (Togo).
   - **Intégré dans** : `auth/login/login.component.html` (champ téléphone admin). Les composants `users` et `shops` n'ont pas de formulaire de création/édition de téléphone côté admin → pas d'autres intégrations possibles aujourd'hui. À réutiliser dès qu'un formulaire d'édition de profil/boutique est ajouté.
   - Build prod OK. Pas de tests dédiés (sortie de scope, voir 🟡 ADMIN tests).
-- [x] **Réinitialisation de mot de passe admin** *(2026-07-27, session 91)* — deux canaux : OTP WhatsApp self-service (`/forgot-password`, dormant tant que WhatsApp n'est pas actif) + filet de secours admin-à-admin (`PATCH /users/:id/reset-password`, bouton sur `/users` pour les comptes ADMIN). Détail complet : voir PROGRESS.md session 91. Committé + poussé (`f53b3d6`, `84f958d`), **pas encore déployé en prod** (à confirmer).
+- [x] **Réinitialisation de mot de passe admin** *(2026-07-27, session 91)* — deux canaux : OTP WhatsApp self-service (`/forgot-password`, dormant tant que WhatsApp n'est pas actif) + filet de secours admin-à-admin (`PATCH /users/:id/reset-password`, bouton sur `/users` pour les comptes ADMIN). Détail complet : voir PROGRESS.md session 91. **Déployé en production** (backend OVH + admin Cloudflare Pages), routes vérifiées en conditions réelles.
 
 ---
 

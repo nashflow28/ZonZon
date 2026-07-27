@@ -1865,7 +1865,19 @@ test (hors périmètre demandé) ou de toucher le vrai compte admin (Malik ATCHA
 délibérément évité. La couverture unitaire (hash bcrypt vérifié, garde auto-cible, garde non-admin,
 audit log) est jugée suffisante pour ce chemin.
 
-**Non déployé** à la fin de cette session : code committé + poussé sur `origin/main`
-(`f53b3d6` backend, `84f958d` frontend), mais ni le backend OVH ni l'admin Cloudflare Pages n'ont
-été redéployés — décision de déploiement à confirmer avec le PO avant d'agir (action difficile à
-annuler sur l'infra de production).
+**Déployé en production** (confirmation PO obtenue avant d'agir) :
+- Tag de rollback créé avant tout changement : `zonzon-backend:rollback-20260727`.
+- Backend OVH : transfert `tar | ssh` + `docker compose up -d --build` sur `zonzon-backend-ovh`.
+  Vérifié : `GET /` → 200, `GET /v1/shops/categories` → 200, `GET /v1/orders` sans auth → 401
+  (aucune régression). Nouvelles routes testées en conditions réelles avec des données sûres
+  (comptes de test non-admin, jamais le vrai compte de Malik ATCHA) :
+  - `POST /auth/forgot-password/request` avec le téléphone CLIENT de test → `{"sent":true}` (201,
+    anti-énumération correcte).
+  - `POST /auth/forgot-password/reset` avec un code volontairement invalide → 401 « Code invalide
+    ou expiré ».
+  - `PATCH /users/:id/reset-password` avec le JWT du compte CLIENT de test → 403 « Accès réservé :
+    rôle insuffisant » (RolesGuard confirmé opérationnel sur la nouvelle route).
+- Admin Cloudflare Pages : `wrangler pages deploy`, déploiement `23cb3656.zonzon-admin.pages.dev`
+  promu sur `https://zonzon-admin.pages.dev`. Vérifié : `/` et `/forgot-password` → 200, rendu de
+  la page confirmé visuellement (aucune erreur console).
+- Rollback backend si besoin : `sudo docker tag zonzon-backend:rollback-20260727 zonzon-backend:working && sudo docker compose up -d --no-build`.
