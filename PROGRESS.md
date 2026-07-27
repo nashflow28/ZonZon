@@ -1941,7 +1941,25 @@ session 91 ne s'affiche que sur les lignes ADMIN et refuse l'auto-ciblage, donc 
 secours ne protège personne tant qu'un second admin n'existe pas**.
 
 **Tests** : backend 417 unitaires + 83 e2e, `nest build` OK, `flutter analyze` sans avertissement,
-`flutter test` 57/57, build PWA OK. **Rien n'est déployé** — les 4 lots sont committés et poussés.
+`flutter test` 57/57, build PWA OK.
+
+**Déployé en production le 2026-07-27** :
+- Point de retour créé avant bascule : `zonzon-backend:rollback-s91` (image de la session 91).
+  Rollback : `sudo docker tag zonzon-backend:rollback-s91 zonzon-backend:working && sudo docker compose up -d --no-build`.
+- **Backend OVH** : `GET /` 200, `/v1/shops/categories` 200, `/v1/orders` sans auth 401 (aucune
+  régression). `DELETE /users/me` vérifié en conditions réelles avec le compte CLIENT de test :
+  401 sans token, **403 « Mot de passe incorrect »** avec un mauvais mot de passe, et le compte
+  reste connectable après la tentative. Le chemin destructif n'a **pas** été exercé en production
+  (il détruirait un compte de test) — il est couvert par les 83 e2e.
+- `scripts/create-admin.js` confirmé présent et valide dans l'image en service.
+- **PWA Cloudflare** : déploiement `87dabbe1.zonzon-pwa.pages.dev` promu sur
+  `https://zonzon-pwa.pages.dev` — `/`, `manifest.webmanifest` et `ngsw.json` en 200.
+- **APK release** régénéré (61,6 Mo). Signature vérifiée à l'`apksigner` :
+  `CN=ZonZon, OU=Mobile, O=Kore Innovation` (et non `CN=Android Debug`), empreinte SHA-256
+  `a5e21f7e…a6a5` identique à celle du keystore — le durcissement de la signature fonctionne
+  réellement de bout en bout.
+- **Admin dashboard non redéployé** : aucun changement le concernant cette session (le dernier
+  déploiement, session 91, est toujours à jour).
 
 **Dette identifiée, non traitée (à arbitrer)** :
 - `delivery_orders.clientPhone` / `clientName` ne sont pas anonymisés : ces colonnes dénormalisées
