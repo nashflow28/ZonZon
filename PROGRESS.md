@@ -1564,3 +1564,49 @@ Vérifié dans le binaire AOT (`lib/arm64-v8a/libapp.so`) : **7 occurrences de `
 **Documentation corrigée** : `CLAUDE.md` documentait `flyctl deploy` comme procédure de
 déploiement du backend, ce qui ne met pas à jour la production OVH. URLs, procédures backend
 OVH / admin / PWA, commandes de logs et points critiques mis à jour.
+
+### Session 85 (2026-07-27) — APK installé et correctif Firebase/FCM
+
+**APK installé** sur le Samsung `R5CW92DM43V` (SM-S918B) avec `adb install -r` (données
+conservées). L'appareil était initialement en `unauthorized` : après acceptation de l'invite de
+débogage USB, un `adb kill-server && adb start-server` a été nécessaire pour que le daemon
+prenne l'autorisation en compte.
+
+**Découverte majeure — FCM n'a jamais fonctionné.** Les logs de premier lancement ont révélé :
+```
+I/flutter: Firebase init skipped: PlatformException(Failed to load FirebaseOptions
+           from resource. Check that you have defined values.xml correctly.)
+```
+Cause : le plugin Gradle **`com.google.gms.google-services` n'était déclaré nulle part** dans
+`android/`. Sans lui, `android/app/google-services.json` n'est jamais traité au build, les
+ressources Firebase ne sont pas générées, et `Firebase.initializeApp()` échoue.
+
+Le fichier `google-services.json` était pourtant correct depuis le début (`project_id`
+`zonzon-4eb31`, `package_name` aligné sur l'applicationId). **Seul le plugin manquait** — ce qui
+explique le symptôme « notifications push jamais activées » signalé de longue date. Aucun APK
+n'avait FCM, y compris ceux de la CI, qui décode pourtant `GOOGLE_SERVICES_JSON` depuis les
+secrets mais sans plugin pour l'exploiter.
+
+À noter : **la revue multi-agents est passée à côté** — les agents ont analysé le code Dart, le
+`AndroidManifest.xml` et le service FCM (tous corrects) mais aucun n'a inspecté la chaîne de
+build Gradle.
+
+**Correctif** (commit `18156d6`) — deux lignes :
+- `android/settings.gradle.kts` : `id("com.google.gms.google-services") version "4.4.2" apply false`
+- `android/app/build.gradle.kts` : `id("com.google.gms.google-services")`
+
+**Vérifié sur appareil réel** : `I/FirebaseInitProvider: FirebaseApp initialization successful`,
+5 clés générées dans `build/app/generated/res/processReleaseGoogleServices/values/values.xml`
+(`google_app_id`, `google_api_key`, `google_crash_reporting_api_key`, `google_storage_bucket`,
+`project_id`), 0 exception fatale. Les APK de la CI en bénéficient aussi (fichiers versionnés).
+
+**APK final** : 58,7 Mo, SHA-256
+`89d3c54112865ff0fc9732f9339269f4147b4775fa28137eb185c8da8386c89e`.
+
+⚠️ **Toujours en attente avant distribution élargie** : l'APK reste signé avec la clé de debug et
+porte l'applicationId `com.example.mobile_app` (cf. session 84).
+
+**Méthode de vérification — leçon** : un premier test cherchant les chaînes Firebase dans
+`resources.arsc` via `strings` a conclu à tort que le correctif était inopérant. Les ressources
+Android compilées n'y sont pas stockées en clair. La vérification fiable est le fichier généré
+par `processReleaseGoogleServices` **et** le log d'initialisation sur l'appareil.
