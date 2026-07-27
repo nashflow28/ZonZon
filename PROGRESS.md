@@ -1791,3 +1791,34 @@ messageId: projects/zonzon-4eb31/messages/0:1785166505475913%1c044b201c044b20
 `com.zonzon.app` signée release (SHA-256 `dd33c0cfcf8202dd059ee509e8a83fc97eaaa1051284bc94a883a5ab40eae670`)
 est donc confirmée pleinement fonctionnelle pour les notifications push, au-delà du seul test
 d'initialisation de la session 87.
+
+### Session 90 (2026-07-27) — Audit "mot de passe oublié" + 3 comptes de test
+
+**Audit "mot de passe oublié" (réponse au PO)** : la fonctionnalité **n'existe pour aucun rôle**
+(client, livreur, commerçant, admin). Seul `PATCH /auth/password` existe — il exige d'être déjà
+connecté et de connaître l'ancien mot de passe (`changePassword`). Aucun endpoint public de type
+`forgot-password`/`reset-password`, aucune entité de token de reset, aucun canal d'envoi (email
+— le modèle `User` n'a d'ailleurs aucun champ email, l'authentification est 100% par téléphone —,
+SMS ou WhatsApp) dédié à ce flux. Aucune UI (mobile, PWA, admin) ne propose ce parcours.
+
+**3 comptes de test créés en production**, via `POST /auth/register` (endpoint public) sur
+`https://api.kore-innov.com`, mot de passe `Mot2passe` pour les trois :
+
+| Rôle | Téléphone | Identité | État |
+|---|---|---|---|
+| CLIENT | `+22890000101` | Test Client | ACTIVE (aucune validation requise pour ce rôle) |
+| LIVREUR | `+22890000102` | Test Livreur | ACTIVE, **driverApprovalStatus=APPROVED**, isAvailable=true |
+| COMMERCANT | `+22890000103` | Test Commerçant | ACTIVE (aucune validation requise pour ce rôle) |
+
+Le compte livreur a nécessité une intervention manuelle en base après l'inscription : le workflow
+`setDriverApproval()` exige une photo de profil non vide (`ensureDriverHasOperationalProfile`)
+avant d'autoriser `APPROVED`, ce qui bloque un compte de test sans vraie photo. Corrigé par mise à
+jour directe (`profilePhotoUrl = 'test-placeholder-no-real-photo.jpg'`, valeur volontairement
+explicite pour signaler qu'elle est synthétique), puis `driverApprovalStatus = 'APPROVED'` et
+`isAvailable = 1`. **Aucune entrée `admin_audit_logs` n'a été créée** pour cette approbation :
+elle n'est pas passée par un vrai admin, fabriquer une entrée d'audit aurait été trompeur.
+
+**Vérifié fonctionnellement**, pas seulement en base : `POST /auth/login` avec `+22890000102` /
+`Mot2passe` réussit, et `GET /orders/available` avec le token obtenu répond **200** (un livreur
+non validé recevrait 403) — le compte livreur est donc réellement opérationnel, pas seulement
+correct sur le papier.
