@@ -34,6 +34,26 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 -d > android/app/google-services.json
 
+      # Signature de release. Sans ces secrets, le build retombe sur la clé de
+      # debug (avec avertissement) et produit un APK NON distribuable : le Play
+      # Store le refuse, et il ne pourra jamais être mis à jour par un APK signé
+      # en release.
+      # Secrets à définir dans le dépôt :
+      #   ANDROID_KEYSTORE_BASE64  : base64 -w0 zonzon-release.jks
+      #   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
+      - name: Decode release keystore
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && env.KEYSTORE_B64 != ''
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          cat > android/key.properties <<EOF
+          storeFile=$RUNNER_TEMP/release.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
       - name: Build APK (release)
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         # Pas de --dart-define=API_URL : la valeur par défaut de
