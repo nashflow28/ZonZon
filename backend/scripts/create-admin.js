@@ -28,6 +28,24 @@ const readline = require('readline');
 
 const PHONE_REGEX = /^\+?[0-9]{8,15}$/; // même règle que RegisterDto
 const MIN_PASSWORD_LENGTH = 8;
+const INDICATIF_TOGO = '228';
+
+/** Passe un numéro togolais local (8 chiffres) au format international. */
+function toInternational(input) {
+  const digits = input.replace(/[^0-9]/g, '');
+  if (digits.startsWith(INDICATIF_TOGO) && digits.length > 8) return `+${digits}`;
+  if (digits.length === 8) return `+${INDICATIF_TOGO}${digits}`;
+  return input.startsWith('+') ? input : `+${digits}`;
+}
+
+/**
+ * Même normalisation que `UsersService.findByPhone` : c'est elle qui décide
+ * si deux lignes désignent le même numéro réel. Comparer `phone = ?` à
+ * l'identique laisse passer un doublon `90828624` / `+22890828624`, et les
+ * deux comptes deviennent alors indiscernables à la connexion.
+ */
+const SQL_NORMALISE =
+  "REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '.', '')";
 
 // Une SEULE interface réutilisée pour toutes les questions : en créer une par
 // question et la fermer consomme stdin et fait échouer silencieusement les
@@ -106,6 +124,15 @@ function askHidden(question) {
     );
     process.exit(1);
   }
+
+  // Normalisation en format international. INDISPENSABLE : stocker un numéro
+  // local (ex. `90828624`) crée un compte que la page de connexion ne retrouve
+  // JAMAIS — elle envoie `+228…`, et `UsersService.findByPhone` ne sait
+  // remonter que du local vers l'international, pas l'inverse.
+  const phoneNormalise = toInternational(phone);
+  if (phoneNormalise !== phone) {
+    console.log(`\nNuméro enregistré au format international : ${phoneNormalise}`);
+  }
   if (password.length < MIN_PASSWORD_LENGTH) {
     console.error(
       `\n✗ Le mot de passe doit contenir au moins ${MIN_PASSWORD_LENGTH} caractères.`,
@@ -128,16 +155,26 @@ function askHidden(question) {
   });
 
   try {
-    // `phone` porte une contrainte UNIQUE : on inclut les comptes soft-deleted,
-    // sinon l'INSERT échouerait avec une erreur SQL peu lisible.
+    // Détection de doublon sur le NUMÉRO RÉEL, pas sur la chaîne exacte : les
+    // comptes soft-deleted sont inclus (contrainte UNIQUE sur `phone`), et un
+    // compte existant sous l'autre format doit bloquer la création.
+    const digits = phoneNormalise.replace(/[^0-9]/g, '');
+    const suffixe = digits.slice(-8); // partie significative d'un numéro togolais
     const [existing] = await conn.execute(
-      'SELECT id, role, deletedAt FROM users WHERE phone = ?',
-      [phone],
+      `SELECT id, role, phone, deletedAt FROM users
+        WHERE ${SQL_NORMALISE} = ? OR ${SQL_NORMALISE} LIKE ?`,
+      [digits, `%${suffixe}`],
     );
     if (existing.length > 0) {
-      const u = existing[0];
+      console.error('\n✗ Ce numéro correspond déjà à un ou plusieurs comptes :');
+      for (const u of existing) {
+        console.error(
+          `    ${u.phone}  rôle ${u.role}${u.deletedAt ? '  (compte supprimé)' : ''}`,
+        );
+      }
       console.error(
-        `\n✗ Ce numéro est déjà utilisé (rôle ${u.role}${u.deletedAt ? ', compte supprimé' : ''}). Choisissez-en un autre.`,
+        "\n  Créer un second compte sur le même numéro réel le rendrait inutilisable :\n" +
+          '  la connexion ne peut en retrouver qu\'un seul. Utilisez un autre numéro.',
       );
       process.exit(1);
     }
@@ -150,14 +187,16 @@ function askHidden(question) {
          (id, role, firstName, lastName, phone, password,
           isAvailable, isPublic, status, createdAt, updatedAt)
        VALUES (?, 'ADMIN', ?, ?, ?, ?, 0, 1, 'ACTIVE', NOW(), NOW())`,
-      [id, firstName, lastName, phone, hash],
+      [id, firstName, lastName, phoneNormalise, hash],
     );
 
     const [admins] = await conn.execute(
       "SELECT COUNT(*) AS n FROM users WHERE role = 'ADMIN' AND deletedAt IS NULL",
     );
 
-    console.log(`\n✓ Compte ADMIN créé : ${firstName} ${lastName} (${phone})`);
+    console.log(
+      `\n✓ Compte ADMIN créé : ${firstName} ${lastName} (${phoneNormalise})`,
+    );
     console.log(`  id : ${id}`);
     console.log(`  Nombre total d'admins actifs : ${admins[0].n}`);
     console.log('\nConnexion : https://zonzon-admin.pages.dev\n');
