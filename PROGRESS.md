@@ -2072,10 +2072,29 @@ dormant depuis sa livraison, est désormais **réellement utilisable** sur
 paiement est en place, et `WHATSAPP_OTP_RESEND_SECONDS=60` + la limite de 5 tentatives dans
 `WhatsappOtpService` bornent l'exposition.
 
-⚠️ **Incident de sécurité de cette session** : une lecture trop large du `.env` de production a
-affiché la **clé privée Firebase Admin** et le **DSN Sentry** en clair dans la conversation. La clé
-doit être révoquée et régénérée (Console Firebase → Paramètres du projet → Comptes de service),
-puis `FIREBASE_CREDENTIALS_JSON` mis à jour sur le VPS.
+⚠️ **Incident de sécurité de cette session — RÉSOLU le 2026-07-30.** Une lecture trop large du
+`.env` de production a affiché la **clé privée Firebase Admin** et le **DSN Sentry** en clair
+dans la conversation. Une seconde clé a ensuite été exposée de la même façon, en joignant le
+fichier JSON téléchargé à la conversation (le mécanisme de pièce jointe en affiche le contenu
+intégral). **Le point faible était le transport du secret, jamais sa génération.**
+
+Résolution : une 3ᵉ clé (`6e6ecdb34d3c3d45fea754c47ad0ab2f138625a2`) a été injectée via
+`backend/scripts/set-firebase-credentials.js` — le JSON est lu sur l'entrée standard depuis le
+poste local et passe directement dans le tunnel SSH, sans jamais transiter par un terminal
+partagé ni une conversation. Les deux clés compromises
+(`75db7e2a85077509a47d5a92df4799404c7ef9b7` et `42c7d545a8db3955971dec59d17e03c980cc38fc`) ont
+été supprimées dans Google Cloud.
+
+**Vérifié après révocation** : `credential.getAccessToken()` via l'API modulaire
+`firebase-admin/app` — la même que `notifications.service.ts` — obtient bien un jeton Google
+(expiration 3599 s). API en 200, aucun warning ni erreur dans les logs.
+
+📌 **Règle à appliquer désormais pour tout secret** : ne jamais coller ni joindre un fichier de
+clé dans une conversation, et ne jamais afficher une plage de lignes du `.env` sans filtrer —
+c'est ce qui a déclenché la première fuite. Utiliser `set-firebase-credentials.js` comme modèle
+de transport (lecture sur stdin, validation, écriture sur une seule ligne, aucune valeur
+affichée). Le `DSN Sentry` exposé n'a pas été régénéré : il permet d'envoyer des événements
+au projet, pas d'en lire — risque jugé acceptable, à arbitrer.
 
 ### Session 94 (2026-07-29) — Exploration de la nouvelle identité visuelle
 
