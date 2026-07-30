@@ -35,6 +35,14 @@
   height: 40px;
   width: auto;
   margin-bottom: 4px;
+  /*
+   * `.auth-header` est un flex en COLONNE : sans cette ligne, l'alignement
+   * par defaut (align-items: stretch) etire l'image sur toute la largeur du
+   * conteneur et ecrase le `width: auto`, deformant le logo (mesure : 400x40
+   * pour un ratio natif de 729x440). La regle n.1 du kit interdit tout
+   * etirement.
+   */
+  align-self: flex-start;
 }
 
 .auth-header .brand {
