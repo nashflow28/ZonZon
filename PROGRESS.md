@@ -2107,3 +2107,69 @@ au projet, pas d'en lire — risque jugé acceptable, à arbitrer.
 - Aucun asset de production n'a été remplacé. Étape suivante : choisir une direction, la simplifier
   en vectoriel déterministe, puis tester la lisibilité en 24 px, monochrome, fond sombre et supports
   physiques avant intégration Android/iOS/PWA.
+
+### Session 95 (2026-07-30) — Kit complet du logo retenu
+
+- Le PO retient la piste `double-Z mouvement` (deux boucles/Z, flèche jaune et mot-symbole
+  `ZonZon`).
+- Kit V1 créé dans `brand/zonzon-logo-kit/`, sans remplacement des icônes actuellement intégrées :
+  original conservé, masters PNG transparents, compositions verticale/horizontale, symbole seul,
+  mot-symbole, variantes couleur/blanche/bleu nuit et fonds prêts à l'emploi.
+- Déclinaisons fournies : PNG multi-tailles, WebP sans perte, SVG vectoriels plats, PDF/EPS
+  vectoriels, TIFF CMJN 300 dpi, favicon ICO, icônes Android par densité, adaptive foreground,
+  iOS/App Store, PWA/maskable/Apple Touch, profils et bannières sociales, email, présentations et
+  documents.
+- Le source choisi étant raster avec dégradés, deux masters complémentaires sont documentés :
+  raster fidèle pour le numérique et vectoriel propre à trois couleurs pour l'impression,
+  la broderie, la sérigraphie et la découpe.
+- Livrables annexes : `README.md`, guide PDF, planche d'aperçu, fichiers de couleurs CSS/JSON,
+  script reproductible et `manifest.json` avec empreintes SHA-256.
+- Contrôle automatisé : **136 fichiers**, **115 images**, transparence présente sur 95 PNG,
+  ouverture vérifiée pour les PNG/JPG/WebP/ICO/TIFF/SVG/PDF/EPS, **0 erreur**. Contrôles visuels
+  effectués sur fond clair, fond sombre, icône App Store, avatar social et rendu du SVG.
+- Étape future distincte : remplacer effectivement les icônes/logos de Flutter, PWA, admin et
+  autres supports après validation finale du kit.
+
+### Session 95 (2026-07-30) — Intégration du kit de marque : icônes Android, PWA, favicons
+
+Premier volet d'intégration du kit produit en session 94 : uniquement le **remplacement mécanique
+d'actifs**, sans aucune décision de design. Aucune retouche des images du kit.
+
+**Android** — le kit fournissait exactement l'arborescence attendue (`mipmap-mdpi` → `xxxhdpi`,
+nom `ic_launcher.png`) et des dimensions **identiques** à l'existant (48→192 px) : remplacement
+fichier pour fichier. Surtout, le projet n'avait **aucune icône adaptative** ; ajouté :
+- `ic_launcher_foreground.png` aux 5 densités (108→432 px, conforme à la spec Android 108 dp) ;
+- `mipmap-anydpi-v26/ic_launcher.xml` (`<adaptive-icon>` fond + premier plan) ;
+- `values/ic_launcher_background.xml` = `#FFFFFF` (valeur imposée par
+  `05-apps/android/adaptive-background-color.txt`) et `values-night/` = `#0C1A22`.
+
+Vérifié dans l'APK, pas seulement dans les sources : `aapt2 dump badging` renvoie
+`application-icon-*: 'res/BW.xml'` à **toutes** les densités (le PNG ne sert plus que d'avant
+Android 8), et `aapt2 dump xmltree` confirme un `adaptive-icon` dont le fond et le premier plan
+sont résolus. Le PNG mipmap reste fourni pour les versions antérieures.
+
+**PWA** — 12 icônes remplacées. ⚠️ Le kit et le projet ont des conventions de nommage
+différentes : kit `icon-192.png` / `icon-maskable-192.png`, projet `icon-192x192.png` /
+`icon-192-maskable.png`. On a remplacé le **contenu** en conservant les noms du projet, car ils
+sont référencés par `manifest.webmanifest` ET par `pwa/src/app/shared/services/web-push.service.ts`
+(icône et badge des notifications) ET par l'`apple-touch-icon` de `index.html`. Renommer aurait
+cassé ces trois usages. Le service worker a réindexé les 14 entrées → les installations existantes
+recevront la mise à jour.
+
+**Favicons** — admin et PWA remplacés par celui du kit (identiques, md5 `d063e301`).
+
+**Couleurs** : rien à changer, `background_color`/`theme_color` du manifeste PWA valaient déjà
+`#0C1A22`, le bleu nuit du kit.
+
+**Builds validés** : APK release 58,9 Mo, `ng build --configuration production` PWA et admin.
+Sauvegarde des 19 icônes d'origine faite avant remplacement.
+
+**Non déployé.** Reste à arbitrer (cf. `TODO.md`) : versionner ou non `brand/` (20 Mo, non suivi
+par git aujourd'hui) ; le **logo de l'interface admin**, aujourd'hui un carré CSS dégradé
+bleu→émeraude avec la lettre « Z » — le remplacer par le vrai logo est un changement de design,
+pas une intégration d'actif ; les icônes iOS (renommage nécessaire, sans objet tant qu'iOS n'est
+pas distribué) ; un éventuel splash screen Flutter, aujourd'hui inexistant.
+
+📌 Note du README du kit à retenir : les **SVG/PDF/EPS sont des simplifications à trois couleurs
+plates**, les PNG/WebP conservent les dégradés. Pour l'écran, ce sont les **PNG/WebP qui font
+référence** — utiliser le SVG dans l'admin donnerait un rendu volontairement plus pauvre.
