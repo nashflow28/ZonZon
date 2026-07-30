@@ -2029,17 +2029,20 @@ le PO). `ENABLED` reste à false tant que le token n'est pas là : l'activer ava
 les envois en 503 au lieu de laisser la fonctionnalité proprement dormante. Aucun redémarrage
 du conteneur nécessaire d'ici là.
 
+**✅ Vérification d'entreprise APPROUVÉE (2026-07-30, en moins d'une journée).** C'était bien
+elle qui bloquait la création de templates — pas le moyen de paiement. Effets immédiats
+constatés : le quota de modèles est passé de « 1 sur 250 » à « 1 sur 6000 », et le template
+**`zonzon_verification_code` (Authentification / French / « Copier le code » / validité 10 min)
+a été créé et approuvé instantanément — statut « Actif – Qualité »**, sans même passer par
+« En attente ».
+
 **Reste à faire (dans l'ordre) :**
-1. ⏳ Attendre le verdict de la vérification d'entreprise (~2 jours ouvrés).
-2. Recréer le template `zonzon_verification_code` : Authentification / **French** / **« Copier le
-   code »** / validité 10 min. Tous les paramètres passent, seule la soumission finale est
-   refusée — il n'y a rien à redécouvrir, juste à rejouer. Si le refus persiste APRÈS la
-   vérification, ouvrir un ticket support Meta avec la trace `WBxP-865112808-1963134884`.
-3. Générer un token permanent (Business Settings → Utilisateurs système), permissions
+1. Générer un token permanent (Business Settings → Utilisateurs système), permissions
    `whatsapp_business_messaging` + `whatsapp_business_management` — le PO le colle lui-même dans
-   `WHATSAPP_ACCESS_TOKEN`, puis passe `WHATSAPP_OTP_ENABLED=true`.
-4. Redémarrer le conteneur (`sudo docker compose up -d` suffit, pas de rebuild) et tester
-   l'envoi réel via `POST /auth/forgot-password/request` avec le téléphone d'un admin.
+   `WHATSAPP_ACCESS_TOKEN` du `.env` hôte, puis passe `WHATSAPP_OTP_ENABLED=true`.
+2. Redémarrer le conteneur (`cd /opt/zonzon/backend && sudo docker compose up -d` suffit, pas de
+   rebuild) et tester l'envoi réel via `POST /auth/forgot-password/request` avec le téléphone
+   d'un admin.
 
 ⚠️ **Incident de sécurité de cette session** : une lecture trop large du `.env` de production a
 affiché la **clé privée Firebase Admin** et le **DSN Sentry** en clair dans la conversation. La clé
