@@ -1,0 +1,2 @@
+#FFFFFF
+Alternative sombre: #0C1A22

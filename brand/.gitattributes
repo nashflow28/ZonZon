@@ -1,0 +1,29 @@
+# Le kit de marque ne contient QUE des fichiers binaires ou à octets stables.
+# Sans ces règles, git applique la conversion de fins de ligne (autocrlf) aux
+# formats qu'il classe à tort comme texte — PDF, EPS et SVG notamment — ce qui
+# les corrompt silencieusement au prochain checkout sur une autre machine.
+#
+# `binary` = `-text -diff` : ni conversion de fins de ligne, ni tentative de
+# diff textuel.
+
+*.png   binary
+*.webp  binary
+*.ico   binary
+*.tif   binary
+*.tiff  binary
+*.pdf   binary
+*.eps   binary
+*.zip   binary
+
+# Le SVG est du XML : git le traite comme du texte et le convertirait en CRLF.
+# On fige les fins de ligne en LF pour que le fichier reste identique partout,
+# tout en gardant un diff lisible.
+*.svg   text eol=lf
+
+# Guide et métadonnées : texte normal, mais fins de ligne figées pour que le
+# manifeste SHA-256 du kit reste vérifiable quelle que soit la plateforme.
+*.md    text eol=lf
+*.json  text eol=lf
+*.css   text eol=lf
+*.txt   text eol=lf
+*.py    text eol=lf

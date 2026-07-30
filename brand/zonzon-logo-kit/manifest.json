@@ -1,0 +1,688 @@
+{
+  "brand": "ZonZon",
+  "version": "1.0",
+  "source": "zonzon-logo-selected-original.png",
+  "colors": {
+    "navy": "#0C1A22",
+    "blue": "#2E90FA",
+    "gold": "#F5B700",
+    "offWhite": "#F8FAFC"
+  },
+  "files": [
+    {
+      "path": "00-source/zonzon-logo-selected-original.png",
+      "bytes": 819729,
+      "sha256": "0516a59f2e7e2b76cb0ed7839cf531ff37ee7fd7ac69e25a2d595fba8ada4500"
+    },
+    {
+      "path": "00-source/zonzon-logo-selected-transparent.png",
+      "bytes": 243121,
+      "sha256": "3d729710f45b962c3bf75f6521c3e9108cd5391b1cc8a910e67d5a051aaa6954"
+    },
+    {
+      "path": "01-master/raster/zonzon-horizontal-color-transparent.png",
+      "bytes": 344751,
+      "sha256": "650c6f64bf45c9080ca61b4ae65a2525ab080969e0c513baa2bdabb7a7ae9dc4"
+    },
+    {
+      "path": "01-master/raster/zonzon-symbol-color-transparent.png",
+      "bytes": 145963,
+      "sha256": "6584e26c78315796727bb7a77e73f6d18afe19ff3e75867062b1b656648bf3cc"
+    },
+    {
+      "path": "01-master/raster/zonzon-vertical-color-transparent.png",
+      "bytes": 234979,
+      "sha256": "63dfa8e7ac3120f6d686b9eefff5945b5c09f662c4f3f2dd1b98899e48dca040"
+    },
+    {
+      "path": "01-master/raster/zonzon-wordmark-color-transparent.png",
+      "bytes": 85711,
+      "sha256": "a092f6afa062f4b86222dfcaecdf3c5f43be5fbb4db92fe04cd04e855578c3f6"
+    },
+    {
+      "path": "01-master/vector/zonzon-horizontal-color.svg",
+      "bytes": 4951,
+      "sha256": "f140e9beb7f47592554693271116c78c367ffd01777e5bc3b8da7795a50c823f"
+    },
+    {
+      "path": "01-master/vector/zonzon-horizontal-mono-navy.svg",
+      "bytes": 4732,
+      "sha256": "433c37a587e5931254225d73476fb92bf1d4bcd62857c08bd7077432e55f8301"
+    },
+    {
+      "path": "01-master/vector/zonzon-symbol-color.svg",
+      "bytes": 2948,
+      "sha256": "3eca9ed3a4ccc0e2a00c55fcc75fc4bd25e5abdec829caf84da7c93147e9fd43"
+    },
+    {
+      "path": "01-master/vector/zonzon-symbol-mono-navy.svg",
+      "bytes": 2729,
+      "sha256": "bd6a0f6fc820e20777e2f91628b1b2cbfec3fe8f96bf802063c51699b220c641"
+    },
+    {
+      "path": "01-master/vector/zonzon-vertical-color.svg",
+      "bytes": 5822,
+      "sha256": "6d84d5086cca7787154ba94f376de7154e112a05e121fa2c864948cbe071eb34"
+    },
+    {
+      "path": "01-master/vector/zonzon-vertical-mono-navy.svg",
+      "bytes": 5603,
+      "sha256": "42a7e3087db6f7c47880ca4cfcbb250d3228dce22af4b957fd1ed0f9e52242da"
+    },
+    {
+      "path": "01-master/vector/zonzon-wordmark-color.svg",
+      "bytes": 3127,
+      "sha256": "7f46c349de915097260e86bb2363ae1500f6ebc3c382f0458fc8dbb21a23886a"
+    },
+    {
+      "path": "01-master/vector/zonzon-wordmark-mono-navy.svg",
+      "bytes": 3077,
+      "sha256": "2d2c1feefd9698b22cecd6862a37d31c1268656d5bd3bc53adb01eadc8691f79"
+    },
+    {
+      "path": "02-variants/zonzon-horizontal-mono-navy.png",
+      "bytes": 108008,
+      "sha256": "ad9c3cce50f4456ec503caa48b56a4c8864808c21dc9cb76216277014ed38e9d"
+    },
+    {
+      "path": "02-variants/zonzon-horizontal-mono-white.png",
+      "bytes": 106837,
+      "sha256": "31c369b97fa710ba06c5725c39c652334c33d327e5f2aa8529a8b63fea35cfdb"
+    },
+    {
+      "path": "02-variants/zonzon-horizontal-on-white-2048.png",
+      "bytes": 259446,
+      "sha256": "0f94bc88e8b81717bf1958117d1cbb628969c619b6acf55caf01b7423feeaf39"
+    },
+    {
+      "path": "02-variants/zonzon-horizontal-white-on-navy-2048.png",
+      "bytes": 122039,
+      "sha256": "742ab46fc021fe9a5982123e80d28e39d35eeddd831518daefbdea50c8895c28"
+    },
+    {
+      "path": "02-variants/zonzon-symbol-mono-navy.png",
+      "bytes": 11073,
+      "sha256": "5b56121159fc35b8689b79460eff818fd3e0abbf94dcabaa9bdc9185eb367f2c"
+    },
+    {
+      "path": "02-variants/zonzon-symbol-mono-white.png",
+      "bytes": 10843,
+      "sha256": "d332e0c0bc9a8d99f530641992581eee816d0fc7d5760c8f6a8d8d9d19453f4a"
+    },
+    {
+      "path": "02-variants/zonzon-symbol-on-white-2048.png",
+      "bytes": 378647,
+      "sha256": "f4bd2c00eec9d7e620a5fd884ae5f52625c5214f49bbef2320716d170e17f8e7"
+    },
+    {
+      "path": "02-variants/zonzon-symbol-white-on-navy-2048.png",
+      "bytes": 192456,
+      "sha256": "e0550e6bc0a52172d4e927e79c0c0c3b41acf87bd88a1d325576d776bab27e23"
+    },
+    {
+      "path": "02-variants/zonzon-vertical-mono-navy.png",
+      "bytes": 18367,
+      "sha256": "bca6dcbacad1994c05fef39d7790bf7ebfb7214424e9f9db7065b539196f2701"
+    },
+    {
+      "path": "02-variants/zonzon-vertical-mono-white.png",
+      "bytes": 18063,
+      "sha256": "48cd5b0f7b473912270d229fab58a4d47a851ec34f9b8bac9c08b08edd90ab04"
+    },
+    {
+      "path": "02-variants/zonzon-vertical-on-white-2048.png",
+      "bytes": 466595,
+      "sha256": "0faec70daba094bfce8450f7ba8b08da400d683236c709b06e293f84c98f5de9"
+    },
+    {
+      "path": "02-variants/zonzon-vertical-white-on-navy-2048.png",
+      "bytes": 228942,
+      "sha256": "119839c1af19c9aa7abcb17cba6728b421abc6cd63e8bb028e5081f231fee951"
+    },
+    {
+      "path": "02-variants/zonzon-wordmark-mono-navy.png",
+      "bytes": 6940,
+      "sha256": "1c861ddea31f5756ff5e6d5131483abb63f69c60ba4b2738830290bfba639f6e"
+    },
+    {
+      "path": "02-variants/zonzon-wordmark-mono-white.png",
+      "bytes": 6899,
+      "sha256": "9ecf6053a4109fa3fceaf40dfc192e23cd713fbd8220adabbc0d3c2e11670e23"
+    },
+    {
+      "path": "02-variants/zonzon-wordmark-on-white-2048.png",
+      "bytes": 187592,
+      "sha256": "193dcb48494850beaaf1d08241c0991ecb82002be4aba31bea839bd0d24dd3a3"
+    },
+    {
+      "path": "02-variants/zonzon-wordmark-white-on-navy-2048.png",
+      "bytes": 103841,
+      "sha256": "d14657ea49b0fb28cd5bca071850f22fb353bafe12daadd0da8f83e6697ab21f"
+    },
+    {
+      "path": "03-web/png/zonzon-horizontal-color-1024w.png",
+      "bytes": 130626,
+      "sha256": "ea2f16e88fdd09858d1a7bbe55bc495315203be723f24e5bf39bd9938ab6a9e2"
+    },
+    {
+      "path": "03-web/png/zonzon-horizontal-color-2048w.png",
+      "bytes": 357322,
+      "sha256": "d801b45fe0dfe7585bd374d899022d6e5ad78ef356a0804f8c427be802b6cd5c"
+    },
+    {
+      "path": "03-web/png/zonzon-horizontal-color-4096w.png",
+      "bytes": 840287,
+      "sha256": "3c47e45216273a505763860c02c456193b1f67a06e5440ef720bfd154f6ef612"
+    },
+    {
+      "path": "03-web/png/zonzon-horizontal-color-512w.png",
+      "bytes": 46778,
+      "sha256": "041424a7b965d0ab798fa816a6a373034b5d72c1763644bd36a0cddd2952d0a6"
+    },
+    {
+      "path": "03-web/png/zonzon-symbol-color-1024w.png",
+      "bytes": 220183,
+      "sha256": "05e27f70f2ff76da86b4322c0a177ba000e1a2683c49dac9939cedae08867084"
+    },
+    {
+      "path": "03-web/png/zonzon-symbol-color-128w.png",
+      "bytes": 11240,
+      "sha256": "eaff728e73f94d43000e7699053ac593e7c026393fe63b77b79497b4b5fd8a1a"
+    },
+    {
+      "path": "03-web/png/zonzon-symbol-color-2048w.png",
+      "bytes": 509405,
+      "sha256": "8caee74e514bc0ff6fbc9098874f0d8ba4ef6cc9a744c02dfbecdbc87794bc17"
+    },
+    {
+      "path": "03-web/png/zonzon-symbol-color-256w.png",
+      "bytes": 30139,
+      "sha256": "eb068bcbf950a4be90f8e7990ad6fb9498001bbf3d08f4eed215a08b25071cf2"
+    },
+    {
+      "path": "03-web/png/zonzon-symbol-color-512w.png",
+      "bytes": 84745,
+      "sha256": "c22187a34dce174ad94c363bcc2642e1161b75d1103e5c0d338b092b5a375438"
+    },
+    {
+      "path": "03-web/png/zonzon-vertical-color-1024w.png",
+      "bytes": 266947,
+      "sha256": "be506f45fce760d205a447bf7545705b369fe0ec0fd4a954a8f90363aa67559e"
+    },
+    {
+      "path": "03-web/png/zonzon-vertical-color-2048w.png",
+      "bytes": 633224,
+      "sha256": "451d3946dfc5bb8160cd8a30a3566c7e593bdfbb3241cccfbd2c06c95d0665f2"
+    },
+    {
+      "path": "03-web/png/zonzon-vertical-color-256w.png",
+      "bytes": 35928,
+      "sha256": "dda658ded7aa86a0a7db05288c52294dbe096f5a4af788cd5c95d0f738b53efc"
+    },
+    {
+      "path": "03-web/png/zonzon-vertical-color-4096w.png",
+      "bytes": 1575132,
+      "sha256": "bd8e1b88613054642b05ddb99ac424efff1c17ebe539a94d2c31e78af3d5c89e"
+    },
+    {
+      "path": "03-web/png/zonzon-vertical-color-512w.png",
+      "bytes": 98566,
+      "sha256": "e5dcabbfce1b002c079cf6d57d14e248fb4b2ab61d6364b1ff8ef814f0246da5"
+    },
+    {
+      "path": "03-web/png/zonzon-wordmark-color-1024w.png",
+      "bytes": 98921,
+      "sha256": "3b754aa82479343203bc3989ad24229be93f2a39e823cec18e38474153d1bf72"
+    },
+    {
+      "path": "03-web/png/zonzon-wordmark-color-2048w.png",
+      "bytes": 240429,
+      "sha256": "e82f1243597c5bf08397e304117030607bb424fc8dd5f1466241a2462f820e63"
+    },
+    {
+      "path": "03-web/png/zonzon-wordmark-color-256w.png",
+      "bytes": 14353,
+      "sha256": "b94942e941798e28e3e03c47653c505035199be927c892e16bf04f219af81161"
+    },
+    {
+      "path": "03-web/png/zonzon-wordmark-color-4096w.png",
+      "bytes": 609423,
+      "sha256": "1fcd8293cb9c7c19f2654f756a8c2479283be73c23bd2ef383a044d85cb0f138"
+    },
+    {
+      "path": "03-web/png/zonzon-wordmark-color-512w.png",
+      "bytes": 37032,
+      "sha256": "a1fd049b218538260f848a169bcbe8a4667f57d4f4532ae53ab19be4ec1512a6"
+    },
+    {
+      "path": "03-web/webp/zonzon-horizontal-color-1024w.webp",
+      "bytes": 92136,
+      "sha256": "2a90136bbee60b2a4139d55166bad808a99a74f43da8b1936c9278682d34665d"
+    },
+    {
+      "path": "03-web/webp/zonzon-horizontal-color-512w.webp",
+      "bytes": 32876,
+      "sha256": "e33232e740fdcb1ce95ea8387e4aff1536d66cfdbc0342f5df3380efe6e7a3d1"
+    },
+    {
+      "path": "03-web/webp/zonzon-symbol-color-1024w.webp",
+      "bytes": 156750,
+      "sha256": "e8e9314341737e050507559860188a3ef778e79bf28f3d6f1ce1fcc9830a7cc5"
+    },
+    {
+      "path": "03-web/webp/zonzon-symbol-color-512w.webp",
+      "bytes": 60268,
+      "sha256": "b1679fe28071c1e6e3cd5e09e79cda1f93627326f874ca5a556439a57de346b2"
+    },
+    {
+      "path": "03-web/webp/zonzon-vertical-color-1024w.webp",
+      "bytes": 190628,
+      "sha256": "dde50f99a084ecb15fd039b229f77b9474af63419ffdabc4cafc255a0995d6cb"
+    },
+    {
+      "path": "03-web/webp/zonzon-vertical-color-512w.webp",
+      "bytes": 71474,
+      "sha256": "4889fe93094c7d6f1bd01ca223ff6cad08ac1e6546236681b1d551c54be7b46d"
+    },
+    {
+      "path": "03-web/webp/zonzon-wordmark-color-1024w.webp",
+      "bytes": 71384,
+      "sha256": "28797d3979ff3e97e74de86ff581bc9486645de91f48a5dd1fd6bf7ecfcf0912"
+    },
+    {
+      "path": "03-web/webp/zonzon-wordmark-color-512w.webp",
+      "bytes": 27856,
+      "sha256": "60809bf1c88f3fa49a1f13ec0dd30d4e8528d0595ae4f3a6857b1224b11b80fb"
+    },
+    {
+      "path": "04-print/zonzon-horizontal-cmyk-300dpi.tif",
+      "bytes": 2274052,
+      "sha256": "9a4a17bd5774d0b7bef636ee8d7939ab37deb312254683cd901a9b27b56fddbc"
+    },
+    {
+      "path": "04-print/zonzon-horizontal-color-vector.eps",
+      "bytes": 9278,
+      "sha256": "cbec7064e3cd7f538fa2d9c8e920de7f60658be580f51d6c95cf369e7c806781"
+    },
+    {
+      "path": "04-print/zonzon-horizontal-color-vector.pdf",
+      "bytes": 3318,
+      "sha256": "3e90b9423c4f10a567d37c2d4cabfa1d52fced37877f36a48f6a7af4164e3d15"
+    },
+    {
+      "path": "04-print/zonzon-symbol-color-vector.eps",
+      "bytes": 5442,
+      "sha256": "e3df3a6e3b33b1fcedf3001e6e1398c38164d6e740e17c74ec82fe276145542c"
+    },
+    {
+      "path": "04-print/zonzon-symbol-color-vector.pdf",
+      "bytes": 2550,
+      "sha256": "971e4f9ffa5708b68169cfe14c147a57138a974fa5f6f4499cc3c3e14a73a653"
+    },
+    {
+      "path": "04-print/zonzon-vertical-cmyk-300dpi.tif",
+      "bytes": 4171732,
+      "sha256": "d5561953c283a1c18e53c9f5d8e078d3d5296f6c63bd961c1e4837e36e294667"
+    },
+    {
+      "path": "04-print/zonzon-vertical-color-vector.eps",
+      "bytes": 10883,
+      "sha256": "8a8d2d1bd47033c1fb66dc97a79894c93a9cd5e297eabdc46f91eebdc8300a0c"
+    },
+    {
+      "path": "04-print/zonzon-vertical-color-vector.pdf",
+      "bytes": 3731,
+      "sha256": "2dfe289071d316319c8f66020dfedeadd8f9aacaa84dd8ef634a0ebabd3a8158"
+    },
+    {
+      "path": "05-apps/android/adaptive-background-color.txt",
+      "bytes": 38,
+      "sha256": "363e2274b7e66c26859ae0010895d6eeb5e9cbb937b2925e5d67b457eaf9e6d9"
+    },
+    {
+      "path": "05-apps/android/adaptive-foreground/mipmap-hdpi/ic_launcher_foreground.png",
+      "bytes": 8360,
+      "sha256": "f53ed162c7597b7ab8dc8c5426df548c46b21642ba9120b8ab11bacdd6b52559"
+    },
+    {
+      "path": "05-apps/android/adaptive-foreground/mipmap-mdpi/ic_launcher_foreground.png",
+      "bytes": 4755,
+      "sha256": "0c98511785eac6ef1777862cb1383a4a6443990ac247f8b2b686a999380c1112"
+    },
+    {
+      "path": "05-apps/android/adaptive-foreground/mipmap-xhdpi/ic_launcher_foreground.png",
+      "bytes": 12601,
+      "sha256": "9b8b80aabd0f6f49ed1117802ed8730eb402e3bf0951ee6d373a0276070a9c45"
+    },
+    {
+      "path": "05-apps/android/adaptive-foreground/mipmap-xxhdpi/ic_launcher_foreground.png",
+      "bytes": 22508,
+      "sha256": "63ad7905b7ae066ea311c60f598af43de7cea0f2bccb57ee7e9e6ec1c3ce07f4"
+    },
+    {
+      "path": "05-apps/android/adaptive-foreground/mipmap-xxxhdpi/ic_launcher_foreground.png",
+      "bytes": 34709,
+      "sha256": "b36f8d301e5c73d57f7a80d74534b29c2005d7c831607d571e14195c22940f76"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-hdpi/ic_launcher.png",
+      "bytes": 3539,
+      "sha256": "9603ec885cdd204bc8e1ad276b40e0e96795d77793377db5f02f9ba9f2fd4d57"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-hdpi/ic_launcher_dark.png",
+      "bytes": 3625,
+      "sha256": "db5ca6226210bd27a238f272c57d4b5ec0f29391410a7725425685b0700d5166"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-mdpi/ic_launcher.png",
+      "bytes": 2000,
+      "sha256": "f8f01ad03404b1a4574a9d0595a00e5a057617304a7b6ce9d8c3c7f89f9c5638"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-mdpi/ic_launcher_dark.png",
+      "bytes": 2190,
+      "sha256": "133f00cd5d9aa8a0c28abe419c9619c8f76ae8bdc6eed2c263813d06eecaf496"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-xhdpi/ic_launcher.png",
+      "bytes": 5205,
+      "sha256": "95d0a417248b351e2efa1c70941723b8c479ac7b68960c91cdcba17e2879ae86"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-xhdpi/ic_launcher_dark.png",
+      "bytes": 5117,
+      "sha256": "1ef7f731b814aed034ef98f8ca3bae6545ee32c6f39389323506e8300e0bb3ce"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-xxhdpi/ic_launcher.png",
+      "bytes": 8777,
+      "sha256": "cfce1cbac03442af8a50364e34850d790540830302931a0c7f4006c8eac67e67"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-xxhdpi/ic_launcher_dark.png",
+      "bytes": 8096,
+      "sha256": "e834492807d2aa096c6fb754f37e6233040fbec4bc651c0c9f7c1268538652d7"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-xxxhdpi/ic_launcher.png",
+      "bytes": 12878,
+      "sha256": "555540cd921bf702b3b58ec7b10060b6661ad3694bfb70efc0a9d4162810b093"
+    },
+    {
+      "path": "05-apps/android/launcher/mipmap-xxxhdpi/ic_launcher_dark.png",
+      "bytes": 11068,
+      "sha256": "98aa7a60bcf1ea6fdb176f62419d031592d225f82b0ad390c5d81c7c97f249b5"
+    },
+    {
+      "path": "05-apps/android/play-store-1024.png",
+      "bytes": 145424,
+      "sha256": "52e1d823b4454555c3e0fd57b606e983df282b6e4a4be09d65b10ee238f2679a"
+    },
+    {
+      "path": "05-apps/android/play-store-512.png",
+      "bytes": 55136,
+      "sha256": "851d52c56d36e96676516d21ec2876927a74ae4aafa00ef52f171eecc7fde1fd"
+    },
+    {
+      "path": "05-apps/ios/Icon-20@2x.png",
+      "bytes": 1526,
+      "sha256": "53050852838c6e68ceebe97b9fac033630c6610af49b3b141db04a6a5e602398"
+    },
+    {
+      "path": "05-apps/ios/Icon-20@3x.png",
+      "bytes": 2762,
+      "sha256": "345a812277d8a3ceb8439b7d8ea2ab7319cfb803c41035b65e6c4e8b534047cb"
+    },
+    {
+      "path": "05-apps/ios/Icon-29@2x.png",
+      "bytes": 2593,
+      "sha256": "05724a7d12fb5e865f6f0e7ed78e022cea9508c458c348ea7fa6526a6386eca6"
+    },
+    {
+      "path": "05-apps/ios/Icon-29@3x.png",
+      "bytes": 4560,
+      "sha256": "50002381d4bac29b28367de19815d283ec56596487c5fc2c668af68c91f94023"
+    },
+    {
+      "path": "05-apps/ios/Icon-40@2x.png",
+      "bytes": 4067,
+      "sha256": "893172c07bce974e094d6e624948c524b6145ff45138983060ea82e7e5ef3422"
+    },
+    {
+      "path": "05-apps/ios/Icon-40@3x.png",
+      "bytes": 6921,
+      "sha256": "d67195c44f87600f7be6a6c25e921a2cd15b7e31290b00069a4dbfd3498b2e58"
+    },
+    {
+      "path": "05-apps/ios/Icon-60@2x.png",
+      "bytes": 6921,
+      "sha256": "d67195c44f87600f7be6a6c25e921a2cd15b7e31290b00069a4dbfd3498b2e58"
+    },
+    {
+      "path": "05-apps/ios/Icon-60@3x.png",
+      "bytes": 11850,
+      "sha256": "42efdafa46b66e6752a11ff8f44520b80983094ec3cdf418b3ec266bf08d48ee"
+    },
+    {
+      "path": "05-apps/ios/Icon-76.png",
+      "bytes": 3786,
+      "sha256": "ae40c84dfb5a7a157bfafbcbbc0e1d21cf6e1fb4a300340d387fe2e813111e00"
+    },
+    {
+      "path": "05-apps/ios/Icon-76@2x.png",
+      "bytes": 9501,
+      "sha256": "bdde4bb9676ab4fbcdd09a775c1aac689b82bc21848827bdd9c64fc06eb1c021"
+    },
+    {
+      "path": "05-apps/ios/Icon-83.5@2x.png",
+      "bytes": 10661,
+      "sha256": "75751d04ddee0f8cc4bc20f18cd88205b6a839510c8ae47f5e60a532800b355f"
+    },
+    {
+      "path": "05-apps/ios/Icon-AppStore-1024.png",
+      "bytes": 145424,
+      "sha256": "52e1d823b4454555c3e0fd57b606e983df282b6e4a4be09d65b10ee238f2679a"
+    },
+    {
+      "path": "05-apps/pwa/apple-touch-icon.png",
+      "bytes": 11850,
+      "sha256": "42efdafa46b66e6752a11ff8f44520b80983094ec3cdf418b3ec266bf08d48ee"
+    },
+    {
+      "path": "05-apps/pwa/favicon.ico",
+      "bytes": 551,
+      "sha256": "b4385ee5818ac560a493a4a754c4fab0514ee077d73edacc601a494f7ac4b41b"
+    },
+    {
+      "path": "05-apps/pwa/icon-128.png",
+      "bytes": 7498,
+      "sha256": "9121c7c3a74ad027f377e3c3f68897c14b572e7e1fa69b93dc3ded5377e87d33"
+    },
+    {
+      "path": "05-apps/pwa/icon-144.png",
+      "bytes": 8777,
+      "sha256": "cfce1cbac03442af8a50364e34850d790540830302931a0c7f4006c8eac67e67"
+    },
+    {
+      "path": "05-apps/pwa/icon-152.png",
+      "bytes": 9501,
+      "sha256": "bdde4bb9676ab4fbcdd09a775c1aac689b82bc21848827bdd9c64fc06eb1c021"
+    },
+    {
+      "path": "05-apps/pwa/icon-16.png",
+      "bytes": 535,
+      "sha256": "ac1a29895434c2403bf1c30fa9032f49ee1eb0404145c84d119be762a1b23954"
+    },
+    {
+      "path": "05-apps/pwa/icon-180.png",
+      "bytes": 11850,
+      "sha256": "42efdafa46b66e6752a11ff8f44520b80983094ec3cdf418b3ec266bf08d48ee"
+    },
+    {
+      "path": "05-apps/pwa/icon-192.png",
+      "bytes": 12878,
+      "sha256": "555540cd921bf702b3b58ec7b10060b6661ad3694bfb70efc0a9d4162810b093"
+    },
+    {
+      "path": "05-apps/pwa/icon-32.png",
+      "bytes": 1142,
+      "sha256": "5e08d9a835aeb2c4b7f38d929bf2af74421353d69bdbbd4abbd16895873e560e"
+    },
+    {
+      "path": "05-apps/pwa/icon-384.png",
+      "bytes": 35712,
+      "sha256": "ce3dc21fc1c0837c71d49978a3d11af6c3e7fcb12c797552e4b2dd44f7e6809d"
+    },
+    {
+      "path": "05-apps/pwa/icon-48.png",
+      "bytes": 2000,
+      "sha256": "f8f01ad03404b1a4574a9d0595a00e5a057617304a7b6ce9d8c3c7f89f9c5638"
+    },
+    {
+      "path": "05-apps/pwa/icon-512.png",
+      "bytes": 55136,
+      "sha256": "851d52c56d36e96676516d21ec2876927a74ae4aafa00ef52f171eecc7fde1fd"
+    },
+    {
+      "path": "05-apps/pwa/icon-72.png",
+      "bytes": 3539,
+      "sha256": "9603ec885cdd204bc8e1ad276b40e0e96795d77793377db5f02f9ba9f2fd4d57"
+    },
+    {
+      "path": "05-apps/pwa/icon-96.png",
+      "bytes": 5205,
+      "sha256": "95d0a417248b351e2efa1c70941723b8c479ac7b68960c91cdcba17e2879ae86"
+    },
+    {
+      "path": "05-apps/pwa/icon-maskable-192.png",
+      "bytes": 9882,
+      "sha256": "db0282c7ce6df59b120bc80a59a2b7a4447bd3fdc2275d333c6133de559aee24"
+    },
+    {
+      "path": "05-apps/pwa/icon-maskable-512.png",
+      "bytes": 40297,
+      "sha256": "25af0f6d8f64c99e85d46947fe751e07d6590d9a9b642995e3295e6d284064cb"
+    },
+    {
+      "path": "06-social-media/facebook-cover-1640x924.jpg",
+      "bytes": 52825,
+      "sha256": "8a8131b3030b363ec182cfc3d8c15424ba1d56565f12825536e6854601392e4f"
+    },
+    {
+      "path": "06-social-media/facebook-cover-1640x924.png",
+      "bytes": 75715,
+      "sha256": "2445dfedcf65568703e8462aa3d9fa8e947f0957e4e22b18ca009d65b5786119"
+    },
+    {
+      "path": "06-social-media/linkedin-cover-1584x396.jpg",
+      "bytes": 27597,
+      "sha256": "1053f380bbad50a8af21b7a9b0aad45bbcfa82ab127c78684fc3d77da49bdeb9"
+    },
+    {
+      "path": "06-social-media/linkedin-cover-1584x396.png",
+      "bytes": 38628,
+      "sha256": "9185e09f4c0ad4d80f161fb89f63c789f9c69ac4c72e137f3cc1e1f72bcce2ac"
+    },
+    {
+      "path": "06-social-media/profile-1080x1080.jpg",
+      "bytes": 40648,
+      "sha256": "e8c4014a3a480ca9701ca9301b256ee51b51c596222e3440717fc5636d930731"
+    },
+    {
+      "path": "06-social-media/profile-1080x1080.png",
+      "bytes": 56617,
+      "sha256": "5731bb01d9b1569fbdfd2969439ad15236725b57007a94e20c301f8b2da0cd03"
+    },
+    {
+      "path": "06-social-media/whatsapp-profile-500x500.jpg",
+      "bytes": 16827,
+      "sha256": "4547f653d43eecfa28e3a3906c1a1a2f7085d692d546d8c4f8316947b7c14bbc"
+    },
+    {
+      "path": "06-social-media/whatsapp-profile-500x500.png",
+      "bytes": 23139,
+      "sha256": "30ef39085d8d916a125ec3a1a4a9648ec0a4899db1c9ddb221bccf25282115a0"
+    },
+    {
+      "path": "06-social-media/x-header-1500x500.jpg",
+      "bytes": 36492,
+      "sha256": "c9048509ea42a9186a519126b522ff467472170c7eb63ff841ecf6f823d3915f"
+    },
+    {
+      "path": "06-social-media/x-header-1500x500.png",
+      "bytes": 50832,
+      "sha256": "d99e0eab2bf2df7886590f6786896ed9151d8e7687ac97eefecfc05ddbc83466"
+    },
+    {
+      "path": "06-social-media/youtube-banner-2560x1440.jpg",
+      "bytes": 65234,
+      "sha256": "ef50bcf770fb1c6dc244b8e44bd4270fa7f0e736ef41909a81b05e473d2871d8"
+    },
+    {
+      "path": "06-social-media/youtube-banner-2560x1440.png",
+      "bytes": 88528,
+      "sha256": "05d3a5a21ede7a42caffad8f0d057e44197c41bdd2be615881be86a15fa65ab5"
+    },
+    {
+      "path": "07-office-email/a4-cover-logo.jpg",
+      "bytes": 149525,
+      "sha256": "593588e2cf90316f88c59a719c77237f104b8155ad33b5e77b5f4ca9f70e76af"
+    },
+    {
+      "path": "07-office-email/documents-vertical-1600.png",
+      "bytes": 469364,
+      "sha256": "0045d0e9b3e219ff54b479a467f7a76cb6437b968f619e8904bf29f1d9912b16"
+    },
+    {
+      "path": "07-office-email/email-signature-1200.png",
+      "bytes": 166330,
+      "sha256": "eecb7ff88a0f7868b0384fdfebf0d6e417339dbc485d52bc59d33dfc482b9d7a"
+    },
+    {
+      "path": "07-office-email/email-signature-600.png",
+      "bytes": 58913,
+      "sha256": "2abf7ac1ed4852e77451f0bd7ecf8bcfc23987fd0be995d2b527fcad99051d0a"
+    },
+    {
+      "path": "07-office-email/presentations-horizontal-2400.png",
+      "bytes": 434558,
+      "sha256": "0c723d2ef7ffbc877843a6bf0be563c32c81d7c2f40e01fd9e22663a34023d97"
+    },
+    {
+      "path": "08-preview/zonzon-logo-kit-preview.png",
+      "bytes": 341063,
+      "sha256": "88a360258cf0ed7c49af7b9f3a70092cf20e1918aac7408cacd8299267420f17"
+    },
+    {
+      "path": "08-preview/zonzon-vector-flat-preview.png",
+      "bytes": 47018,
+      "sha256": "7ef3ad98ecf87ae3e91be7216900783f2ab7eeaa82cfd8563578eb1b5d1a8d30"
+    },
+    {
+      "path": "brand-colors.css",
+      "bytes": 146,
+      "sha256": "bc8fa5cbc6fbfa2765ab4706c1c7eb1d722f1aaacd6f4623b0c2f131a1e517ba"
+    },
+    {
+      "path": "brand-colors.json",
+      "bytes": 113,
+      "sha256": "c77c03cb88b9bb96ef67198aece6fdfb66e5c6f40fc73599d1461021c8249556"
+    },
+    {
+      "path": "GUIDE-RAPIDE-ZONZON.pdf",
+      "bytes": 3097,
+      "sha256": "dd7e1d517d0d100dd30b02e52d27129fa3db413eb6d2633c492c7de93ba4b850"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3180,
+      "sha256": "88f52dba776063656160509fa7934a2ecea3b79f445c2f67cc90c7b67ecc0a18"
+    },
+    {
+      "path": "tools/build_logo_kit.py",
+      "bytes": 22538,
+      "sha256": "4724ede64ae281409f4e52453f9d55fc3e685366271745c9d3e552d57d5d6edf"
+    }
+  ]
+}

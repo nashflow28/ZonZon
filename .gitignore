@@ -81,3 +81,9 @@ firebase-adminsdk.json
 # Secrets de signature Android (keystore + mots de passe) — jamais versionnes
 key.properties
 mobile_app/android/key.properties
+
+# Archive ZIP du kit de marque : duplique intégralement brand/zonzon-logo-kit/
+# (18 Mo pour le même contenu, non diffable et incompressible par git).
+# Le dossier, lui, EST versionné — c'est la source de vérité.
+# Régénérable via brand/zonzon-logo-kit/tools/build_logo_kit.py
+brand/*.zip
