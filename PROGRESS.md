@@ -2036,13 +2036,41 @@ constatés : le quota de modèles est passé de « 1 sur 250 » à « 1 sur 6000
 a été créé et approuvé instantanément — statut « Actif – Qualité »**, sans même passer par
 « En attente ».
 
-**Reste à faire (dans l'ordre) :**
-1. Générer un token permanent (Business Settings → Utilisateurs système), permissions
-   `whatsapp_business_messaging` + `whatsapp_business_management` — le PO le colle lui-même dans
-   `WHATSAPP_ACCESS_TOKEN` du `.env` hôte, puis passe `WHATSAPP_OTP_ENABLED=true`.
-2. Redémarrer le conteneur (`cd /opt/zonzon/backend && sudo docker compose up -d` suffit, pas de
-   rebuild) et tester l'envoi réel via `POST /auth/forgot-password/request` avec le téléphone
-   d'un admin.
+**✅ CHAÎNE COMPLÈTE OPÉRATIONNELLE (2026-07-30).** `POST /auth/forgot-password/request` renvoie
+`{"sent":true}` et le code arrive réellement sur WhatsApp — **confirmé par réception sur le
+téléphone du PO**. Le chantier ouvert en session 88 est clos.
+
+**Les 3 erreurs Meta traversées après l'activation du token** — chacune masquait la suivante,
+et aucune n'est devinable depuis le message affiché. À relire avant tout futur changement de
+numéro ou de token :
+
+| # | Erreur Graph API | Cause réelle | Correctif |
+|---|---|---|---|
+| 1 | `Ce compte n'a pas l'autorisation de créer un modèle` | entreprise non vérifiée — **PAS** le moyen de paiement (hypothèse initiale erronée, le paiement ajouté n'avait rien changé) | vérification d'entreprise |
+| 2 | `(#100, subcode 33) Object with ID '<phone_number_id>' does not exist / missing permissions` | le WABA n'était pas affecté à l'utilisateur système `zonzon-backend` — un token valide ne donne accès qu'aux éléments explicitement affectés | Business Settings → Utilisateurs système → Affecter des éléments → Comptes WhatsApp → ZonZon → activer « Gérer les numéros et modèles » + « Messages » |
+| 3 | `(#133010) Account not registered` | le numéro était vérifié dans la console mais **jamais enregistré sur la Cloud API** — un appel `POST /<phone_number_id>/register` est obligatoire | `backend/scripts/register-whatsapp.js` |
+
+**Utilisateur système** : `zonzon-backend` (ID `61592320455723`), accès Employee, token permanent
+(sans expiration), 203 caractères.
+
+🔑 **PIN de vérification en deux étapes** : choisi par le PO lors de l'enregistrement (ce n'est
+pas un code reçu, c'est un secret qu'on définit). Il sera **exigé pour tout ré-enregistrement du
+numéro** — s'il est perdu, Meta impose un délai d'attente avant de pouvoir le réinitialiser.
+Valeur non consignée ici volontairement.
+
+**Configuration finale en production** (`/opt/zonzon/backend/.env`, sur l'HÔTE) :
+`WHATSAPP_OTP_ENABLED=true` · `WHATSAPP_PHONE_NUMBER_ID=1206128152588133` ·
+`WHATSAPP_OTP_TEMPLATE_NAME=zonzon_verification_code` · `WHATSAPP_OTP_TEMPLATE_LANGUAGE=fr` ·
+`WHATSAPP_GRAPH_API_VERSION=v23.0` · `WHATSAPP_OTP_TTL_SECONDS=300` ·
+`WHATSAPP_OTP_RESEND_SECONDS=60` · `WHATSAPP_ACCESS_TOKEN` renseigné.
+
+**Conséquence fonctionnelle** : le parcours « mot de passe oublié » admin de la session 91,
+dormant depuis sa livraison, est désormais **réellement utilisable** sur
+`https://zonzon-admin.pages.dev/forgot-password`.
+
+⚠️ **Coût** : les messages d'authentification sont facturés à l'unité par Meta. Le moyen de
+paiement est en place, et `WHATSAPP_OTP_RESEND_SECONDS=60` + la limite de 5 tentatives dans
+`WhatsappOtpService` bornent l'exposition.
 
 ⚠️ **Incident de sécurité de cette session** : une lecture trop large du `.env` de production a
 affiché la **clé privée Firebase Admin** et le **DSN Sentry** en clair dans la conversation. La clé
