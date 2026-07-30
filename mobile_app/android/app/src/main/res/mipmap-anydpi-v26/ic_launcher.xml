@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Icône adaptative (Android 8.0+). Le lanceur applique lui-meme le masque
+  (rond, squircle, goutte...) sur ce couple fond + premier plan.
+  Sans ce fichier, Android retombe sur le PNG mipmap/ic_launcher.png, qui
+  reste fourni pour les versions anterieures.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

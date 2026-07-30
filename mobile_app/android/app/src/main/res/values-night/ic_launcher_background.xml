@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fond de l'icône adaptative en thème sombre : bleu nuit ZonZon, conformément
+  à l'alternative documentée dans le kit de marque.
+-->
+<resources>
+    <color name="ic_launcher_background">#0C1A22</color>
+</resources>
