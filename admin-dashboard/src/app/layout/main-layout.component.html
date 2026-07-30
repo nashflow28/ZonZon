@@ -13,14 +13,18 @@
     [class.translate-x-0]="sidebarOpen()"
     [ngClass]="{ 'md:translate-x-0': true }">
     <div class="px-6 py-5 border-b border-zline flex items-center justify-between">
-      <div class="flex items-center gap-3 min-w-0">
-        <img src="brand/zonzon-symbol-white.png" alt="" aria-hidden="true" class="h-8 w-auto shrink-0" />
-        <div class="min-w-0">
-          <h1 class="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-zsky to-zgold">
-            ZonZon Admin
-          </h1>
-          <p class="text-[11px] text-slate-500 mt-1">Centre de contrôle</p>
+      <div class="min-w-0">
+        <!--
+          Le logo horizontal contient déjà le mot « ZonZon » : le répéter en
+          texte le ferait apparaître deux fois. Le titre reste présent pour les
+          lecteurs d'écran via `sr-only`, et « Admin » est porté par le badge.
+        -->
+        <h1 class="sr-only">ZonZon Admin — Centre de contrôle</h1>
+        <div class="flex items-center gap-2 min-w-0">
+          <img src="brand/zonzon-horizontal-white.png" alt="ZonZon" class="h-7 w-auto shrink-0" />
+          <span class="text-[11px] font-semibold tracking-wide text-zgold uppercase shrink-0">Admin</span>
         </div>
+        <p class="text-[11px] text-slate-500 mt-1.5">Centre de contrôle</p>
       </div>
       <button
         type="button"

@@ -32,7 +32,8 @@
  * contraindre en carré le déformerait.
  */
 .auth-header .brand-mark {
-  height: 40px;
+  /* Logo horizontal (symbole + mot-symbole), ratio natif 214x80. */
+  height: 34px;
   width: auto;
   margin-bottom: 4px;
   /*
@@ -45,16 +46,11 @@
   align-self: flex-start;
 }
 
-.auth-header .brand {
-  font-size: 30px;
-  font-weight: 800;
-  /*
-   * Or de marque, et non plus --zz-go : ce dernier est une couleur de STATUT
-   * (« livré / payé / validé ») qui n'a rien à faire sur le nom de la marque.
-   */
-  color: var(--zz-gold, #F5B700);
-  letter-spacing: -0.02em;
-}
+/*
+ * `.brand` (le nom « ZonZon » en texte) a été supprimé des écrans de connexion
+ * et d'inscription : le logo horizontal contient déjà le mot-symbole, l'afficher
+ * en plus faisait apparaître le nom deux fois.
+ */
 
 .auth-header .subtitle {
   font-size: 15px;
