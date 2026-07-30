@@ -2221,3 +2221,46 @@ octet pour octet** à ceux du kit (comparaison md5).
 **Reste à arbitrer** : icônes iOS du kit (renommage nécessaire, sans objet tant qu'iOS n'est pas
 distribué) ; splash screen Flutter (aucun aujourd'hui, ce serait un ajout) ; usage du logo
 horizontal complet dans les en-têtes plutôt que le seul symbole.
+
+### Session 97 (2026-07-30) — Logo horizontal complet dans les en-têtes
+
+Suite de la session 96 : le symbole seul est remplacé par le **logo horizontal**
+(symbole + mot-symbole) dans les en-têtes de l'admin (connexion mobile et desktop, barre latérale)
+et de la PWA (connexion et inscription).
+
+**Conséquence directe, facile à manquer** : le logo horizontal contient déjà le mot « ZonZon ».
+Tous les textes qui le répétaient ont donc été supprimés, sinon le nom serait apparu **deux fois**
+côte à côte :
+- admin : « ZonZon Admin » devient le logo + un badge **« ADMIN »** en or. Le titre reste exposé
+  aux lecteurs d'écran via `sr-only` dans la barre latérale (l'image seule ne le porterait pas) ;
+- PWA : le `span.brand` est retiré des deux écrans, et sa règle CSS avec.
+
+**Actif dérivé, pas repris tel quel.** `02-variants/zonzon-horizontal-mono-white.png` fait
+2089×780 pour 104 Ko — disproportionné pour un en-tête affiché autour de 100 px de large. Réduit
+en **214×80 pour 6 Ko (−94 %)** par rééchantillonnage Lanczos (Pillow), sans recadrage ni
+recoloration. Placé dans `public/brand/` des deux apps, pas dans le kit. Le symbole seul, devenu
+inutilisé, a été supprimé des deux dossiers.
+
+🐛 **Bug Tailwind corrigé** : `text-zgold/90` était **silencieusement ignoré**. Le modificateur
+d'opacité de Tailwind v3 ne fonctionne pas sur une couleur déclarée `var(--zz-gold)` sans espace
+réservé `<alpha-value>` — la classe est éliminée et le badge héritait du blanc. Constaté par
+mesure (`rgb(255,255,255)`), corrigé en `text-zgold`, revérifié : `rgb(245,183,0)`.
+
+⚠️ **Piège de vérification à retenir.** Le panneau navigateur de cette session rapportait
+`innerWidth: 0` et `documentElement.clientWidth: 0` : toute mesure de mise en page y est
+**dégénérée**. Un « logo compressé à 57×28 » a été diagnostiqué à tort sur cette base. La méthode
+fiable retenue : injecter l'image dans un conteneur hors flux de **largeur imposée** (1280 px) et
+mesurer là — résultat 96×36, ratio 2,675 identique au natif. Toujours vérifier `innerWidth` avant
+de conclure quoi que ce soit d'une mesure de rendu.
+Rappel du même ordre : le service worker de la PWA sert l'ancienne version tant que les caches ne
+sont pas purgés — indispensable avant toute validation post-déploiement.
+
+**Vérifié en production**, ratio natif 2,675 préservé partout : admin 96×36 (conteneur 1280 px),
+PWA connexion et inscription 90,94×34. Aucun texte « ZonZon » redondant restant.
+`shrink-0` ajouté par précaution sur les images des en-têtes flex.
+
+**Déployé** : admin `c8d4f868.zonzon-admin.pages.dev`, PWA `353bf97e.zonzon-pwa.pages.dev`.
+
+**Limite assumée** : aucune capture d'écran n'a pu être produite (panneau non composité). La
+validation repose sur la mesure du DOM — plus précise qu'un coup d'œil sur les dimensions et les
+couleurs, mais elle ne remplace pas un jugement esthétique humain.
