@@ -2173,3 +2173,51 @@ pas distribué) ; un éventuel splash screen Flutter, aujourd'hui inexistant.
 📌 Note du README du kit à retenir : les **SVG/PDF/EPS sont des simplifications à trois couleurs
 plates**, les PNG/WebP conservent les dégradés. Pour l'écran, ce sont les **PNG/WebP qui font
 référence** — utiliser le SVG dans l'admin donnerait un rendu volontairement plus pauvre.
+
+### Session 96 (2026-07-30) — Vrai logo dans l'admin et la PWA, versionnage du kit, déploiement
+
+**Le logo factice est remplacé.** L'admin affichait un carré CSS dégradé bleu→émeraude contenant
+la lettre « Z » ; la PWA affichait le mot « ZonZon » coloré avec `--zz-go`, c'est-à-dire la
+couleur de **statut** signifiant « livré / payé / validé ». Aucun des deux n'était le logo.
+
+Actif retenu : **`zonzon-symbol-mono-white.png`** (729×440, 11 Ko), et non la version couleur.
+Raison vérifiée visuellement : le symbole couleur mêle bleu nuit et bleu, or les deux interfaces
+ont un fond `#0C1A22` — la moitié navy du logo y disparaîtrait. C'est aussi la règle n°3 du kit
+(« variante blanche sur fond sombre »).
+
+**Palette : elle était déjà presque alignée.** `--zz-bg` valait déjà `#0C1A22` (bleu nuit du kit)
+et `--zz-sky` déjà `#2E90FA` (bleu mouvement). Seul l'or manquait : ajout de `--zz-gold`
+(`#F5B700`) côté admin et PWA, plus l'alias Tailwind `zgold`. ⚠️ Ce jeton est **d'identité, sans
+sémantique de statut** — il ne touche donc pas au contrat de couleurs explicitement partagé avec
+`AppColors` côté Flutter (cf. commentaire dans `admin-dashboard/src/styles.css`).
+Dégradé du nom de marque passé de bleu→émeraude à `--zz-sky` → `--zz-gold` ; vérifié dans le
+navigateur : `linear-gradient(rgb(46,144,250), rgb(245,183,0))`.
+
+🐛 **Défaut trouvé et corrigé grâce à la mesure du rendu réel.** Sur la page de connexion PWA,
+`.auth-header` est un flex **en colonne** : `align-items: stretch` étirait l'image sur toute la
+largeur et écrasait le `width: auto`. Mesure en production : **400×40 affichés pour un ratio natif
+729×440**, soit un ratio de 10,0 au lieu de 1,657 — le logo était aplati, ce qu'interdit la règle
+n°1 du kit. Corrigé par `align-self: flex-start` (revérifié : 66×40, ratio 1,657). **Ni le build,
+ni la relecture du CSS ne l'auraient révélé** — seule la mesure du DOM en production l'a montré.
+À noter aussi : le service worker servait l'ancienne feuille de style, il a fallu purger les 12
+caches pour valider le correctif (piège classique lors des vérifications post-déploiement PWA).
+
+**Versionnage du kit.** `brand/zonzon-logo-kit/` est désormais suivi par git (136 fichiers, 20 Mo).
+L'archive `brand/zonzon-logo-kit-v1.0.zip` est **exclue** via `.gitignore` : elle duplique
+intégralement le dossier (141 entrées pour 136 fichiers, 18 Mo de plus), n'est ni diffable ni
+compressible par git, et reste régénérable par `tools/build_logo_kit.py`.
+
+⚠️ **`brand/.gitattributes` ajouté, et il n'est pas cosmétique** : sans lui, git appliquait la
+conversion CRLF aux PDF et EPS du dossier `04-print`, ce qui les aurait **corrompus silencieusement
+au checkout** sur une autre machine. PNG/WebP/ICO/TIF/PDF/EPS marqués `binary` ; SVG et
+métadonnées figés en LF pour que le manifeste SHA-256 reste vérifiable quelle que soit la
+plateforme. Intégrité contrôlée après indexation : **135 fichiers conformes au manifeste, 0 écart**.
+
+**Déployé.** Admin `d235ee13.zonzon-admin.pages.dev`, PWA `40a9ee17.zonzon-pwa.pages.dev`,
+tous deux promus. Vérifié en production : `/`, `/brand/zonzon-symbol-white.png`, `/favicon.ico`,
+`/icons/icon-512x512.png` et `/ngsw.json` répondent 200, et les actifs servis sont **identiques
+octet pour octet** à ceux du kit (comparaison md5).
+
+**Reste à arbitrer** : icônes iOS du kit (renommage nécessaire, sans objet tant qu'iOS n'est pas
+distribué) ; splash screen Flutter (aucun aujourd'hui, ce serait un ajout) ; usage du logo
+horizontal complet dans les en-têtes plutôt que le seul symbole.
