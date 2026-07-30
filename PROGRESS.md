@@ -1973,3 +1973,87 @@ secours ne protège personne tant qu'un second admin n'existe pas**.
 - Composant PWA `change-password` : ses classes CSS sont définies chez les parents et ne franchissent
   pas l'encapsulation Angular, donc le formulaire s'affiche sans style. Bug préexistant, sorti en
   tâche à part.
+
+### Session 93 (2026-07-29) — WhatsApp Cloud API : vrai numéro enregistré, bloqué sur le paiement
+
+**Le blocage de la session 88 est levé.** Un vrai numéro togolais est désormais enregistré et vérifié
+sur un WABA de production. Reste un dernier obstacle : le moyen de paiement.
+
+**Identifiants à jour — ceux de la session 88 sont OBSOLÈTES :**
+
+| Élément | Valeur | Remplace |
+|---|---|---|
+| Numéro expéditeur | `+228 98 59 69 71` | ~~`+1 555 154 1885`~~ (numéro de test Meta) |
+| `WHATSAPP_PHONE_NUMBER_ID` | **`1206128152588133`** | ~~`1162448583626720`~~ |
+| WABA ID | **`1391869109508703`** (« ZonZon ») | ~~`1527332121746828`~~ (compte de test) |
+| App Meta | `1643671951095041` | inchangé |
+
+**Comment le blocage a été contourné.** Le WABA de test est une impasse fermée des deux côtés :
+« Ce compte a atteint sa limite de numéros » à l'ajout, et « Le numéro de téléphone de test ne peut
+pas être supprimé » à la suppression. Créer un WABA de production depuis **Meta Business Suite**
+échoue systématiquement sur une erreur opaque `#1675030` (non documentée publiquement), y compris
+après avoir complété toutes les informations d'entreprise. **La solution : passer par la console
+développeur** (`developers.facebook.com` → app → WhatsApp → Configuration de l'API → sélecteur
+« De » → « Ajouter un numéro de téléphone »). Ce parcours crée le profil, le WABA et enregistre le
+numéro d'un seul tenant, sans jamais demander la création préalable d'un compte.
+
+**Informations d'entreprise renseignées** (elles étaient entièrement vides, ce qui bloquait aussi) :
+Kore Innovation · BP 81281, Adidogomé · Lomé, Maritime · Togo · +22890733837 ·
+`https://kore-innov.com`. ⚠️ Meta impose un « Code postal » même pour le Togo qui n'en utilise pas :
+`81281` (la boîte postale) y a été remis faute de mieux — à discuter avec le support si la
+vérification d'entreprise achoppe dessus.
+
+**Création du template refusée** avec « Ce compte WhatsApp Business n'a pas l'autorisation de
+créer un modèle de message ». Meta ne nomme jamais la cause. Deux hypothèses testées :
+1. ~~Moyen de paiement manquant~~ — le PO a ajouté une carte le 2026-07-30 (l'alerte « Moyen de
+   paiement valide manquant » a disparu de la vue d'ensemble), mais le refus persiste à
+   l'identique. **Hypothèse réfutée.**
+2. **Vérification d'entreprise** — dernier manque objectif restant. Lancée le 2026-07-30 :
+   Centre de sécurité → cas d'utilisation « L'application nécessite un accès aux autorisations sur
+   Meta for Developers » → pays Togo → type d'entreprise et confirmation faits par le PO
+   lui-même (confirmation du lien par téléphone au `+22891188289`, numéro du collègue —
+   l'option e-mail était inutilisable, l'adresse au dossier étant un Gmail alors que Meta exige
+   un domaine identique au site web). Statut affiché : **« En cours d'examen »**, délai annoncé
+   **~2 jours ouvrés**.
+
+**`.env` de production réparé** (2026-07-30) : les 6 lignes fusionnées par le séparateur `__K__`
+ont été remplacées par un bloc propre — sauvegarde dans
+`/opt/zonzon/backend/.env.bak-avant-fix-whatsapp`, 31 autres variables vérifiées inchangées.
+Attention : le fichier vit sur l'HÔTE (`/opt/zonzon/backend/.env`, injecté par `env_file`), pas
+dans le conteneur. État actuel :
+`WHATSAPP_OTP_ENABLED=false` · `WHATSAPP_OTP_TEMPLATE_NAME=zonzon_verification_code` ·
+`WHATSAPP_OTP_TEMPLATE_LANGUAGE=fr` · `WHATSAPP_GRAPH_API_VERSION=v23.0` ·
+`WHATSAPP_OTP_TTL_SECONDS=300` · `WHATSAPP_OTP_RESEND_SECONDS=60` ·
+`WHATSAPP_PHONE_NUMBER_ID=1206128152588133` · `WHATSAPP_ACCESS_TOKEN=` (vide, à renseigner par
+le PO). `ENABLED` reste à false tant que le token n'est pas là : l'activer avant ferait échouer
+les envois en 503 au lieu de laisser la fonctionnalité proprement dormante. Aucun redémarrage
+du conteneur nécessaire d'ici là.
+
+**Reste à faire (dans l'ordre) :**
+1. ⏳ Attendre le verdict de la vérification d'entreprise (~2 jours ouvrés).
+2. Recréer le template `zonzon_verification_code` : Authentification / **French** / **« Copier le
+   code »** / validité 10 min. Tous les paramètres passent, seule la soumission finale est
+   refusée — il n'y a rien à redécouvrir, juste à rejouer. Si le refus persiste APRÈS la
+   vérification, ouvrir un ticket support Meta avec la trace `WBxP-865112808-1963134884`.
+3. Générer un token permanent (Business Settings → Utilisateurs système), permissions
+   `whatsapp_business_messaging` + `whatsapp_business_management` — le PO le colle lui-même dans
+   `WHATSAPP_ACCESS_TOKEN`, puis passe `WHATSAPP_OTP_ENABLED=true`.
+4. Redémarrer le conteneur (`sudo docker compose up -d` suffit, pas de rebuild) et tester
+   l'envoi réel via `POST /auth/forgot-password/request` avec le téléphone d'un admin.
+
+⚠️ **Incident de sécurité de cette session** : une lecture trop large du `.env` de production a
+affiché la **clé privée Firebase Admin** et le **DSN Sentry** en clair dans la conversation. La clé
+doit être révoquée et régénérée (Console Firebase → Paramètres du projet → Comptes de service),
+puis `FIREBASE_CREDENTIALS_JSON` mis à jour sur le VPS.
+
+### Session 94 (2026-07-29) — Exploration de la nouvelle identité visuelle
+
+- Analyse de la promesse de marque : livraison locale au Togo, mouvement, proximité, confiance et
+  ambition de plateforme grand public ouest-africaine.
+- Palette existante conservée comme base : bleu `#2E90FA` et bleu nuit `#0C1A22`, avec des accents
+  jaune chaud ou vert limités selon la piste.
+- Quatre concepts de logo générés en aperçu : `Z-route`, `double-Z mouvement`, `colis ruban` et
+  `wordmark premium` avec monogramme `ZZ`.
+- Aucun asset de production n'a été remplacé. Étape suivante : choisir une direction, la simplifier
+  en vectoriel déterministe, puis tester la lisibilité en 24 px, monochrome, fond sombre et supports
+  physiques avant intégration Android/iOS/PWA.
