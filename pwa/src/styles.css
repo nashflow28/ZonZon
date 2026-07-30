@@ -15,6 +15,14 @@
   --zz-text-hi: #EAF2F0;
   --zz-text-mut: #8FA6AE;
 
+  /*
+   * Or de marque (kit `brand/zonzon-logo-kit`). Seule couleur du kit qui
+   * manquait : --zz-bg valait déjà #0C1A22 et --zz-sky #2E90FA.
+   * Identité uniquement — aucune sémantique de statut, contrairement à
+   * --zz-go / --zz-mango / --zz-coral.
+   */
+  --zz-gold: #F5B700;
+
   /* Safe areas iOS (actives grâce à viewport-fit=cover dans index.html) */
   --zz-safe-top: env(safe-area-inset-top, 0px);
   --zz-safe-bottom: env(safe-area-inset-bottom, 0px);

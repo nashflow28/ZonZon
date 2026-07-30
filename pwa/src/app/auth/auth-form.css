@@ -25,10 +25,26 @@
   padding-top: 12px;
 }
 
+/*
+ * Symbole ZonZon (variante blanche du kit de marque : le fond de l'app est
+ * sombre, et la partie bleu nuit du logo couleur y disparaîtrait).
+ * `height` fixe et `width: auto` : le symbole n'est PAS carré (729x440), le
+ * contraindre en carré le déformerait.
+ */
+.auth-header .brand-mark {
+  height: 40px;
+  width: auto;
+  margin-bottom: 4px;
+}
+
 .auth-header .brand {
   font-size: 30px;
   font-weight: 800;
-  color: var(--zz-go);
+  /*
+   * Or de marque, et non plus --zz-go : ce dernier est une couleur de STATUT
+   * (« livré / payé / validé ») qui n'a rien à faire sur le nom de la marque.
+   */
+  color: var(--zz-gold, #F5B700);
   letter-spacing: -0.02em;
 }
 

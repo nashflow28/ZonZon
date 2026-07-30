@@ -13,11 +13,14 @@
     [class.translate-x-0]="sidebarOpen()"
     [ngClass]="{ 'md:translate-x-0': true }">
     <div class="px-6 py-5 border-b border-zline flex items-center justify-between">
-      <div>
-        <h1 class="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-go to-emerald-400">
-          ZonZon Admin
-        </h1>
-        <p class="text-[11px] text-slate-500 mt-1">Centre de contrôle</p>
+      <div class="flex items-center gap-3 min-w-0">
+        <img src="brand/zonzon-symbol-white.png" alt="" aria-hidden="true" class="h-8 w-auto shrink-0" />
+        <div class="min-w-0">
+          <h1 class="text-xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-zsky to-zgold">
+            ZonZon Admin
+          </h1>
+          <p class="text-[11px] text-slate-500 mt-1">Centre de contrôle</p>
+        </div>
       </div>
       <button
         type="button"

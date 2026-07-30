@@ -26,6 +26,9 @@ module.exports = {
         mango: 'var(--zz-mango)',
         zsky: 'var(--zz-sky)',
         coral: 'var(--zz-coral)',
+        // Or de marque — identité uniquement (dégradé du nom ZonZon), jamais
+        // un état métier. Cf. commentaire de --zz-gold dans styles.css.
+        zgold: 'var(--zz-gold)',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

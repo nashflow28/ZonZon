@@ -40,6 +40,16 @@
   --zz-sky: #2E90FA;
   --zz-coral: #F0453D;
   --zz-mut: #8FA6AE;
+
+  /*
+   * Or de marque (kit `brand/zonzon-logo-kit`, `brand-colors.json`). C'est la
+   * seule couleur du kit qui manquait ici : `--zz-bg` valait déjà #0C1A22 (bleu
+   * nuit) et `--zz-sky` #2E90FA (bleu mouvement).
+   * NOUVEAU jeton — il n'écrase rien et ne porte aucune sémantique de statut,
+   * contrairement à --zz-go/--zz-mango/... Réservé à l'identité (dégradé du
+   * nom de marque), pas aux états métier.
+   */
+  --zz-gold: #F5B700;
 }
 
 html, body {
