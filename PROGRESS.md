@@ -2264,3 +2264,43 @@ PWA connexion et inscription 90,94×34. Aucun texte « ZonZon » redondant resta
 **Limite assumée** : aucune capture d'écran n'a pu être produite (panneau non composité). La
 validation repose sur la mesure du DOM — plus précise qu'un coup d'œil sur les dimensions et les
 couleurs, mais elle ne remplace pas un jugement esthétique humain.
+
+### Session 98 (2026-07-30) — Logo dans le splash et les en-têtes de l'app mobile
+
+Dernier volet de l'intégration du kit : l'app Flutter, qui n'affichait **aucun** logo jusqu'ici.
+
+**Écran de lancement Android.** Le fond blanc par défaut de Flutter est remplacé par le bleu nuit
+de la marque (`#0C1A22`) avec le logo horizontal blanc centré. Deux décisions justifiées :
+navy et non blanc parce que l'application est **entièrement sombre** — un fond clair provoquait un
+flash désagréable avant le premier frame ; variante blanche du logo parce que sa moitié bleu nuit
+disparaîtrait sur ce fond (règle n°3 du kit). Rendu identique en thème clair et sombre, l'app
+n'ayant pas de thème clair, ce qui évite d'avoir à maintenir un `drawable-night`.
+
+**Écran de connexion.** `Icons.delivery_dining` — une icône Material générique — accompagnée du
+mot « ZonZon » en texte servait de logo. Remplacés par le vrai logo, qui contient déjà le
+mot-symbole ; `semanticLabel` conserve le nom pour les lecteurs d'écran.
+
+**En-têtes d'accueil commerçant et livreur.** Logo ajouté à côté du titre, pas à la place : le
+logo identifie l'application, le titre indique la section (et il est dynamique côté livreur). Le
+titre livreur est passé en `Flexible` avec ellipsis pour ne pas déborder une fois le logo présent.
+📌 L'accueil **client** est une carte plein écran sans en-tête : il n'y avait rien à y ajouter.
+
+**Actifs dérivés du kit** par rééchantillonnage Lanczos, sans recadrage ni recoloration :
+5 densités Android (`drawable-mdpi` → `xxxhdpi`, 160 à 640 px de large pour une cible de 160 dp)
+et 3 résolutions Flutter (`1x`/`2.0x`/`3.0x`, 4 à 16 Ko). `assets/brand/` déclaré dans
+`pubspec.yaml` — Flutter résout la densité automatiquement depuis le chemin de base.
+
+🐛 **Build cassé puis réparé** : mon commentaire XML contenait `--zz-bg`. Une **double tiret est
+interdite dans un commentaire XML**, et AGP échouait avec « The string "--" is not permitted within
+comments ». Les 6 fichiers de ressources ont ensuite été validés par un parseur XML avant relance.
+À retenir pour toute rédaction de commentaire dans `res/`.
+
+**Vérifié dans l'APK**, pas seulement dans les sources : `color/zonzon_splash_background`,
+`drawable/launch_background` et `drawable/zonzon_splash_logo` compilés, `windowBackground` les
+référençant dans les **deux** thèmes, et les 3 densités du logo Flutter embarquées
+(`assets/flutter_assets/assets/brand/`). `flutter analyze` sans aucun problème, `flutter test`
+57/57, APK 59,0 Mo signé `CN=ZonZon, O=Kore Innovation`.
+
+**Limite** : le rendu réel du splash et des en-têtes n'a pas pu être observé — aucun appareil ni
+émulateur n'est piloté depuis cette session. La validation est structurelle (ressources compilées,
+actifs embarqués, analyse et tests) ; l'appréciation visuelle reste à faire à l'installation.
