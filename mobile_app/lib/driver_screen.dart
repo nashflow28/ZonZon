@@ -1609,12 +1609,29 @@ class _DriverScreenState extends State<DriverScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFF0C1A22),
         appBar: AppBar(
-          title: Text(
-            _currentTabTitle(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+          title: Row(
+            children: [
+              // Logo de marque en tete de l'ecran livreur. Le titre reste a
+              // cote car il est dynamique (onglet courant) : le logo identifie
+              // l'application, le texte la section.
+              Image.asset(
+                'assets/brand/zonzon-horizontal-white.png',
+                height: 22,
+                fit: BoxFit.contain,
+                semanticLabel: 'ZonZon',
+              ),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  _currentTabTitle(),
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
           ),
           backgroundColor: const Color(0xFF122530),
           iconTheme: const IconThemeData(color: Colors.white),

@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!--
+  Ecran de lancement. Fond bleu nuit de la marque (#0C1A22) et NON blanc :
+  l'application est entierement sombre, un fond clair provoquerait un flash
+  desagreable avant le premier frame Flutter.
+  Le logo est la variante BLANCHE du kit : sur ce fond, la moitie bleu nuit du
+  logo couleur disparaitrait (regle n.3 du kit).
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+    <item android:drawable="@color/zonzon_splash_background" />
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@drawable/zonzon_splash_logo" />
+    </item>
 </layer-list>

@@ -176,11 +176,19 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF122530),
         elevation: 0,
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.storefront, color: Color(0xFF0FB271)),
-            SizedBox(width: 10),
-            Text(
+            // Logo de marque en tete d'ecran d'accueil. Le titre reste a
+            // cote : le logo identifie l'application, le texte identifie
+            // l'espace dans lequel on se trouve.
+            Image.asset(
+              'assets/brand/zonzon-horizontal-white.png',
+              height: 22,
+              fit: BoxFit.contain,
+              semanticLabel: 'ZonZon',
+            ),
+            const SizedBox(width: 10),
+            const Text(
               'Espace commerçant',
               style: TextStyle(
                 color: Colors.white,

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fond de l'ecran de lancement : bleu nuit de la marque, identique au jeton
+  `zz-bg` cote admin/PWA et au Color(0xFF0C1A22) des ecrans Flutter.
+  Volontairement le meme en clair et en sombre : l'app n'a pas de theme clair.
+-->
+<resources>
+    <color name="zonzon_splash_background">#0C1A22</color>
+</resources>

@@ -114,23 +114,18 @@ class _LoginScreenState extends State<LoginScreen> {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const Icon(
-                                Icons.delivery_dining,
-                                size: 70,
-                                color: Color(0xFF2E90FA),
+                              // Logo horizontal du kit (symbole + mot-symbole).
+                              // Il contient deja le mot « ZonZon » : afficher
+                              // le nom en texte a cote le ferait apparaitre
+                              // deux fois. `semanticsLabel` conserve
+                              // l'information pour les lecteurs d'ecran.
+                              Image.asset(
+                                'assets/brand/zonzon-horizontal-white.png',
+                                height: 56,
+                                fit: BoxFit.contain,
+                                semanticLabel: 'ZonZon',
                               ),
                               const SizedBox(height: 12),
-                              const Text(
-                                'ZonZon',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.5,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
                               const Text(
                                 'Connectez-vous pour continuer',
                                 textAlign: TextAlign.center,
