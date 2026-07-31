@@ -188,11 +188,20 @@ class _MerchantHomeScreenState extends State<MerchantHomeScreen> {
               semanticLabel: 'ZonZon',
             ),
             const SizedBox(width: 10),
-            const Text(
-              'Espace commerçant',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+            // « Commerçant » et non « Espace commerçant » : la barre porte
+            // 4 boutons d'action (messagerie, profil, rafraichir, deconnexion),
+            // soit ~192 dp, plus le logo — le titre long chevauchait les icones
+            // sur un ecran de 360 dp. Flexible + ellipsis en filet de securite
+            // si la place venait encore a manquer.
+            const Flexible(
+              child: Text(
+                'Commerçant',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
               ),
             ),
           ],
